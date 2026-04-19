@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { usePlayer } from "./PlayerProvider";
 import { LoadingIcon, PauseIcon, PlayIcon } from "./Icons";
+import { useNowPlaying } from "./useNowPlaying";
 
 const SCROLL_TRIGGER = 520; // roughly past the hero
 
 export function MiniPlayer() {
   const { isPlaying, isLoading, toggle } = usePlayer();
+  const np = useNowPlaying();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -35,14 +37,24 @@ export function MiniPlayer() {
           <PlayIcon />
         )}
       </button>
-      <div className="mp-art" />
+      <div
+        className="mp-art"
+        style={
+          np.artworkUrl
+            ? {
+                backgroundImage: `url(${np.artworkUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
+      />
       <div className="mp-meta">
         <div className="mp-label">On Air · Lena</div>
-        {/* TODO Phase 4: render from /api/station/now-playing */}
         <div className="mp-title">
-          Slow Fade, Brighter
+          {np.title ?? "—"}
           <span className="sep"> · </span>
-          <span className="artist">Russell Ross</span>
+          <span className="artist">{np.artistDisplay ?? "—"}</span>
         </div>
       </div>
       <div className="mp-eq eq">

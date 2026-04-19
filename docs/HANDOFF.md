@@ -76,6 +76,13 @@ B2_SECRET_ACCESS_KEY         Backblaze applicationKey
 B2_BUCKET_PUBLIC_URL         https://f003.backblazeb2.com/file/numaradio
 ```
 
+Also needed (everywhere — Vercel env + mini-server `/etc/numa/env`):
+
+```
+INTERNAL_API_SECRET          shared secret Liquidsoap uses to call /api/internal/*
+                             generate with `openssl rand -hex 32`
+```
+
 Server (mini-server only) also needs:
 
 ```

@@ -10,12 +10,23 @@ import {
 } from "./Icons";
 import { LiveClock } from "./LiveClock";
 import { Waveform } from "./Waveform";
+import { useNowPlaying } from "./useNowPlaying";
 
-// TODO Phase 4: replace placeholder track + Lena copy with live data from
-// `GET /api/station/now-playing`.
+function initials(title: string | undefined): string {
+  if (!title) return "··";
+  const words = title.split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
 
 export function PlayerCard() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
+  const np = useNowPlaying();
+
+  const title = np.title ?? "—";
+  const artist = np.artistDisplay ?? "—";
+  const cover = np.artworkUrl;
+  const coverInitials = initials(np.title);
 
   return (
     <div className="player-card">
@@ -24,11 +35,22 @@ export function PlayerCard() {
         <div className="player-time"><LiveClock /></div>
       </div>
 
-      <div className="now-art">
-        <div className="art-inner">SF</div>
+      <div
+        className="now-art"
+        style={
+          cover
+            ? {
+                backgroundImage: `url(${cover})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
+      >
+        {!cover && <div className="art-inner">{coverInitials}</div>}
         <div className="art-overlay" />
         <div className="art-meta">
-          <div className="track-no">Up Next · Tunnel 61</div>
+          <div className="track-no">{np.isPlaying ? "Now Airing" : "Off Air"}</div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <span
               style={{
@@ -49,8 +71,8 @@ export function PlayerCard() {
       </div>
 
       <div className="now-info">
-        <div className="track">Slow Fade, Brighter</div>
-        <div className="artist">RUSSELL ROSS · Nightshore EP · 2025</div>
+        <div className="track">{title}</div>
+        <div className="artist">{artist.toUpperCase()}</div>
         <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
           <button className="share-pill" aria-label="Copy link">
             <CopyIcon className="" />

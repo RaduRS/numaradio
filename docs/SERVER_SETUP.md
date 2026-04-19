@@ -93,12 +93,17 @@ Or just use Prisma Studio on either machine (`npx prisma studio`) — open the
 
 For the first proof, one URL is enough.
 
-Save the password from step 1 to a file Liquidsoap can read:
+Save the password from step 1 to a file Liquidsoap can read. **Also** add
+`INTERNAL_API_SECRET` here — it's the shared secret Liquidsoap sends to the
+website when each track starts (so the wave shows truthful elapsed time).
+The same value must be set in Vercel's environment variables.
 
 ```bash
 sudo mkdir -p /etc/numa
 sudo nano /etc/numa/env
-# Contents:  ICECAST_SOURCE_PASSWORD=<your-source-password-from-step-1>
+# Contents:
+# ICECAST_SOURCE_PASSWORD=<your-source-password-from-step-1>
+# INTERNAL_API_SECRET=<long-random-hex-from-`openssl rand -hex 32`>
 ```
 
 Run Liquidsoap manually first to verify:
