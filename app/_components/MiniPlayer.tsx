@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { usePlayer } from "./PlayerProvider";
-import { PauseIcon, PlayIcon } from "./Icons";
+import { LoadingIcon, PauseIcon, PlayIcon } from "./Icons";
 
 const SCROLL_TRIGGER = 520; // roughly past the hero
 
 export function MiniPlayer() {
-  const { isPlaying, toggle } = usePlayer();
+  const { isPlaying, isLoading, toggle } = usePlayer();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -21,8 +21,19 @@ export function MiniPlayer() {
 
   return (
     <div className={`mini-player ${show ? "show" : ""}`} id="mini-player">
-      <button className="mp-btn-play" onClick={toggle} aria-pressed={isPlaying}>
-        {isPlaying ? <PauseIcon /> : <PlayIcon />}
+      <button
+        className="mp-btn-play"
+        onClick={toggle}
+        aria-pressed={isPlaying}
+        aria-busy={isLoading}
+      >
+        {isLoading ? (
+          <LoadingIcon />
+        ) : isPlaying ? (
+          <PauseIcon />
+        ) : (
+          <PlayIcon />
+        )}
       </button>
       <div className="mp-art" />
       <div className="mp-meta">

@@ -1,7 +1,14 @@
 "use client";
 
 import { usePlayer } from "./PlayerProvider";
-import { PauseIcon, PlayIcon, BlueskyIcon, CopyIcon, WhatsAppIcon } from "./Icons";
+import {
+  BlueskyIcon,
+  CopyIcon,
+  LoadingIcon,
+  PauseIcon,
+  PlayIcon,
+  WhatsAppIcon,
+} from "./Icons";
 import { LiveClock } from "./LiveClock";
 import { Waveform } from "./Waveform";
 
@@ -9,7 +16,7 @@ import { Waveform } from "./Waveform";
 // `GET /api/station/now-playing`.
 
 export function PlayerCard() {
-  const { isPlaying, toggle } = usePlayer();
+  const { status, isPlaying, isLoading, toggle } = usePlayer();
 
   return (
     <div className="player-card">
@@ -64,13 +71,30 @@ export function PlayerCard() {
       <Waveform />
 
       <div className="player-controls">
-        <button className="btn-play" onClick={toggle} aria-pressed={isPlaying}>
-          {isPlaying ? <PauseIcon /> : <PlayIcon />}
+        <button
+          className="btn-play"
+          onClick={toggle}
+          aria-pressed={isPlaying}
+          aria-busy={isLoading}
+        >
+          {isLoading ? (
+            <LoadingIcon />
+          ) : isPlaying ? (
+            <PauseIcon />
+          ) : (
+            <PlayIcon />
+          )}
         </button>
         <div className="ctrl-info">
           <div className="lbl">Streaming · 192kbps</div>
           <div className="val">
-            <span style={{ color: "var(--fg-dim)" }}>Live</span>
+            <span style={{ color: "var(--fg-dim)" }}>
+              {status === "loading"
+                ? "Connecting…"
+                : status === "error"
+                  ? "Stream error — try again"
+                  : "Live"}
+            </span>
           </div>
         </div>
         <div className="vol">

@@ -1,0 +1,156 @@
+/*
+ * Carries the inline <style> block from Numa Radio Landing.html (rules that
+ * weren't in styles.css or sections.css) plus our own MVP-specific overrides.
+ *
+ * Loaded AFTER the design files so its specificity wins on collisions.
+ */
+
+/* ─── Request tabs: 2 columns instead of 3 (Suno dropped) ──────── */
+.req-types {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* ─── Share affordances (player + shoutout cards) ──────────────── */
+.share-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.share-pill:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+  background: rgba(79, 209, 197, 0.06);
+}
+.share-pill svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+.f-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: var(--fg-dim);
+  transition: all 0.15s ease;
+}
+.f-social svg {
+  width: 12px;
+  height: 12px;
+}
+.f-social:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(79, 209, 197, 0.05);
+}
+
+.shout-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--fg-mute);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.shout-share svg {
+  width: 9px;
+  height: 9px;
+}
+.shout-share:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+/* ─── Rotating "review" line under the request form ───────────── */
+.rev-rotator {
+  position: relative;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+.rev-line {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fg-dim);
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+  pointer-events: none;
+}
+.rev-line.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+.rev-line .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  flex-shrink: 0;
+}
+.rev-line .dot.soft {
+  background: var(--fg-mute);
+  box-shadow: none;
+}
+
+/* ─── Lena reply stamp inside shoutout cards ──────────────────── */
+.shout-reply {
+  display: block;
+}
+.shout-reply .rep-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  background: rgba(79, 209, 197, 0.08);
+  border: 1px solid rgba(79, 209, 197, 0.28);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+  margin-right: 8px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
+.shout-reply .rep-text {
+  display: inline;
+}
+.shout-reply .rep-text .q {
+  display: block;
+  margin: 6px 0 4px;
+}

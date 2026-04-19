@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1032.0",
+    "@icons-pack/react-simple-icons": "^13.11.1",
     "@prisma/client": "^6.19.3",
     "dotenv": "^17.4.2",
+    "lucide-react": "^1.8.0",
     "music-metadata": "^11.12.3",
     "next": "16.2.4",
     "pg": "^8.20.0",
