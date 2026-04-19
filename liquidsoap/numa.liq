@@ -37,7 +37,7 @@ def notify_track_started(metadata) =
     if secret == "" then
       log.severe("[numa] INTERNAL_API_SECRET not set — skipping notify")
     else
-      body = json.stringify(payload={sourceUrl=url})
+      body = json.stringify({sourceUrl=url})
       try
         response = http.post(
           headers=[
@@ -57,7 +57,7 @@ def notify_track_started(metadata) =
   end
 end
 
-source = source.on_track(source, notify_track_started)
+source.on_track(notify_track_started)
 
 # mksafe wraps the source so a stall or empty playlist falls back to silence
 # instead of disconnecting Icecast.
