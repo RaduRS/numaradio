@@ -57,7 +57,10 @@ def notify_track_started(metadata) =
   end
 end
 
-source.on_track(notify_track_started)
+# Method form returns a NEW source — must assign back, otherwise the
+# wrapped source is dropped and the callback never fires.
+source = source.on_track(notify_track_started)
+log.important("[numa] notify pipeline ready, api=" ^ api_url)
 
 # mksafe wraps the source so a stall or empty playlist falls back to silence
 # instead of disconnecting Icecast.
