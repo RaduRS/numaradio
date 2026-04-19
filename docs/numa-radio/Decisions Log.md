@@ -4,6 +4,31 @@ Living record of decisions made in chat that aren't already captured elsewhere i
 
 ---
 
+## 2026-04-19 (night) — Now-playing + real listener count wired end-to-end
+
+### Public site now shows truthful title, artist, artwork, elapsed/duration
+- Liquidsoap `on_track` POSTs to `/api/internal/track-started` → Neon `NowPlaying` upsert → site polls `/api/station/now-playing` every 15s.
+- Tunnel now also exposes `/status-json.xsl` (new ingress rule in `/etc/cloudflared/config.yml`), so `/api/station/listeners` proxies Icecast directly.
+
+### Liquidsoap 2.2.4 quirks worth remembering
+- **`json.stringify` takes the value positionally**, not as `payload={…}`. The labeled form is a newer-Liquidsoap idiom and the 2.2.4 parser hard-errors with "no argument labeled payload".
+- **`source.on_track(f)` returns `unit`, not a new source** in 2.2.4. The method form mutates the receiver in place; reassigning (`source = source.on_track(f)`) replaces `source` with `unit`, which then breaks `mksafe(source)` downstream with a type error. Just call it.
+- **`playlist.reloadable` pre-downloads HTTP items to /tmp** before playback, so by the time `on_track` fires, `metadata["filename"]` is `/tmp/liq-processXXXXXX.mp3` — the original URL is gone from that field. The B2 URL **is** still present in `metadata["initial_uri"]` though (not `["source_url"]`, which is empty in this Liquidsoap build). `numa.liq` picks `initial_uri` first, falls back to `filename`.
+
+### API fallback: lookup by title + artist when the URL doesn't carry a trackId
+- Even with `initial_uri` available, we send `title` and `artist` from ID3 in the POST body. The API tries `trackId → URL-extracted trackId → (stationSlug, title, artist)` lookup in order. Case-insensitive match, `orderBy updatedAt desc` so later-ingested duplicates win. This means future playlist sources that strip the URL (local cache, a different `playlist.*` builder, etc.) keep working without an API change.
+
+### Listener count: additive boost, not a floor
+- Original implementation was `max(real, 15)` — real listeners up to 15 produced no visible change. Switched to `15 + real` so pressing play always nudges the counter. Field name `withFloor` kept in the API response for backwards compatibility with the `ListenerCount` component (semantically it's a boost now, but renaming would churn the consumer for no gain).
+
+### HSTS: deliberately NOT enabling
+- Cloudflare Security Center flagged `api.numaradio.com` for missing HSTS. Enabled "Always Use HTTPS" (the practical protection — redirects any `http://` request to `https://`) but skipped HSTS. Reason: HSTS pins browsers to HTTPS-only for the max-age window (6–24 months typical); any future HTTPS hiccup (expired cert, Cloudflare pause, migration) → site dark for cached visitors. Marginal security upgrade not worth the operational lock-in at MVP stage.
+
+### Operational gotcha — Claude Code's `!` shell prefix
+- Chained commands with `&&` and `sudo` sometimes only surface the first command's output; later commands still run but their stdout gets eaten before it reaches the paste buffer. Recovery pattern: run each command as its own `!` invocation. Cost a lot of round-trip confusion tonight when trying to batch `sudo cp ... && sudo systemctl restart ... && curl ...`.
+
+---
+
 ## 2026-04-19 (late evening) — Operator Dashboard live + two field-learned fixes
 
 ### Dashboard is live
