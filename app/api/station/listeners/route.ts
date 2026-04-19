@@ -4,6 +4,11 @@
 // pain or Icecast URL leakage. Returns:
 //   { listeners: number, withFloor: number, isLive: boolean }
 //
+// Note on the name: `withFloor` is kept for backwards compatibility with the
+// ListenerCount component. Semantically it's now "real listeners + BOOST" —
+// the ambient number is added, not capped — so the count always moves when
+// a real listener joins, while still presenting a non-dead station on day 0.
+//
 // Requires the cloudflared tunnel on the mini-server to expose the Icecast
 // status JSON publicly. Add this ingress entry above the /stream rule:
 //
@@ -11,10 +16,10 @@
 //     path: /status-json.xsl
 //     service: http://localhost:8000
 //
-// If unreachable, this route falls back to {listeners: 0, withFloor: FLOOR}.
+// If unreachable, this route falls back to {listeners: 0, withFloor: BOOST}.
 
 const STATUS_URL = "https://api.numaradio.com/status-json.xsl";
-const FLOOR = 15; // never show fewer than this — radio feels dead at zero
+const BOOST = 15; // ambient listeners added on top of the real count
 const CACHE_SECONDS = 5;
 
 type IcecastSource = {
@@ -28,14 +33,12 @@ type IcecastStatus = {
   };
 };
 
-// Always re-evaluate per request; let the CDN handle caching via Cache-Control.
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     const r = await fetch(STATUS_URL, {
       cache: "no-store",
-      // Icecast can be slow under load; bound the wait.
       signal: AbortSignal.timeout(3_000),
     });
     if (!r.ok) throw new Error(`upstream ${r.status}`);
@@ -48,8 +51,6 @@ export async function GET() {
         ? [sources]
         : [];
 
-    // We only care about our /stream mount, but if there's just one source
-    // that's the one regardless of mount path.
     const stream =
       list.find((s) => s.listenurl?.endsWith("/stream")) ?? list[0];
     const listeners = Math.max(0, stream?.listeners ?? 0);
@@ -57,7 +58,7 @@ export async function GET() {
     return Response.json(
       {
         listeners,
-        withFloor: Math.max(FLOOR, listeners),
+        withFloor: BOOST + listeners,
         isLive: list.length > 0,
       },
       {
@@ -68,7 +69,7 @@ export async function GET() {
     );
   } catch {
     return Response.json(
-      { listeners: 0, withFloor: FLOOR, isLive: false },
+      { listeners: 0, withFloor: BOOST, isLive: false },
       {
         headers: {
           "Cache-Control": `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=30`,
