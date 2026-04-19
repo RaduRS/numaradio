@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-19 (mini-server, end of Operator Dashboard build)
+Last updated: 2026-04-19 (mini-server, Operator Dashboard live)
 
 ## Where we are
 
@@ -21,24 +21,18 @@ Last updated: 2026-04-19 (mini-server, end of Operator Dashboard build)
 
 When all three remaining Phase 1 tasks are done, the station is live.
 
-**Phase 2 (Operator Dashboard) — code complete, pending systemd install**
-- ✅ `dashboard/` Next.js 16 app scaffolded + shadcn/ui on dark Numa palette
-- ✅ Library layer (`systemd`, `icecast`, `cloudflared`, `health`, `db`) with unit tests (8/8 pass)
-- ✅ API routes: `GET /api/status`, `POST /api/services/[name]/[action]`, `GET /api/logs/[name]`
-- ✅ UI: status pills, services card (start/stop/restart + confirm dialog + toast),
-  health card (Neon/B2/Tunnel), logs card (journalctl tail)
-- ✅ `npm run build` passes
-- ✅ Cloudflare Tunnel ingress and sudoers allowlist already installed
-  (see `dashboard/deploy/*` reference copies)
-- ⏳ **Next step on mini-server:** install the systemd unit and enable the service:
-  ```
-  sudo cp dashboard/deploy/numa-dashboard.service /etc/systemd/system/
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now numa-dashboard
-  ```
-  Then walk through `dashboard/ACCEPTANCE.md` in the browser.
-- Design spec: `docs/superpowers/specs/2026-04-19-operator-dashboard-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-04-19-operator-dashboard.md`
+**Phase 2 (Operator Dashboard) — LIVE**
+- ✅ `https://dashboard.numaradio.com` running behind Cloudflare Access
+- ✅ `numa-dashboard.service` enabled + active on Orion (Next.js on :3001)
+- ✅ Controllable services: `icecast2`, `numa-liquidsoap` (cloudflared dropped from
+  controls after it was clicked and killed its own tunnel — health row kept for
+  visibility; see Decisions Log 2026-04-19 late evening)
+- ✅ Cards: stream pills + now-playing, services (start/stop/restart + confirm
+  dialog), health (Neon/B2/Tunnel), logs (journalctl tail)
+- Spec: `docs/superpowers/specs/2026-04-19-operator-dashboard-design.md`
+- Plan: `docs/superpowers/plans/2026-04-19-operator-dashboard.md`
+- Acceptance checklist: `dashboard/ACCEPTANCE.md`
+- To redeploy after a code change: `git pull && cd dashboard && npm run build && sudo systemctl restart numa-dashboard`
 
 ## Vault location (product decisions / design / policy)
 

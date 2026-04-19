@@ -4,6 +4,32 @@ Living record of decisions made in chat that aren't already captured elsewhere i
 
 ---
 
+## 2026-04-19 (late evening) — Operator Dashboard live + two field-learned fixes
+
+### Dashboard is live
+- `https://dashboard.numaradio.com` is up behind Cloudflare Access, running as `numa-dashboard.service` on Orion (the mini-server, Next.js on port 3001 → cloudflared).
+- Four cards: stream status + now-playing, controllable services, health (Neon / B2 / Tunnel), journalctl logs.
+- Plan: `docs/superpowers/plans/2026-04-19-operator-dashboard.md`. Design spec: `docs/superpowers/specs/2026-04-19-operator-dashboard-design.md`.
+
+### Cloudflared REMOVED from dashboard-controllable services
+- First deploy exposed a footgun: "Restart cloudflared" from the dashboard kills the tunnel the dashboard itself rides on. Clicked it once by accident → Cloudflare Error 1033 for both `dashboard.numaradio.com` and `api.numaradio.com` until restarted from a local terminal.
+- Decision: remove cloudflared from the controllable service list (`lib/service-names.ts`). Services card + Logs tab now only show `icecast2` and `numa-liquidsoap`. Health card still shows **Cloudflare Tunnel** status (connection count from `/metrics`) so tunnel state stays visible without the restart button.
+- Sudoers allowlist at `/etc/sudoers.d/numa-dashboard` keeps cloudflared entries — allowed-but-unused is harmless and we may want the escape hatch back later.
+
+### Listener count was being inflated by our own probe
+- `/api/status` originally did `fetch(STREAM_PUBLIC_URL, { Range: "bytes=0-1" })` every 5s to set the "reachable" flag. Icecast counts any HTTP GET on `/stream` as a listener — so the dashboard was adding one listener per open dashboard tab, visible as a steadily-climbing count.
+- Fix: `reachable` is now derived from signals we already collect — Icecast's source JSON shows `/stream` is connected **and** cloudflared `/metrics` reports active tunnel connections. No extra stream connection, listener count matches reality.
+
+### Vercel was building `dashboard/` and failing
+- Vercel builds the parent Next.js app from repo root. Its tsconfig had `"include": ["**/*.ts", ...]`, which swept in `dashboard/**` — and the dashboard's `@/*` alias points inside `dashboard/`, so Vercel's builder couldn't resolve `@/lib/systemd` and the deploy failed.
+- Added `dashboard` to root `tsconfig.json` `exclude`, plus a `.vercelignore` (also skips `workers`, `liquidsoap`, `seed`, `docs` — Vercel doesn't need any of them).
+
+### B2 egress optimization: not worth doing yet
+- With Liquidsoap pulling each track from B2 once per play (not per listener — Icecast handles fan-out), actual egress is small: ~100 plays/day × 5.5 MB ≈ 550 MB/day, under B2's free 1 GB/day. Effective cost ≈ $0.
+- Two optimizations held in reserve if costs ever show up: (1) local disk cache so Liquidsoap re-reads from `/var/cache/numa/` on repeat plays, or (2) Cloudflare CNAME in front of the B2 public bucket (Backblaze + Cloudflare Bandwidth Alliance = free egress). Prefer (2) when the time comes — zero code, just DNS + page rule.
+
+---
+
 ## 2026-04-19 (evening) — Phase 0 + Phase 1 ingest landed
 
 ### Repo foundation set up
