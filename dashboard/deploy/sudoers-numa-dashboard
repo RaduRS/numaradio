@@ -1,0 +1,12 @@
+# Numa Radio operator dashboard — narrow NOPASSWD allowlist for user marku.
+# Installed to: /etc/sudoers.d/numa-dashboard  (mode 0440, owned by root)
+# Validate after edits: sudo visudo -cf /etc/sudoers.d/numa-dashboard
+marku ALL=(root) NOPASSWD: /usr/bin/systemctl start icecast2, \
+                            /usr/bin/systemctl stop icecast2, \
+                            /usr/bin/systemctl restart icecast2, \
+                            /usr/bin/systemctl start numa-liquidsoap, \
+                            /usr/bin/systemctl stop numa-liquidsoap, \
+                            /usr/bin/systemctl restart numa-liquidsoap, \
+                            /usr/bin/systemctl start cloudflared, \
+                            /usr/bin/systemctl stop cloudflared, \
+                            /usr/bin/systemctl restart cloudflared
