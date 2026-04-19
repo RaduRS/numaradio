@@ -1,0 +1,10 @@
+{
+  "icestats": {
+    "admin": "icemaster@localhost",
+    "host": "localhost",
+    "location": "Earth",
+    "server_id": "Icecast 2.4.4",
+    "server_start": "Sun, 19 Apr 2026 16:32:45 +0100",
+    "server_start_iso8601": "2026-04-19T16:32:45+0100"
+  }
+}
