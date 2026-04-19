@@ -1,8 +1,14 @@
 # Reference copy of /etc/cloudflared/config.yml — keep in sync when you edit the /etc one.
+# Also mirror changes to ~/.cloudflared/config.yml for `cloudflared tunnel run` without systemd.
 tunnel: 60c1c3e0-54e5-4331-8992-2ce7d5f9c2ba
 credentials-file: /etc/cloudflared/60c1c3e0-54e5-4331-8992-2ce7d5f9c2ba.json
 
 ingress:
+  # Icecast status JSON — fuels the public site's real-time listener count via
+  # GET /api/station/listeners on the Vercel app (floor-15 applied there).
+  - hostname: api.numaradio.com
+    path: /status-json.xsl
+    service: http://localhost:8000
   - hostname: api.numaradio.com
     path: /stream
     service: http://localhost:8000
