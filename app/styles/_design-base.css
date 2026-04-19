@@ -1,0 +1,270 @@
+/* ============ NUMA RADIO ============ */
+
+:root {
+  --bg: #0B0C0E;
+  --bg-1: #0F1114;
+  --bg-2: #14171B;
+  --bg-3: #1A1E23;
+  --line: rgba(255,255,255,0.07);
+  --line-strong: rgba(255,255,255,0.14);
+  --fg: #F2F0EA;
+  --fg-dim: #A8A69D;
+  --fg-mute: #6B6B68;
+  --accent: #4FD1C5;
+  --accent-glow: rgba(79, 209, 197, 0.35);
+  --accent-soft: rgba(79, 209, 197, 0.12);
+  --red-live: #FF4D4D;
+  --warm: #E8D9B0;
+
+  --font-display: var(--font-archivo), system-ui, sans-serif;
+  --font-body: var(--font-inter-tight), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(79, 209, 197, 0.08), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(79, 209, 197, 0.04), transparent 70%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+/* ============ TYPE ============ */
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.mono { font-family: var(--font-mono); letter-spacing: 0.02em; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--fg-dim);
+}
+
+/* ============ LAYOUT ============ */
+
+.shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 48px;
+}
+
+section { position: relative; }
+
+.divider {
+  height: 1px;
+  background: var(--line);
+  width: 100%;
+}
+
+/* ============ NAV ============ */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(11, 12, 14, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+}
+
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 125%;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.logo-mark {
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-mark::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+  animation: pulseDot 2.2s ease-in-out infinite;
+}
+
+.nav-links {
+  display: flex;
+  gap: 36px;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+.nav-links a { transition: color 0.2s; }
+.nav-links a:hover { color: var(--fg); }
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--fg);
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255,77,77,0.08);
+}
+.live-chip .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--red-live);
+  box-shadow: 0 0 8px var(--red-live);
+  animation: pulseDot 1.6s ease-in-out infinite;
+}
+
+/* ============ BUTTONS ============ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0A0D0E;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 32px var(--accent-glow);
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px var(--accent), 0 12px 40px var(--accent-glow);
+}
+
+.btn-ghost {
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  background: rgba(255,255,255,0.02);
+}
+.btn-ghost:hover {
+  border-color: var(--fg-dim);
+  background: rgba(255,255,255,0.05);
+}
+
+.btn-icon {
+  width: 14px; height: 14px;
+  display: inline-block;
+}
+
+/* ============ KEYFRAMES ============ */
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+@keyframes eqBar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes slowGlow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(8px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes waveMove {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-32px); }
+}
+
+/* ============ EQ BARS ============ */
+
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+.eq span {
+  display: inline-block;
+  width: 2px;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: bottom;
+  animation: eqBar 1s ease-in-out infinite;
+  border-radius: 1px;
+}
+.eq span:nth-child(1) { animation-delay: -0.2s; height: 80%; }
+.eq span:nth-child(2) { animation-delay: -0.5s; height: 100%; }
+.eq span:nth-child(3) { animation-delay: -0.1s; height: 60%; }
+.eq span:nth-child(4) { animation-delay: -0.7s; height: 90%; }
+.eq span:nth-child(5) { animation-delay: -0.3s; height: 70%; }
+
+.eq-lg { height: 28px; gap: 3px; }
+.eq-lg span { width: 3px; border-radius: 2px; }

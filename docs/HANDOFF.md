@@ -12,14 +12,14 @@ Last updated: 2026-04-19 (mini-server, Operator Dashboard live)
 - Fonts: Archivo (variable, with wdth axis), Inter Tight, JetBrains Mono via `next/font/google`
 - Dev server boots cleanly (`npm run dev` → `http://localhost:3000`)
 
-**Phase 1 (Audible station) — partially done**
+**Phase 1 (Audible station) — DONE**
 - ✅ Seed-ingest script working end-to-end (`npm run ingest:seed`)
 - ✅ One real track ingested: "One More Dance" by Russell Ross
-- ⏳ Install Icecast + Liquidsoap on the mini-server (WSL2 Ubuntu) — see `docs/SERVER_SETUP.md`
-- ⏳ Drop the minimal Liquidsoap config and confirm local stream works
-- ⏳ Set up Cloudflare Tunnel so `https://api.numaradio.com/stream` is publicly reachable
+- ✅ Icecast + Liquidsoap installed on the mini-server (WSL2 Ubuntu)
+- ✅ Liquidsoap config running, mount `/stream`, 192kbps stereo MP3
+- ✅ Cloudflare Tunnel live — `https://api.numaradio.com/stream` publicly reachable
 
-When all three remaining Phase 1 tasks are done, the station is live.
+The station is live and listenable from any browser worldwide.
 
 **Phase 2 (Operator Dashboard) — LIVE**
 - ✅ `https://dashboard.numaradio.com` running behind Cloudflare Access
