@@ -3,24 +3,13 @@ import { spawn } from "node:child_process";
 import {
   SERVICE_NAMES,
   SERVICE_ACTIONS,
+  validateServiceAction,
   type ServiceName,
   type ServiceAction,
 } from "./service-names";
 
-export { SERVICE_NAMES, SERVICE_ACTIONS };
+export { SERVICE_NAMES, SERVICE_ACTIONS, validateServiceAction };
 export type { ServiceName, ServiceAction };
-
-const SERVICES = new Set<string>(SERVICE_NAMES);
-const ACTIONS = new Set<string>(SERVICE_ACTIONS);
-
-export function validateServiceAction(
-  name: string,
-  action: string,
-): { name: ServiceName; action: ServiceAction } {
-  if (!SERVICES.has(name)) throw new Error(`invalid service: ${JSON.stringify(name)}`);
-  if (!ACTIONS.has(action)) throw new Error(`invalid action: ${JSON.stringify(action)}`);
-  return { name: name as ServiceName, action: action as ServiceAction };
-}
 
 export interface ActionResult {
   ok: boolean;
