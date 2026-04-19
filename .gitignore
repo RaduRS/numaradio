@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# seed audio + artwork (large binaries — uploaded to B2 by ingest script)
+/seed
+!/seed/.gitkeep
+!/seed/README.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
