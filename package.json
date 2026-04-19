@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "postinstall": "prisma generate",
     "ingest:seed": "tsx scripts/ingest-seed.ts"
   },
   "dependencies": {
