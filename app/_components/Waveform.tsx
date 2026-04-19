@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { usePlayer } from "./PlayerProvider";
 import { useNowPlaying } from "./useNowPlaying";
 
 const BAR_COUNT = 64;
@@ -21,34 +20,23 @@ function buildHeights(): number[] {
 }
 
 // Wave fills as the current track progresses (truthful — driven by
-// startedAt + durationSeconds from the now-playing API). When the API
-// has no track info yet, we fall back to the gentler "audio is live"
-// animation instead of pretending to know progress.
+// startedAt + durationSeconds from /api/station/now-playing). When the API
+// has no track info, all bars stay grey — never lit blue dishonestly.
 export function Waveform() {
-  const { isPlaying } = usePlayer();
   const { progress, isPlaying: hasTrack } = useNowPlaying();
   const heights = useMemo(buildHeights, []);
 
   const filledThrough = hasTrack ? Math.floor(progress * BAR_COUNT) : 0;
-  const useFakeAnimation = isPlaying && !hasTrack;
 
   return (
     <div className="wave">
-      {heights.map((h, i) => {
-        const filled = hasTrack ? i < filledThrough : isPlaying;
-        return (
-          <div
-            key={i}
-            className={`wave-bar ${filled ? "active" : ""}`}
-            style={{
-              height: `${h}%`,
-              animation: useFakeAnimation
-                ? `eqBar ${1.2 + (i % 5) * 0.15}s ease-in-out ${(i % 8) * 0.1}s infinite`
-                : "none",
-            }}
-          />
-        );
-      })}
+      {heights.map((h, i) => (
+        <div
+          key={i}
+          className={`wave-bar ${hasTrack && i < filledThrough ? "active" : ""}`}
+          style={{ height: `${h}%` }}
+        />
+      ))}
     </div>
   );
 }

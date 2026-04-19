@@ -46,6 +46,21 @@ export async function GET() {
     );
   }
 
+  // Freshness check — Liquidsoap should push a new track-started for every
+  // track. If the current row's expectedEndAt is in the past with no update,
+  // Liquidsoap is either down or hasn't moved on yet; either way we don't
+  // want the website lying about progress.
+  const STALE_GRACE_SECONDS = 30;
+  if (np.expectedEndAt) {
+    const expiredMs = Date.now() - np.expectedEndAt.getTime();
+    if (expiredMs > STALE_GRACE_SECONDS * 1000) {
+      return new globalThis.Response(
+        JSON.stringify({ isPlaying: false } satisfies Response),
+        { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
+      );
+    }
+  }
+
   const track = await prisma.track.findUnique({
     where: { id: np.currentTrackId },
     select: {
