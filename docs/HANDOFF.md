@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-19 (mini-server, Operator Dashboard live)
+Last updated: 2026-04-19 (mini-server, now-playing pipeline live)
 
 ## Where we are
 
@@ -20,6 +20,18 @@ Last updated: 2026-04-19 (mini-server, Operator Dashboard live)
 - ✅ Cloudflare Tunnel live — `https://api.numaradio.com/stream` publicly reachable
 
 The station is live and listenable from any browser worldwide.
+
+**Public site — now-playing + real listener count LIVE**
+- Hero shows truthful title / artist / artwork fetched from Neon `NowPlaying`,
+  pushed there by Liquidsoap's `on_track` → `POST /api/internal/track-started`
+  (auth: `INTERNAL_API_SECRET` shared between Vercel env and `/etc/numa/env`).
+- Public listener count via `/api/station/listeners` = `15 + real` (additive
+  boost, not a floor — pressing play always nudges the counter).
+- Tunnel now exposes `/status-json.xsl` in addition to `/stream` so the listener
+  endpoint can read Icecast directly.
+- See Decisions Log 2026-04-19 (night) for the Liquidsoap 2.2.4 metadata
+  quirks that took the most time (`playlist.reloadable` hides the source URL
+  in `initial_uri`, not `filename`).
 
 **Phase 2 (Operator Dashboard) — LIVE**
 - ✅ `https://dashboard.numaradio.com` running behind Cloudflare Access
