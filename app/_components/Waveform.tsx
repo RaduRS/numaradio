@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { usePlayer } from "./PlayerProvider";
 
 const BAR_COUNT = 64;
@@ -17,26 +17,27 @@ function buildHeights(): number[] {
   return arr;
 }
 
+// Live audio indicator. NOT a song-progress bar — the browser's <audio>
+// element receiving a continuous stream has no idea what's playing or where
+// in the song we are. When Phase 4 lands and we have a now-playing API
+// (track + startedAt + duration), turn this back into a real progress fill.
 export function Waveform() {
   const { isPlaying } = usePlayer();
   const heights = useMemo(buildHeights, []);
-  const [progress, setProgress] = useState(40);
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    const id = setInterval(() => {
-      setProgress((p) => (p + 0.3 > BAR_COUNT ? 0 : p + 0.3));
-    }, 200);
-    return () => clearInterval(id);
-  }, [isPlaying]);
 
   return (
-    <div className="wave">
+    <div className="wave" data-playing={isPlaying ? "true" : "false"}>
       {heights.map((h, i) => (
         <div
           key={i}
-          className={`wave-bar ${i < progress ? "active" : ""}`}
-          style={{ height: `${h}%` }}
+          className={`wave-bar ${isPlaying ? "active" : ""}`}
+          style={{
+            height: `${h}%`,
+            // Stagger a subtle scaleY pulse across all bars when live.
+            animation: isPlaying
+              ? `eqBar ${1.2 + (i % 5) * 0.15}s ease-in-out ${(i % 8) * 0.1}s infinite`
+              : "none",
+          }}
         />
       ))}
     </div>

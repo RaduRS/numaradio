@@ -2,12 +2,11 @@
 
 import { usePlayer } from "./PlayerProvider";
 import {
-  BlueskyIcon,
   CopyIcon,
   LoadingIcon,
   PauseIcon,
   PlayIcon,
-  WhatsAppIcon,
+  ShareIcon,
 } from "./Icons";
 import { LiveClock } from "./LiveClock";
 import { Waveform } from "./Waveform";
@@ -57,12 +56,8 @@ export function PlayerCard() {
             <CopyIcon className="" />
             Copy link
           </button>
-          <button className="share-pill" aria-label="Share on Bluesky">
-            <BlueskyIcon className="" />
-            Post
-          </button>
-          <button className="share-pill" aria-label="Share on WhatsApp">
-            <WhatsAppIcon className="" />
+          <button className="share-pill" aria-label="Share">
+            <ShareIcon className="" />
             Share
           </button>
         </div>

@@ -1,10 +1,5 @@
 import { ListenerCount } from "./ListenerCount";
-import {
-  BlueskyIcon,
-  InstagramIcon,
-  MastodonIcon,
-  RssIcon,
-} from "./Icons";
+import { InstagramIcon, RssIcon } from "./Icons";
 
 export function Footer() {
   return (
@@ -61,14 +56,8 @@ export function Footer() {
         <div className="footer-base">
           <span>© 2026 Numa Radio · Broadcasting from everywhere</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <a href="#" className="f-social" aria-label="Bluesky">
-              <BlueskyIcon className="" />
-            </a>
             <a href="#" className="f-social" aria-label="Instagram">
               <InstagramIcon className="" />
-            </a>
-            <a href="#" className="f-social" aria-label="Mastodon">
-              <MastodonIcon className="" />
             </a>
             <a href="#" className="f-social" aria-label="RSS">
               <RssIcon className="" />

@@ -154,6 +154,9 @@ ingress:
     path: /stream
     service: http://localhost:8000
   - hostname: api.numaradio.com
+    path: /status-json.xsl
+    service: http://localhost:8000
+  - hostname: api.numaradio.com
     service: http_status:404
   - service: http_status:404
 ```
@@ -161,8 +164,13 @@ ingress:
 Cloudflare Tunnel **does not support path rewrites** — the `service:` URL can't
 contain a path. The path from the listener's request is forwarded as-is. That's
 why the Icecast mount in `liquidsoap/numa.liq` is `/stream` (matching the
-public URL), not `/numa`. Paths other than `/stream` on `api.numaradio.com`
-return 404, so Icecast's admin UI and `status-json.xsl` stay internal-only.
+public URL), not `/numa`. The `/status-json.xsl` path lets the website read
+real listener counts via `/api/station/listeners` without exposing Icecast's
+admin UI. Other paths return 404.
+
+(If you've already deployed and need to add `/status-json.xsl` later, edit
+`~/.cloudflared/config.yml` AND `/etc/cloudflared/config.yml` to match, then
+`sudo systemctl restart cloudflared`.)
 
 Point DNS at the tunnel:
 
