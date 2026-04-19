@@ -1,0 +1,414 @@
+// Numa Radio — production schema
+// Source of truth: SaaS/Numa Radio/3. AI Radio Final Implementation Blueprint.md
+// Generated 2026-04-19. Suno-link request type intentionally omitted (see Decisions Log).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum StationStatus {
+  active
+  maintenance
+  paused
+}
+
+enum TrackSourceType {
+  suno_manual
+  minimax_request
+  external_import
+  internal_test
+}
+
+enum TrackStatus {
+  draft
+  processing
+  ready
+  queued
+  playing
+  played
+  held
+  archived
+  failed
+}
+
+enum AiringPolicy {
+  library
+  request_only
+  priority_request
+  hold
+}
+
+enum SafetyStatus {
+  pending
+  approved
+  blocked
+  needs_review
+}
+
+enum RequestStatus {
+  submitted
+  rate_limited
+  rejected_policy
+  queued
+  sanitizing
+  deduplicated
+  prompt_ready
+  generating_song
+  song_failed
+  generating_art
+  art_failed
+  assembling_track
+  ready_for_queue
+  queued_for_air
+  aired
+  expired
+}
+
+enum ModerationStatus {
+  pending
+  allowed
+  rewritten
+  blocked
+  held
+}
+
+enum QueueType {
+  music
+  host_intro
+  host_outro
+  shoutout
+  station_id
+  weather
+  transition
+}
+
+enum QueueStatus {
+  planned
+  reserved
+  staged
+  playing
+  completed
+  skipped
+  cancelled
+  failed
+}
+
+enum SegmentType {
+  audio_track
+  audio_host
+  audio_id
+  audio_transition
+}
+
+enum PlaybackStatus {
+  planned
+  staged
+  started
+  completed
+  failed
+  skipped
+}
+
+enum WorkflowType {
+  request_generation
+  shoutout_preparation
+  track_ingest
+  queue_repair
+  host_generation
+  asset_cleanup
+}
+
+enum WorkflowStatus {
+  created
+  running
+  waiting_callback
+  retrying
+  completed
+  failed
+  aborted
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+model Station {
+  id                  String        @id @default(cuid())
+  slug                String        @unique
+  name                String
+  description         String?
+  status              StationStatus @default(active)
+  streamUrl           String?
+  defaultVoiceProfile String?
+  defaultArtStyle     String?
+  timezone            String        @default("Europe/London")
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  tracks      Track[]
+  requests    Request[]
+  shoutouts   Shoutout[]
+  queueItems  QueueItem[]
+  segments    BroadcastSegment[]
+  playHistory PlayHistory[]
+}
+
+model Track {
+  id                  String          @id @default(cuid())
+  stationId           String
+  sourceType          TrackSourceType
+  sourceReference     String?
+  title               String
+  artistDisplay       String?
+  description         String?
+  mood                String?
+  genre               String?
+  bpm                 Int?
+  durationSeconds     Int?
+  language            String?
+  lyricsSummary       String?
+  promptSummary       String?
+  provenanceJson      Json?
+  rightsPolicy        String?
+  airingPolicy        AiringPolicy    @default(library)
+  safetyStatus        SafetyStatus    @default(pending)
+  trackStatus         TrackStatus     @default(draft)
+  primaryAudioAssetId String?
+  primaryArtAssetId   String?
+  requestId           String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  station     Station       @relation(fields: [stationId], references: [id])
+  request     Request?      @relation(fields: [requestId], references: [id])
+  assets      TrackAsset[]
+  queueItems  QueueItem[]
+  playHistory PlayHistory[]
+
+  @@index([stationId, trackStatus, airingPolicy])
+}
+
+model TrackAsset {
+  id              String    @id @default(cuid())
+  trackId         String
+  assetType       String
+  storageProvider String    @default("b2")
+  storageKey      String    @unique
+  publicUrl       String
+  mimeType        String?
+  byteSize        Int?
+  durationSeconds Int?
+  width           Int?
+  height          Int?
+  checksum        String?
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  track      Track              @relation(fields: [trackId], references: [id])
+  queueItems QueueItem[]
+  segments   BroadcastSegment[]
+}
+
+model Request {
+  id                    String           @id @default(cuid())
+  stationId             String
+  publicRequestCode     String           @unique
+  requestType           String
+  rawText               String
+  cleanText             String?
+  promptPayloadJson     Json?
+  requesterName         String?
+  requesterLocation     String?
+  fingerprintHash       String?
+  ipHash                String?
+  requestStatus         RequestStatus    @default(submitted)
+  priorityScore         Int              @default(0)
+  queuePositionEstimate Int?
+  moderationStatus      ModerationStatus @default(pending)
+  moderationReason      String?
+  dedupeKey             String?
+  resultTrackId         String?
+  submittedAt           DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  station Station        @relation(fields: [stationId], references: [id])
+  events  RequestEvent[]
+  tracks  Track[]
+
+  @@index([requestStatus, submittedAt])
+}
+
+model RequestEvent {
+  id          String   @id @default(cuid())
+  requestId   String
+  eventType   String
+  fromStatus  String?
+  toStatus    String?
+  message     String?
+  payloadJson Json?
+  createdAt   DateTime @default(now())
+
+  request Request @relation(fields: [requestId], references: [id])
+}
+
+model Shoutout {
+  id                String           @id @default(cuid())
+  stationId         String
+  rawText           String
+  cleanText         String?
+  broadcastText     String?
+  requesterName     String?
+  fingerprintHash   String?
+  ipHash            String?
+  moderationStatus  ModerationStatus @default(pending)
+  moderationReason  String?
+  deliveryStatus    String           @default("pending")
+  linkedQueueItemId String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  station Station @relation(fields: [stationId], references: [id])
+
+  @@index([moderationStatus, deliveryStatus, createdAt])
+}
+
+model Vote {
+  id              String   @id @default(cuid())
+  stationId       String
+  trackId         String
+  voteType        String
+  fingerprintHash String?
+  ipHash          String?
+  createdAt       DateTime @default(now())
+
+  @@index([trackId, createdAt])
+}
+
+model QueueItem {
+  id                       String      @id @default(cuid())
+  stationId                String
+  queueType                QueueType
+  sourceObjectType         String
+  sourceObjectId           String
+  trackId                  String?
+  assetId                  String?
+  plannedStartAt           DateTime?
+  estimatedDurationSeconds Int?
+  priorityBand             String      @default("normal")
+  queueStatus              QueueStatus @default(planned)
+  positionIndex            Int
+  generationGroupId        String?
+  reasonCode               String?
+  insertedBy               String      @default("system")
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  station  Station            @relation(fields: [stationId], references: [id])
+  track    Track?             @relation(fields: [trackId], references: [id])
+  asset    TrackAsset?        @relation(fields: [assetId], references: [id])
+  segments BroadcastSegment[]
+
+  @@index([stationId, queueStatus, positionIndex])
+}
+
+model BroadcastSegment {
+  id              String         @id @default(cuid())
+  stationId       String
+  queueItemId     String
+  segmentType     SegmentType
+  assetId         String
+  segmentOrder    Int
+  durationSeconds Int
+  playbackStatus  PlaybackStatus @default(planned)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  station   Station    @relation(fields: [stationId], references: [id])
+  queueItem QueueItem  @relation(fields: [queueItemId], references: [id])
+  asset     TrackAsset @relation(fields: [assetId], references: [id])
+
+  @@index([playbackStatus, createdAt])
+}
+
+model NowPlaying {
+  stationId          String    @id
+  currentQueueItemId String?
+  currentSegmentId   String?
+  currentTrackId     String?
+  currentAssetId     String?
+  startedAt          DateTime?
+  expectedEndAt      DateTime?
+  lastHeartbeatAt    DateTime?
+  updatedAt          DateTime  @updatedAt
+}
+
+model PlayHistory {
+  id                String    @id @default(cuid())
+  stationId         String
+  queueItemId       String?
+  segmentId         String?
+  trackId           String?
+  segmentType       String
+  titleSnapshot     String?
+  startedAt         DateTime
+  endedAt           DateTime?
+  durationSeconds   Int?
+  completedNormally Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+  track   Track?  @relation(fields: [trackId], references: [id])
+
+  @@index([stationId, startedAt])
+}
+
+model ModerationFlag {
+  id          String   @id @default(cuid())
+  sourceType  String
+  sourceId    String
+  ruleCode    String
+  severity    String
+  decision    String
+  detailsJson Json?
+  createdAt   DateTime @default(now())
+
+  @@index([sourceType, sourceId])
+}
+
+// Polymorphic — sourceType + sourceId reference Request, Shoutout, Track, etc.
+model WorkflowRun {
+  id           String         @id @default(cuid())
+  workflowType WorkflowType
+  sourceType   String
+  sourceId     String
+  runStatus    WorkflowStatus @default(created)
+  attemptCount Int            @default(0)
+  startedAt    DateTime       @default(now())
+  finishedAt   DateTime?
+  errorCode    String?
+  errorMessage String?
+  payloadJson  Json?
+  resultJson   Json?
+
+  @@index([runStatus, workflowType, startedAt])
+  @@index([sourceType, sourceId])
+}
+
+model SystemEvent {
+  id          String    @id @default(cuid())
+  eventType   String
+  sourceType  String
+  sourceId    String
+  payloadJson Json?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([eventType, processedAt, createdAt])
+}
