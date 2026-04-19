@@ -24,7 +24,7 @@ output.icecast(
   host="localhost",
   port=8000,
   password=environment.get("ICECAST_SOURCE_PASSWORD"),
-  mount="/numa",
+  mount="/stream",
   name="Numa Radio",
   description="Always-on AI radio",
   url="https://numaradio.com",

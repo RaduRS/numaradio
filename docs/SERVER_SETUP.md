@@ -111,12 +111,12 @@ liquidsoap ~/numaradio/liquidsoap/numa.liq
 In another shell, verify it's airing:
 
 ```bash
-curl -sI http://localhost:8000/numa | head -5
-# HTTP/1.0 200 OK
-# Content-Type: audio/mpeg
+curl -s http://localhost:8000/status-json.xsl | head -c 300
+# Should show the /stream mount with bitrate 192, 2 channels.
+# (Icecast returns 400 on HEAD for stream mounts — use status-json.xsl or a ranged GET instead.)
 ```
 
-Listen with `mpv http://localhost:8000/numa` or any browser.
+Listen with `mpv http://localhost:8000/stream` or any browser.
 
 ## 4. Cloudflare Tunnel — expose `api.numaradio.com/stream`
 
@@ -152,13 +152,17 @@ credentials-file: /home/<your-username>/.cloudflared/<UUID>.json
 ingress:
   - hostname: api.numaradio.com
     path: /stream
-    service: http://localhost:8000/numa
+    service: http://localhost:8000
   - hostname: api.numaradio.com
     service: http_status:404
+  - service: http_status:404
 ```
 
-(The path rewrite means `https://api.numaradio.com/stream` proxies to
-`http://localhost:8000/numa`. We don't expose Icecast's web admin externally.)
+Cloudflare Tunnel **does not support path rewrites** — the `service:` URL can't
+contain a path. The path from the listener's request is forwarded as-is. That's
+why the Icecast mount in `liquidsoap/numa.liq` is `/stream` (matching the
+public URL), not `/numa`. Paths other than `/stream` on `api.numaradio.com`
+return 404, so Icecast's admin UI and `status-json.xsl` stay internal-only.
 
 Point DNS at the tunnel:
 
@@ -213,7 +217,26 @@ sudo systemctl enable --now numa-liquidsoap
 
 ### cloudflared
 
+`sudo cloudflared service install` looks for config in `/etc/cloudflared/` —
+not the user's `~/.cloudflared/`. Copy the credentials and write a config that
+references the new location before installing:
+
 ```bash
+sudo mkdir -p /etc/cloudflared
+sudo cp ~/.cloudflared/<TUNNEL-UUID>.json /etc/cloudflared/
+sudo tee /etc/cloudflared/config.yml > /dev/null <<EOF
+tunnel: <TUNNEL-UUID>
+credentials-file: /etc/cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  - hostname: api.numaradio.com
+    path: /stream
+    service: http://localhost:8000
+  - hostname: api.numaradio.com
+    service: http_status:404
+  - service: http_status:404
+EOF
+
 sudo cloudflared service install
 sudo systemctl enable --now cloudflared
 ```
