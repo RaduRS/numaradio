@@ -30,14 +30,32 @@ api_url = environment.get(
 )
 
 def notify_track_started(metadata) =
-  url = metadata["filename"]
-  if url != "" then
-    log.important("[numa] track started: " ^ url)
+  # playlist.reloadable pre-downloads HTTP items to /tmp, so "filename" is the
+  # local cache path, not the original B2 URL. Prefer fields that retain the
+  # original remote URL; include title/artist so the API can fall back to an
+  # ID3 lookup when no URL field is useful.
+  filename = metadata["filename"]
+  source_url = metadata["source_url"]
+  initial_uri = metadata["initial_uri"]
+  title = metadata["title"]
+  artist = metadata["artist"]
+  src = if source_url != "" then source_url
+        elsif initial_uri != "" then initial_uri
+        else filename end
+  log.important(
+    "[numa] track: src=" ^ src ^
+    " filename=" ^ filename ^
+    " source_url=" ^ source_url ^
+    " initial_uri=" ^ initial_uri ^
+    " title=" ^ title ^
+    " artist=" ^ artist
+  )
+  if src != "" or title != "" then
     secret = environment.get(default="", "INTERNAL_API_SECRET")
     if secret == "" then
       log.severe("[numa] INTERNAL_API_SECRET not set — skipping notify")
     else
-      body = json.stringify({sourceUrl=url})
+      body = json.stringify({sourceUrl=src, title=title, artist=artist})
       try
         response = http.post(
           headers=[
@@ -57,9 +75,9 @@ def notify_track_started(metadata) =
   end
 end
 
-# Method form returns a NEW source — must assign back, otherwise the
-# wrapped source is dropped and the callback never fires.
-source = source.on_track(notify_track_started)
+# Liquidsoap 2.2.4 method form: returns unit, mutates the source in place.
+# The callback fires on every track boundary even without a reassignment.
+source.on_track(notify_track_started)
 log.important("[numa] notify pipeline ready, api=" ^ api_url)
 
 # mksafe wraps the source so a stall or empty playlist falls back to silence
