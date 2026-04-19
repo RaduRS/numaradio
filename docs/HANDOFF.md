@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-19 (Mac, end of Phase 1 ingest)
+Last updated: 2026-04-19 (mini-server, end of Operator Dashboard build)
 
 ## Where we are
 
@@ -20,6 +20,25 @@ Last updated: 2026-04-19 (Mac, end of Phase 1 ingest)
 - ⏳ Set up Cloudflare Tunnel so `https://api.numaradio.com/stream` is publicly reachable
 
 When all three remaining Phase 1 tasks are done, the station is live.
+
+**Phase 2 (Operator Dashboard) — code complete, pending systemd install**
+- ✅ `dashboard/` Next.js 16 app scaffolded + shadcn/ui on dark Numa palette
+- ✅ Library layer (`systemd`, `icecast`, `cloudflared`, `health`, `db`) with unit tests (8/8 pass)
+- ✅ API routes: `GET /api/status`, `POST /api/services/[name]/[action]`, `GET /api/logs/[name]`
+- ✅ UI: status pills, services card (start/stop/restart + confirm dialog + toast),
+  health card (Neon/B2/Tunnel), logs card (journalctl tail)
+- ✅ `npm run build` passes
+- ✅ Cloudflare Tunnel ingress and sudoers allowlist already installed
+  (see `dashboard/deploy/*` reference copies)
+- ⏳ **Next step on mini-server:** install the systemd unit and enable the service:
+  ```
+  sudo cp dashboard/deploy/numa-dashboard.service /etc/systemd/system/
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now numa-dashboard
+  ```
+  Then walk through `dashboard/ACCEPTANCE.md` in the browser.
+- Design spec: `docs/superpowers/specs/2026-04-19-operator-dashboard-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-04-19-operator-dashboard.md`
 
 ## Vault location (product decisions / design / policy)
 

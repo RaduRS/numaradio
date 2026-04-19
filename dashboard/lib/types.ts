@@ -1,4 +1,4 @@
-import type { ServiceName } from "./systemd";
+import type { ServiceName } from "./service-names";
 
 export interface StatusSnapshot {
   ts: string;

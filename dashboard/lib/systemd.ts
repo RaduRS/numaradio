@@ -1,10 +1,14 @@
+import "server-only";
 import { spawn } from "node:child_process";
+import {
+  SERVICE_NAMES,
+  SERVICE_ACTIONS,
+  type ServiceName,
+  type ServiceAction,
+} from "./service-names";
 
-export const SERVICE_NAMES = ["icecast2", "numa-liquidsoap", "cloudflared"] as const;
-export const SERVICE_ACTIONS = ["start", "stop", "restart"] as const;
-
-export type ServiceName = (typeof SERVICE_NAMES)[number];
-export type ServiceAction = (typeof SERVICE_ACTIONS)[number];
+export { SERVICE_NAMES, SERVICE_ACTIONS };
+export type { ServiceName, ServiceAction };
 
 const SERVICES = new Set<string>(SERVICE_NAMES);
 const ACTIONS = new Set<string>(SERVICE_ACTIONS);

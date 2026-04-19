@@ -11,13 +11,13 @@ export async function checkNeon(timeoutMs = 2_000): Promise<HealthPing> {
   const start = Date.now();
   try {
     const pool = getDbPool();
-    const res = await Promise.race<Promise<HealthPing | null>>([
-      pool.query("SELECT 1 AS ok").then(() => ({ ok: true, latencyMs: Date.now() - start })),
-      new Promise<HealthPing>((resolve) =>
-        setTimeout(() => resolve({ ok: false, error: `timeout after ${timeoutMs}ms` }), timeoutMs),
-      ),
-    ]);
-    return res ?? { ok: false, error: "unknown" };
+    const query: Promise<HealthPing> = pool
+      .query("SELECT 1 AS ok")
+      .then(() => ({ ok: true, latencyMs: Date.now() - start }));
+    const timeout = new Promise<HealthPing>((resolve) =>
+      setTimeout(() => resolve({ ok: false, error: `timeout after ${timeoutMs}ms` }), timeoutMs),
+    );
+    return await Promise.race([query, timeout]);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "query failed" };
   }

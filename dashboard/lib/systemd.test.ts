@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateServiceAction, type ServiceName, type ServiceAction } from "./systemd.ts";
+import { validateServiceAction } from "./systemd.ts";
+import type { ServiceName, ServiceAction } from "./service-names.ts";
 
 test("validateServiceAction accepts all whitelisted combos", () => {
   for (const svc of ["icecast2", "numa-liquidsoap", "cloudflared"] as ServiceName[]) {

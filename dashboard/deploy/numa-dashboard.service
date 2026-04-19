@@ -1,0 +1,19 @@
+[Unit]
+Description=Numa Radio — Operator Dashboard (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=marku
+WorkingDirectory=/home/marku/saas/numaradio/dashboard
+EnvironmentFile=/home/marku/saas/numaradio/dashboard/.env.local
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=numa-dashboard
+
+[Install]
+WantedBy=multi-user.target

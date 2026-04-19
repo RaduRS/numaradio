@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -90,11 +91,14 @@ export function ServiceRow({ svc, onActionComplete }: Props) {
           {pending === "stop" ? "…" : "Stop"}
         </Button>
         <Dialog>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="secondary" disabled={!!pending}>
-              {pending === "restart" ? "…" : "Restart"}
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            disabled={!!pending}
+            render={
+              <Button size="sm" variant="secondary">
+                {pending === "restart" ? "…" : "Restart"}
+              </Button>
+            }
+          />
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Restart {svc.name}?</DialogTitle>
@@ -103,8 +107,12 @@ export function ServiceRow({ svc, onActionComplete }: Props) {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline">Cancel</Button>
-              <Button onClick={() => run("restart")}>Confirm restart</Button>
+              <DialogClose render={<Button variant="outline">Cancel</Button>} />
+              <DialogClose
+                render={
+                  <Button onClick={() => run("restart")}>Confirm restart</Button>
+                }
+              />
             </DialogFooter>
           </DialogContent>
         </Dialog>

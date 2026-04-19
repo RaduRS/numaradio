@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SERVICE_NAMES, type ServiceName } from "@/lib/systemd";
+import { SERVICE_NAMES, type ServiceName } from "@/lib/service-names";
 
 interface LogsResponse {
   name: string;
