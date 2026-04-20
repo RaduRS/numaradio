@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-20 (on-demand queue + Neon rotation code landed, ready to deploy)
+Last updated: 2026-04-20 (on-demand queue + Neon rotation LIVE on Orion)
 
 ## Where we are
 
@@ -46,31 +46,39 @@ The station is live and listenable from any browser worldwide.
 - Acceptance checklist: `dashboard/ACCEPTANCE.md`
 - To redeploy after a code change: `git pull && cd dashboard && npm run build && sudo systemctl restart numa-dashboard`
 
-**On-demand queue + Neon rotation — READY (code only, not deployed yet)**
-- ✅ `workers/queue-daemon/` — Node service: loopback HTTP (`POST /push`, `POST /on-track`, `GET /status`), Liquidsoap telnet socket with exponential reconnect, hydrator that reads staged priority `QueueItem`s from Neon and re-pushes on startup/reconnect.
-- ✅ `scripts/refresh-rotation.ts` — regenerates `/etc/numa/playlist.m3u` from Neon: library tracks (`trackStatus='ready' AND airingPolicy='library'`) minus the last 20 `PlayHistory` entries, Fisher–Yates shuffled, atomic tmp→rename write.
-- ✅ `liquidsoap/numa.liq` — now uses `fallback(track_sensitive=true, [priority_request_queue, rotation, blank()])`. Priority requests air at the next track boundary, never mid-song. `on_track` callback POSTs to both Vercel (`/api/internal/track-started`) AND the local daemon (`/on-track`) so queue-item transitions don't depend on Vercel.
-- ✅ `app/api/internal/track-started/route.ts` — now writes `PlayHistory` alongside `NowPlaying` in one transaction, so rotation's "avoid recent N" filter has a reliable source of truth.
+**On-demand queue + Neon rotation — LIVE**
+- ✅ `numa-queue-daemon.service` active on Orion, loopback `:4000`. Exposes
+  `POST /push`, `POST /on-track`, `GET /status`. Owns a persistent telnet
+  connection to Liquidsoap at `127.0.0.1:1234` with exponential reconnect.
+- ✅ `numa-rotation-refresher.timer` active, firing every 2 min (plus
+  `OnBootSec=30s`). Regenerates `/etc/numa/playlist.m3u` from Neon:
+  library tracks (`trackStatus='ready' AND airingPolicy='library'`) minus
+  the last 20 `PlayHistory` entries, Fisher–Yates shuffled, atomic tmp→rename.
+- ✅ `liquidsoap/numa.liq` now uses `fallback(track_sensitive=true, [priority, rotation, blank()])`.
+  Priority requests air at the next track boundary, never mid-song.
+  `on_track` callback POSTs to both Vercel (`/api/internal/track-started`)
+  AND the local daemon (`/on-track`) so queue-item transitions don't
+  depend on Vercel. Telnet idle timeout disabled
+  (`settings.server.timeout.set(-1.)`) — see Decisions Log 2026-04-20 for why.
+- ✅ `app/api/internal/track-started/route.ts` writes `PlayHistory` alongside
+  `NowPlaying` in one transaction so rotation's "avoid recent N" filter
+  has a reliable source of truth.
 - ✅ Manual CLI: `npm run queue:push -- --trackId=<id> [--reason=<text>]`.
-- ✅ Systemd units written at `deploy/systemd/` (queue daemon unit, rotation refresher service + timer).
-- ✅ 27 unit tests across `workers/queue-daemon/` and `scripts/`: `npm test`.
+- ✅ 27 unit tests: `npm test`.
 
-**NanoClaw integration seam:** once NanoClaw exists, its final step is `POST http://127.0.0.1:4000/push` with `{ trackId, sourceUrl, requestId?, reason? }`. No protocol negotiation — just that one call.
+**NanoClaw integration seam:** when NanoClaw exists, its final step is `POST http://127.0.0.1:4000/push` with `{ trackId, sourceUrl, requestId?, reason? }`. No protocol negotiation — just that one call.
 
 **Spec:** `docs/superpowers/specs/2026-04-20-on-demand-track-queue-design.md`
 **Plan:** `docs/superpowers/plans/2026-04-20-on-demand-track-queue.md`
 
-**To deploy (next step):**
+**To redeploy after a code change:**
 ```bash
-sudo cp deploy/systemd/numa-queue-daemon.service /etc/systemd/system/
-sudo cp deploy/systemd/numa-rotation-refresher.service /etc/systemd/system/
-sudo cp deploy/systemd/numa-rotation-refresher.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now numa-rotation-refresher.timer
-sudo systemctl enable --now numa-queue-daemon.service
-sudo systemctl restart numa-liquidsoap  # picks up new numa.liq
+git pull
+sudo systemctl restart numa-queue-daemon
+sudo systemctl restart numa-liquidsoap  # only if numa.liq changed
 ```
-Then verify `curl -sS http://127.0.0.1:4000/status | jq .` returns `{"socket":"connected",...}`. The unit files live in `deploy/systemd/` in this repo — the commands above copy them into place. Only the `sudo` install steps require operator action; the copy-in is deliberately manual so the operator reviews any changes before they land under `/etc/systemd/`.
+Systemd units live in `deploy/systemd/` in the repo; they're already
+installed under `/etc/systemd/system/`.
 
 ## Vault location (product decisions / design / policy)
 
