@@ -230,7 +230,7 @@ voice = limit(threshold=-1., voice)
 # unducked on top.
 source = smooth_add(
   duration=0.5,
-  p=0.5,
+  p=0.3,
   normal=music_bed,
   special=voice
 )
