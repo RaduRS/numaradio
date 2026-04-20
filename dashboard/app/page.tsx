@@ -20,12 +20,20 @@ export default function OperatorDashboard() {
           >
             Numa<span className="text-accent">·</span>Radio
           </span>
-          <Link
-            href="/library"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
-          >
-            Library →
-          </Link>
+          <nav className="flex items-center gap-4">
+            <Link
+              href="/shoutouts"
+              className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
+            >
+              Shoutouts →
+            </Link>
+            <Link
+              href="/library"
+              className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
+            >
+              Library →
+            </Link>
+          </nav>
         </div>
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
           Operator · polling every 5s {isStale ? "· ⚠ stale, retrying" : ""}
