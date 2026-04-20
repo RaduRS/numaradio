@@ -11,6 +11,7 @@ import {
 import { LiveClock } from "./LiveClock";
 import { Waveform } from "./Waveform";
 import { useNowPlaying } from "./useNowPlaying";
+import { VoteButtons } from "./VoteButtons";
 
 function VolumeIcon({ muted, level }: { muted: boolean; level: number }) {
   // Speaker body + varying number of wave arcs based on volume level.
@@ -111,15 +112,18 @@ export function PlayerCard() {
       <div className="now-info">
         <div className="track">{title}</div>
         <div className="artist">{artist.toUpperCase()}</div>
-        <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
-          <button className="share-pill" aria-label="Copy link">
-            <CopyIcon className="" />
-            Copy link
-          </button>
-          <button className="share-pill" aria-label="Share">
-            <ShareIcon className="" />
-            Share
-          </button>
+        <div className="now-actions">
+          <VoteButtons trackId={np.trackId} />
+          <div className="now-shares">
+            <button className="share-pill" aria-label="Copy link">
+              <CopyIcon className="" />
+              Copy link
+            </button>
+            <button className="share-pill" aria-label="Share">
+              <ShareIcon className="" />
+              Share
+            </button>
+          </div>
         </div>
       </div>
 

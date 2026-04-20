@@ -189,6 +189,7 @@ model Track {
   assets      TrackAsset[]
   queueItems  QueueItem[]
   playHistory PlayHistory[]
+  votes       TrackVote[]
 
   @@index([stationId, trackStatus, airingPolicy])
 }
@@ -423,4 +424,21 @@ model SiteVisitor {
   lastSeenAt DateTime @default(now())
 
   @@index([lastSeenAt])
+}
+
+// Anonymous thumbs-up / thumbs-down votes on tracks. Keyed by the same
+// in-memory sessionId as SiteVisitor — so one tab has one voice per track.
+// Refreshing the tab mints a new sessionId and can revote; that's fine for
+// a vibe gauge, not an audit. value is -1 or 1 (never 0 — a missing row
+// means "no vote").
+model TrackVote {
+  trackId   String
+  sessionId String
+  value     Int
+  updatedAt DateTime @updatedAt
+
+  track Track @relation(fields: [trackId], references: [id])
+
+  @@id([trackId, sessionId])
+  @@index([trackId, value])
 }

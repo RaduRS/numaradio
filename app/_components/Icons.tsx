@@ -14,6 +14,8 @@ import {
   Rss,
   Send,
   Share2,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import {
   SiBluesky,
@@ -88,4 +90,12 @@ export function MastodonIcon({ className = "", size }: IconProps) {
 
 export function RssIcon({ className = "", size }: IconProps) {
   return <Rss className={className} size={size} strokeWidth={1.6} />;
+}
+
+export function ThumbsUpIcon({ className = "", size }: IconProps) {
+  return <ThumbsUp className={className} size={size} strokeWidth={1.8} />;
+}
+
+export function ThumbsDownIcon({ className = "", size }: IconProps) {
+  return <ThumbsDown className={className} size={size} strokeWidth={1.8} />;
 }

@@ -2292,6 +2292,65 @@
   max-width: 520px;
 }
 
+/* Thumbs up / down row under the hero player card. */
+.now-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+.now-shares {
+  display: flex;
+  gap: 6px;
+}
+.vote-row {
+  display: inline-flex;
+  gap: 6px;
+}
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.vote-btn:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--fg-dim);
+}
+.vote-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.vote-btn .vote-icon {
+  width: 13px;
+  height: 13px;
+}
+.vote-btn.up.active {
+  color: var(--accent);
+  border-color: rgba(79, 209, 197, 0.45);
+  background: rgba(79, 209, 197, 0.08);
+}
+.vote-btn.down.active {
+  color: var(--red-live);
+  border-color: rgba(255, 77, 77, 0.45);
+  background: rgba(255, 77, 77, 0.08);
+}
+.vote-count {
+  font-variant-numeric: tabular-nums;
+  min-width: 1ch;
+}
+
 /* Red pulsing "Live" indicator used in the Broadcast section's Just
    Played / Up Next head. Shares the same dot style and animation as the
    navbar .live-chip so the whole site says "live" with the same tell. */
