@@ -1,4 +1,3 @@
-import { PlayerProvider } from "./_components/PlayerProvider";
 import { Nav } from "./_components/Nav";
 import { Hero } from "./_components/Hero";
 import { Marquee } from "./_components/Marquee";
@@ -12,7 +11,7 @@ import { MiniPlayer } from "./_components/MiniPlayer";
 
 export default function Home() {
   return (
-    <PlayerProvider>
+    <>
       <Nav />
       <Hero />
       <Marquee />
@@ -23,6 +22,6 @@ export default function Home() {
       <Mobile />
       <Footer />
       <MiniPlayer />
-    </PlayerProvider>
+    </>
   );
 }

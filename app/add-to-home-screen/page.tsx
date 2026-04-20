@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PlayerProvider } from "../_components/PlayerProvider";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { ListenLiveButton } from "../_components/ListenLiveButton";
@@ -637,7 +636,7 @@ export default function AddToHomeScreen() {
   }
 
   return (
-    <PlayerProvider>
+    <>
       <Nav />
 
       <section className="install-hero">
@@ -808,6 +807,6 @@ export default function AddToHomeScreen() {
       </section>
 
       <Footer />
-    </PlayerProvider>
+    </>
   );
 }

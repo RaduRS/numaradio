@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PlayerProvider } from "../_components/PlayerProvider";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { EmailCta } from "./EmailCta";
@@ -49,7 +48,7 @@ function CheckIcon() {
 
 export default function SubmitPage() {
   return (
-    <PlayerProvider>
+    <>
       <Nav />
 
       <section className="install-hero">
@@ -289,6 +288,6 @@ export default function SubmitPage() {
       </section>
 
       <Footer />
-    </PlayerProvider>
+    </>
   );
 }

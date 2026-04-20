@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PlayerProvider } from "../_components/PlayerProvider";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { ListenLiveButton } from "../_components/ListenLiveButton";
@@ -21,7 +20,7 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <PlayerProvider>
+    <>
       <Nav />
 
       <section className="install-hero">
@@ -166,7 +165,7 @@ export default function AboutPage() {
       </section>
 
       <Footer />
-    </PlayerProvider>
+    </>
   );
 }
 

@@ -136,7 +136,7 @@ export function Broadcast() {
               03 — Live Queue
             </div>
             <h2>
-              Now playing.<br />Just played.
+              Live now.<br />The last few.
             </h2>
           </div>
           <p className="lead">
