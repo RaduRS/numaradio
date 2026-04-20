@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PlayerProvider } from "../_components/PlayerProvider";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
+import { EmailCta } from "./EmailCta";
 
 const SUBMIT_EMAIL = "submit@numaradio.com";
 
@@ -18,6 +19,33 @@ export const metadata: Metadata = {
     url: "https://numaradio.com/submit",
   },
 };
+
+const CHECKLIST = [
+  {
+    title: "A high-quality audio file",
+    body: "WAV or 320kbps MP3. Attached or on Dropbox / Drive / WeTransfer — not a streaming link.",
+  },
+  {
+    title: "Your name and track title",
+    body: "How you'd like to be credited on air, plus album / EP and year if it's part of a release.",
+  },
+  {
+    title: "One line about the moment",
+    body: "Late-night, morning focus, long drive, heartbreak — whatever the track is for. Helps Lena slot it.",
+  },
+  {
+    title: "Rights confirmation",
+    body: "You own or control the recording and the composition, and it's clear to broadcast.",
+  },
+];
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2.5}>
+      <path d="M4 10l4 4 8-8" />
+    </svg>
+  );
+}
 
 export default function SubmitPage() {
   return (
@@ -46,80 +74,176 @@ export default function SubmitPage() {
           </h1>
           <p className="lead">
             Numa is hand-curated. Every song that airs was picked by someone
-            who listened to the whole thing. If that sounds like a good home
-            for what you make, here&apos;s how to get it in front of us.
+            who listened to the whole thing. One email, one track per
+            submission — we read everything.
+          </p>
+          <EmailCta email={SUBMIT_EMAIL} />
+        </div>
+      </section>
+
+      {/* 01 — What we need (checklist) */}
+      <section
+        style={{ padding: "80px 0", borderTop: "1px solid var(--line)" }}
+      >
+        <div className="shell">
+          <div className="about-grid" style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1.6fr",
+            gap: 64,
+            alignItems: "start",
+          }}>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 20 }}>
+                01 — What we need
+              </div>
+              <h2
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800,
+                  fontStretch: "125%",
+                  fontSize: "clamp(32px, 4vw, 52px)",
+                  lineHeight: 0.95,
+                  letterSpacing: "-0.02em",
+                  textTransform: "uppercase",
+                }}
+              >
+                The bare minimum.<br />Nothing fancy.
+              </h2>
+            </div>
+            <div className="why-list" style={{ maxWidth: 620 }}>
+              {CHECKLIST.map((c) => (
+                <div key={c.title} className="why-item">
+                  <div className="check">
+                    <CheckIcon />
+                  </div>
+                  <div>
+                    <h4>{c.title}</h4>
+                    <p>{c.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 02 — What happens next (timeline) */}
+      <section
+        style={{ padding: "72px 0", borderTop: "1px solid var(--line)" }}
+      >
+        <div className="shell">
+          <div className="eyebrow" style={{ marginBottom: 20 }}>
+            02 — What happens next
+          </div>
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontStretch: "125%",
+              fontSize: "clamp(28px, 3.4vw, 44px)",
+              lineHeight: 0.95,
+              letterSpacing: "-0.02em",
+              textTransform: "uppercase",
+              marginBottom: 32,
+            }}
+          >
+            Three steps.<br />One reply.
+          </h2>
+
+          <div className="submit-timeline">
+            <div className="submit-step">
+              <span className="step-tag">Step 01</span>
+              <span className="step-label">You send</span>
+              <span className="step-note">Email + file</span>
+            </div>
+            <div className="submit-arrow">→</div>
+            <div className="submit-step">
+              <span className="step-tag">Step 02</span>
+              <span className="step-label">We listen</span>
+              <span className="step-note">~1 – 2 weeks</span>
+            </div>
+            <div className="submit-arrow">→</div>
+            <div className="submit-step">
+              <span className="step-tag">Step 03</span>
+              <span className="step-label">We reply</span>
+              <span className="step-note">Yes, no, or why</span>
+            </div>
+          </div>
+
+          <p
+            style={{
+              marginTop: 28,
+              color: "var(--fg-dim)",
+              fontSize: 15,
+              lineHeight: 1.55,
+              maxWidth: 620,
+            }}
+          >
+            We&apos;re small on purpose. Numa launched with ~50 tracks from one
+            artist — we&apos;ll grow it carefully. That&apos;s the whole point.
           </p>
         </div>
       </section>
 
-      <SubmitBlock eyebrow="01 — Send a file">
-        <p>
-          Email a high-quality audio file to{" "}
-          <a
-            href={`mailto:${SUBMIT_EMAIL}`}
-            style={{ color: "var(--accent)", textDecoration: "none" }}
-          >
-            {SUBMIT_EMAIL}
-          </a>
-          . WAV or 320kbps MP3, please — not a link to Spotify, SoundCloud,
-          Suno, or a streaming page. We don&apos;t auto-ingest from any
-          platform because we can&apos;t verify rights from a public URL.
-        </p>
-        <p>
-          If the file is too big for email, share a Dropbox / Drive /
-          WeTransfer link that lets us download the original.
-        </p>
-      </SubmitBlock>
-
-      <SubmitBlock eyebrow="02 — Tell us what it is">
-        <p>In the email body, keep it short. We want:</p>
-        <ul style={{ paddingLeft: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-          <li>
-            <strong style={{ color: "var(--fg)" }}>Your name</strong> and how
-            you&apos;d like to be credited on air.
-          </li>
-          <li>
-            <strong style={{ color: "var(--fg)" }}>Track title</strong> and,
-            if part of a release, the album / EP name and year.
-          </li>
-          <li>
-            <strong style={{ color: "var(--fg)" }}>One line</strong> about
-            what kind of moment the track is for — late night, morning
-            focus, long drive, heartbreak. This helps Lena slot it.
-          </li>
-          <li>
-            A confirmation that you own or control the rights to the
-            recording and the composition.
-          </li>
-        </ul>
-      </SubmitBlock>
-
-      <SubmitBlock eyebrow="03 — What happens next">
-        <p>
-          We listen to everything. It may take a couple of weeks. If it fits
-          the station, we add it to the catalog and Lena will start mixing it
-          in. If it doesn&apos;t, we&apos;ll usually still reply so you
-          aren&apos;t left guessing.
-        </p>
-        <p>
-          We&apos;re small on purpose. Numa Radio launched with about 50
-          tracks from one artist — we&apos;ll grow it carefully. That&apos;s
-          the whole point.
-        </p>
-      </SubmitBlock>
-
-      <SubmitBlock eyebrow="04 — What we don't take">
-        <p>
-          No auto-generated tracks from a public AI music service unless you
-          can prove clear, commercial-use rights to the specific generation.
-          No tracks with uncleared samples. No content that can&apos;t be
-          broadcast 24/7 on an open stream.
-        </p>
-        <p>
-          If any of that rules you out, we&apos;re not the right home. No
-          hard feelings.
-        </p>
-      </SubmitBlock>
+      {/* 03 — What we don't take */}
+      <section
+        style={{ padding: "72px 0", borderTop: "1px solid var(--line)" }}
+      >
+        <div className="shell">
+          <div className="about-grid" style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1.6fr",
+            gap: 64,
+            alignItems: "start",
+          }}>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 20 }}>
+                03 — What we don&apos;t take
+              </div>
+              <h2
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800,
+                  fontStretch: "125%",
+                  fontSize: "clamp(28px, 3.4vw, 44px)",
+                  lineHeight: 0.95,
+                  letterSpacing: "-0.02em",
+                  textTransform: "uppercase",
+                }}
+              >
+                A short list.<br />We stick to it.
+              </h2>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+                color: "var(--fg-dim)",
+                fontSize: 15,
+                lineHeight: 1.55,
+                maxWidth: 620,
+                padding: "22px 24px",
+                border: "1px dashed var(--line-strong)",
+                borderRadius: 12,
+                background: "rgba(255,77,77,0.03)",
+              }}
+            >
+              <p>
+                No auto-generated tracks from a public AI music service
+                unless you can prove clear, commercial-use rights to the
+                specific generation.
+              </p>
+              <p>No tracks with uncleared samples.</p>
+              <p>No content that can&apos;t be broadcast 24/7 on an open stream.</p>
+              <p style={{ color: "var(--fg-mute)", fontSize: 13 }}>
+                If any of that rules you out, we&apos;re not the right home.
+                No hard feelings.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="cta-footer">
         <div className="shell">
@@ -127,7 +251,7 @@ export default function SubmitPage() {
             Ready?<br />
             <span className="accent">send it.</span>
           </h2>
-          <p>One email. One track per submission, please.</p>
+          <p>One email. One track per submission.</p>
           <a
             href={`mailto:${SUBMIT_EMAIL}`}
             className="btn btn-primary"
@@ -147,46 +271,5 @@ export default function SubmitPage() {
 
       <Footer />
     </PlayerProvider>
-  );
-}
-
-function SubmitBlock({
-  eyebrow,
-  children,
-}: {
-  eyebrow: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      style={{ padding: "72px 0", borderTop: "1px solid var(--line)" }}
-    >
-      <div className="shell">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1.6fr",
-            gap: 64,
-            alignItems: "start",
-          }}
-          className="about-grid"
-        >
-          <div className="eyebrow">{eyebrow}</div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 18,
-              color: "var(--fg-dim)",
-              fontSize: 17,
-              lineHeight: 1.55,
-              maxWidth: 620,
-            }}
-          >
-            {children}
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }

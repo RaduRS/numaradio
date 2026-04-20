@@ -4,6 +4,7 @@ import { PlayerProvider } from "../_components/PlayerProvider";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { ListenLiveButton } from "../_components/ListenLiveButton";
+import { ListenerCount } from "../_components/ListenerCount";
 
 export const metadata: Metadata = {
   title: "About Lena — Numa Radio",
@@ -48,6 +49,41 @@ export default function AboutPage() {
             She reads your shoutouts, picks what plays next, and knows when to
             shut up and let a song land. Here&apos;s the rest of the story.
           </p>
+
+          <div
+            className="hero-stats about-stats"
+            style={{ marginTop: 48, maxWidth: 720 }}
+          >
+            <div className="hero-stat">
+              <div className="n">24/7</div>
+              <div className="l">Never silent</div>
+            </div>
+            <div className="hero-stat">
+              <div className="n">
+                <ListenerCount />
+              </div>
+              <div className="l">Listening right now</div>
+            </div>
+            <div className="hero-stat">
+              <div className="n">Zero</div>
+              <div className="l">Ads · accounts · ever</div>
+            </div>
+          </div>
+
+          <div className="lena-card" style={{ maxWidth: 620, marginTop: 40 }}>
+            <div className="lena-avatar">L</div>
+            <div className="lena-content">
+              <div className="lena-head">
+                <span className="lena-name">Lena</span>
+                <span className="lena-label">Host · Live</span>
+              </div>
+              <div className="lena-text">
+                &ldquo;I don&apos;t sleep, I don&apos;t eat, I don&apos;t get
+                tired of songs. That&apos;s the one thing I can genuinely offer —
+                the mic is always hot, and I&apos;m always listening.&rdquo;
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -87,6 +123,16 @@ export default function AboutPage() {
           change her mind.
         </p>
       </AboutBlock>
+
+      <section className="about-pull">
+        <div className="shell">
+          <p>
+            A station isn&apos;t a <span>prediction.</span>
+            <br />
+            It&apos;s a <span className="accent">decision.</span>
+          </p>
+        </div>
+      </section>
 
       <AboutBlock
         eyebrow="03 — Why this exists"
