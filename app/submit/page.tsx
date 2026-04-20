@@ -77,6 +77,25 @@ export default function SubmitPage() {
             who listened to the whole thing. One email, one track per
             submission — we read everything.
           </p>
+          <p
+            style={{
+              marginTop: -24,
+              marginBottom: 32,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--fg-mute)",
+            }}
+          >
+            For artists only · Listeners requesting a song →{" "}
+            <Link
+              href="/#requests"
+              style={{ color: "var(--accent)", textDecoration: "none" }}
+            >
+              use the request form
+            </Link>
+          </p>
           <EmailCta email={SUBMIT_EMAIL} />
         </div>
       </section>

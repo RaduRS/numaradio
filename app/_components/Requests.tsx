@@ -64,7 +64,8 @@ export function Requests() {
               Request the<br />next moment.
             </h3>
             <p className="hint">
-              Send a song request or a shoutout for Lena to read on Numa Radio.
+              Describe a moment — Numa writes you a song. Or send Lena a
+              shoutout to read on air.
             </p>
 
             <div className="req-types" role="tablist">
@@ -97,7 +98,7 @@ export function Requests() {
                 <div className="req-input-group">
                   <input
                     className="req-input"
-                    placeholder="A vibe, a mood, or a track you want to hear…"
+                    placeholder="A vibe, a mood, a moment — Numa makes it into a song"
                   />
                   <input className="req-input" placeholder="Your name or city" />
                   <textarea
@@ -145,6 +146,26 @@ export function Requests() {
               <span>Queue length · 14</span>
               <span style={{ color: "var(--fg-mute)" }}>—</span>
               <span>Avg wait · 9 min</span>
+            </div>
+            <div
+              style={{
+                marginTop: 16,
+                paddingTop: 12,
+                borderTop: "1px dashed var(--line)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--fg-mute)",
+              }}
+            >
+              Got finished music?{" "}
+              <a
+                href="/submit"
+                style={{ color: "var(--accent)", textDecoration: "none" }}
+              >
+                Submit it here →
+              </a>
             </div>
           </div>
 

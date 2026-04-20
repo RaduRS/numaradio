@@ -98,9 +98,9 @@ export default function AboutPage() {
           has always been about one voice picking the next song and meaning it.
         </p>
         <p>
-          What makes Lena feel alive is the loop: she reads real requests, she
-          hears what you send, and what plays next actually changes because of
-          it. The station has a pulse because you&apos;re in it.
+          What makes Lena feel alive is the loop: you describe a moment, Numa
+          writes a song for it, and Lena picks when it airs. The station has a
+          pulse because you&apos;re in it.
         </p>
       </AboutBlock>
 
