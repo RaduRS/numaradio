@@ -39,6 +39,63 @@ Respond with ONLY a single minified JSON object, no surrounding text, matching:
 
 If decision is "allowed", "text" must equal the original. If "blocked" or "held", "text" should echo the original (never empty).`;
 
+/**
+ * Pull a valid JSON object out of the moderator's reply.
+ * Tolerates markdown code fences, stray prose, and multiple braces.
+ */
+function extractModerationJson(raw: string): Partial<ModerationResult> | null {
+  const stripped = raw
+    .replace(/```(?:json)?\s*/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  // Fast path: whole response is valid JSON.
+  try {
+    return JSON.parse(stripped);
+  } catch {
+    // fall through
+  }
+
+  // Scan for the first balanced top-level object.
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < stripped.length; i++) {
+    const ch = stripped[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        const candidate = stripped.slice(start, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          start = -1;
+          // keep scanning for the next {...}
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export async function moderateShoutout(rawText: string): Promise<ModerationResult> {
   const apiKey = process.env.MINIMAX_API_KEY;
   if (!apiKey) {
@@ -73,16 +130,11 @@ export async function moderateShoutout(rawText: string): Promise<ModerationResul
     content?: Array<{ type: string; text?: string }>;
   };
   const textBlock = data.content?.find((b) => b.type === "text" && b.text)?.text ?? "";
-  const jsonMatch = textBlock.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    return { decision: "held", reason: "moderator_no_json", text: rawText };
-  }
 
-  let parsed: Partial<ModerationResult>;
-  try {
-    parsed = JSON.parse(jsonMatch[0]);
-  } catch {
-    return { decision: "held", reason: "moderator_bad_json", text: rawText };
+  const parsed = extractModerationJson(textBlock);
+  if (!parsed) {
+    console.warn("[moderate] non-JSON moderator output:", textBlock.slice(0, 400));
+    return { decision: "held", reason: "moderator_no_json", text: rawText };
   }
 
   const decision = parsed.decision;
