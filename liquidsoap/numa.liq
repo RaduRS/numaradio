@@ -15,9 +15,14 @@ settings.log.stdout.set(true)
 settings.log.level.set(3)
 
 # ─── Local control socket (loopback only) ──────────────────────────
+# settings.server.timeout defaults to 30s and causes idle telnet
+# connections to drop — which makes the queue daemon's reconnect loop
+# thrash (re-hydrating staged items every ~30s). Loopback-only with no
+# untrusted consumers, so disable the timeout entirely.
 settings.server.telnet.set(true)
 settings.server.telnet.bind_addr.set("127.0.0.1")
 settings.server.telnet.port.set(1234)
+settings.server.timeout.set(-1.)
 
 playlist_file = "/etc/numa/playlist.m3u"
 
