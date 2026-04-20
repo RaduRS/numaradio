@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server, type Socket } from "node:net";
-import { LiquidsoapSocket } from "./socket.ts";
+import { LiquidsoapSocket, SupervisedSocket } from "./socket.ts";
 
 function tcpServer(onConnect: (s: Socket) => void): Promise<{ port: number; server: Server }> {
   return new Promise((resolve) => {
@@ -61,4 +61,58 @@ test("LiquidsoapSocket reports isConnected correctly", async () => {
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(sock.isConnected(), false);
   server.close();
+});
+
+test("SupervisedSocket reconnects after server restart", async () => {
+  const reconnects: number[] = [];
+  const sink: string[] = [];
+
+  // Start first server, letting the OS pick a port.
+  const first = await tcpServer((s) => {
+    s.on("data", (d) => sink.push(d.toString()));
+  });
+
+  const sup = new SupervisedSocket(
+    { host: "127.0.0.1", port: first.port },
+    { baseDelayMs: 20, maxDelayMs: 40 },
+  );
+  sup.onReconnect(() => reconnects.push(Date.now()));
+  await sup.start();
+  await sup.send("hello");
+  await new Promise((r) => setTimeout(r, 40));
+
+  // Restart the server on the SAME port.
+  first.server.close();
+  await new Promise((r) => setTimeout(r, 200));
+  const second = await new Promise<{ port: number; server: Server }>((resolve) => {
+    const srv = createServer((s) => {
+      s.on("data", (d) => sink.push(d.toString()));
+    });
+    srv.listen(first.port, "127.0.0.1", () => resolve({ port: first.port, server: srv }));
+  });
+
+  // Wait up to 500ms for the supervisor to reconnect.
+  const deadline = Date.now() + 500;
+  while (Date.now() < deadline && reconnects.length < 1) {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.ok(reconnects.length >= 1, "expected at least one reconnect");
+
+  await sup.send("world");
+  await new Promise((r) => setTimeout(r, 40));
+
+  sup.stop();
+  second.server.close();
+
+  assert.ok(sink.some((s) => s.includes("hello")));
+  assert.ok(sink.some((s) => s.includes("world")));
+});
+
+test("SupervisedSocket.send rejects fast when not connected", async () => {
+  const sup = new SupervisedSocket(
+    { host: "127.0.0.1", port: 1 /* bogus */ },
+    { baseDelayMs: 10_000, maxDelayMs: 10_000 },
+  );
+  // Do not call start(); we just want to confirm the "not connected" path.
+  await assert.rejects(() => sup.send("x"), /not connected/);
 });

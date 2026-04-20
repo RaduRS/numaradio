@@ -84,3 +84,64 @@ export class LiquidsoapSocket {
     this.connected = false;
   }
 }
+
+export type SupervisorOpts = { baseDelayMs?: number; maxDelayMs?: number };
+
+export class SupervisedSocket {
+  private inner: LiquidsoapSocket;
+  private stopped = false;
+  private reconnectListeners = new Set<() => void | Promise<void>>();
+  private lineListeners = new Set<(line: string) => void>();
+  private readonly base: number;
+  private readonly max: number;
+
+  constructor(opts: SocketOpts, sup: SupervisorOpts = {}) {
+    this.inner = new LiquidsoapSocket(opts);
+    this.base = sup.baseDelayMs ?? 2_000;
+    this.max = sup.maxDelayMs ?? 30_000;
+    this.inner.onDisconnect(() => {
+      if (!this.stopped) void this.loop(this.base);
+    });
+    this.inner.onLine((l) => {
+      for (const fn of this.lineListeners) fn(l);
+    });
+  }
+
+  onLine(fn: (line: string) => void): void {
+    this.lineListeners.add(fn);
+  }
+
+  onReconnect(fn: () => void | Promise<void>): void {
+    this.reconnectListeners.add(fn);
+  }
+
+  isConnected(): boolean {
+    return this.inner.isConnected();
+  }
+
+  async start(): Promise<void> {
+    await this.loop(this.base);
+  }
+
+  stop(): void {
+    this.stopped = true;
+    this.inner.close();
+  }
+
+  async send(line: string): Promise<void> {
+    await this.inner.send(line);
+  }
+
+  private async loop(delay: number): Promise<void> {
+    while (!this.stopped) {
+      try {
+        await this.inner.connect();
+        for (const fn of this.reconnectListeners) await fn();
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(delay * 2, this.max);
+      }
+    }
+  }
+}
