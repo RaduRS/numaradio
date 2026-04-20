@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-20 (shoutout pipeline live end-to-end via NanoClaw + Telegram)
+Last updated: 2026-04-20 (listener booth + dashboard shoutouts panel live; `npm run deploy` + passwordless restarts)
 
 ## Where we are
 
@@ -125,17 +125,62 @@ real Claude) — its credential proxy rewrites outbound Anthropic-SDK requests
 to the MiniMax endpoint. See
 `/home/marku/.claude/projects/-home-marku-nanoclaw/memory/project_numaradio_integration.md`.
 
+**Listener booth — LIVE (2026-04-20)**
+- ✅ Public shoutout form on `numaradio.com` (the existing `Requests` homepage
+  tab). POSTs to Vercel `POST /api/booth/submit` which does:
+  IP rate-limit (3/hour, 10/day, keyed on `sha256(INTERNAL_API_SECRET:ip)`,
+  counted from the existing `Shoutout` table) → MiniMax Anthropic-compat
+  moderator (`MiniMax-M2.7`, classifies `allowed` / `rewritten` / `held` /
+  `blocked`; fail-closed to `held` on any moderator error) → create `Shoutout`
+  row (audit trail) → if approved, forward to the dashboard's internal route
+  via the tunnel with `x-internal-secret: $INTERNAL_API_SECRET`.
+- ✅ Cloudflare tunnel: `api.numaradio.com/api/internal/*` →
+  `http://localhost:3001` (ingress rule added to
+  `/etc/cloudflared/config.yml`; `~/.cloudflared/config.yml` is now a symlink
+  to the same file, no more drift). `dashboard.numaradio.com` stays behind
+  Cloudflare Access; only `/api/internal/*` is tunnel-exposed and gated by
+  the shared secret.
+- ✅ `INTERNAL_API_SECRET` canonical source is `/etc/numa/env` (root-only)
+  and matches Vercel's env var. Copy it into `dashboard/.env.local` with:
+  `sudo grep ^INTERNAL_API_SECRET= /etc/numa/env | sudo tee -a
+  dashboard/.env.local` — `numaradio/.env.local` had a stale value and bit us
+  once; don't trust it as the source.
+- ✅ Moderator JSON extraction (`lib/moderate.ts`) tolerates markdown fences
+  and leading prose — MiniMax-M2.7 sometimes wraps its JSON.
+
+**Dashboard shoutouts panel — LIVE (2026-04-20)**
+- ✅ `dashboard.numaradio.com/shoutouts` — three cards:
+  - **Compose**: textbox + "Send to Lena" (⌘/Ctrl+Enter). POSTs to
+    `/api/shoutouts/compose`, which reuses `generateShoutout()` directly —
+    no moderation, no rate limit (operator trust = Cloudflare Access).
+    Sender is tagged `dashboard:<cf-access-email>` in Track provenance.
+  - **Held for review**: lists rows where MiniMax returned `held`, with
+    one-click Approve (flips `moderationStatus` to `allowed`, runs the
+    normal pipeline, updates `deliveryStatus` + `linkedQueueItemId`) or
+    Reject (marks `blocked`, logs operator email in `moderationReason`).
+  - **Recent**: last 20 aired/failed/blocked. Clocks use `HH:MM` for
+    anything older than 10 minutes (relative time was reading "1h ago"
+    for 60-90m-old items, which is technically true but useless).
+- Nav link from main dashboard header alongside "Library →".
+
+**Operator ergonomics — 2026-04-20**
+- ✅ `cd dashboard && npm run deploy` = `next build && sudo systemctl restart
+  numa-dashboard`, no password prompt.
+- ✅ Sudoers drop-in at `/etc/sudoers.d/numa-nopasswd` (template in repo:
+  `deploy/systemd/numa-nopasswd.sudoers`) allows `marku` to restart
+  `numa-dashboard`, `cloudflared`, `numa-queue-daemon`, `numa-liquidsoap`,
+  and `numa-rotation-refresher.timer` without a password. Scope is a strict
+  Cmnd_Alias — no wildcards, both `foo` and `foo.service` spellings listed.
+
 **Next for NanoClaw × Numa Radio:**
 1. Song generation endpoint (`POST /api/generate/song`) — MiniMax
    `music_generation` API, async, polls 2-3 min, re-hosts audio on B2,
    same `Track` flow. Reference code: `~/examples/make-noise/app/api/music/`.
-2. Public **booth** tab on `numaradio.com` — listeners submit shoutout text →
-   IP rate limit (3/hour, 10/day) + MiniMax moderation classifier
-   ("ok / hold / reject"); "ok" auto-airs via the existing dashboard endpoint,
-   "hold" queues for operator approval, "reject" is silently dropped.
-3. Dashboard chat widget on `dashboard.numaradio.com` — a chat box that talks
-   to NanoClaw via a new HTTP channel (NanoClaw-side code), with progress
-   callbacks ("Song queued — Lena will read it next").
+2. Dashboard chat widget (full NanoClaw agent) — conversational UI at
+   `dashboard.numaradio.com` with all agent tools (memory, schedules, songs,
+   shoutouts), progress callbacks. Requires adding an HTTP channel on the
+   NanoClaw side. Deferred: the `/shoutouts` Compose card already covers the
+   "unlimited shoutouts from the dashboard" need.
 
 **Spec:** `docs/superpowers/specs/2026-04-20-on-demand-track-queue-design.md`
 **Plan:** `docs/superpowers/plans/2026-04-20-on-demand-track-queue.md`
