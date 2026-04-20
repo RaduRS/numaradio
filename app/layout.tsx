@@ -23,11 +23,27 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://numaradio.com"),
   title: "Numa Radio — Always On",
   description:
     "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
   applicationName: "Numa Radio",
   manifest: "/manifest.webmanifest",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "Numa Radio",
+    url: "https://numaradio.com",
+    title: "Numa Radio — Always On",
+    description:
+      "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Numa Radio — Always On",
+    description:
+      "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
+  },
   appleWebApp: {
     capable: true,
     title: "Numa Radio",
@@ -53,6 +69,50 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
+        <Script
+          id="ld-json"
+          type="application/ld+json"
+          strategy="afterInteractive"
+        >
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "WebSite",
+                "@id": "https://numaradio.com/#website",
+                url: "https://numaradio.com",
+                name: "Numa Radio",
+                description:
+                  "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
+                inLanguage: "en",
+                publisher: { "@id": "https://numaradio.com/#org" },
+              },
+              {
+                "@type": "Organization",
+                "@id": "https://numaradio.com/#org",
+                name: "Numa Radio",
+                url: "https://numaradio.com",
+                logo: "https://numaradio.com/apple-icon",
+              },
+              {
+                "@type": "BroadcastService",
+                "@id": "https://numaradio.com/#broadcast",
+                name: "Numa Radio",
+                broadcastDisplayName: "Numa Radio",
+                url: "https://numaradio.com",
+                description:
+                  "Always-on AI radio hosted by Lena — fresh tracks, live energy, listener requests.",
+                inLanguage: "en",
+                broadcaster: { "@id": "https://numaradio.com/#org" },
+                hasBroadcastChannel: {
+                  "@type": "BroadcastChannel",
+                  broadcastServiceTier: "Free",
+                  inBroadcastLineup: "https://api.numaradio.com/stream",
+                },
+              },
+            ],
+          })}
+        </Script>
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }`}
         </Script>
