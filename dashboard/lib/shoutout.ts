@@ -4,9 +4,14 @@ import type { Pool } from "pg";
 import { pushToDaemon } from "@/lib/library";
 import { stripMarkdown } from "@/lib/strip-markdown";
 import { radioHostTransform } from "@/lib/radio-host";
+import { humanizeScript } from "@/lib/humanize";
 
 const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
-const MODEL_PRIMARY = "aura-2-asteria-en";
+// Thalia is described by Deepgram as an "engaging storyteller" — warmer
+// and more conversational than Asteria's clean/professional tone, which
+// better fits Lena's late-night-radio character. Fallback keeps the
+// aura-1 Asteria so old API keys without Aura-2 access still work.
+const MODEL_PRIMARY = "aura-2-thalia-en";
 const MODEL_FALLBACK = "aura-asteria-en";
 export const SHOUTOUT_MAX_CHARS = 2000;
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
@@ -116,7 +121,13 @@ export async function generateShoutout(
 
   let mp3: Buffer;
   try {
-    const radioText = radioHostTransform(plain);
+    // 1. Humanize: MiniMax rewrites the flat text into warm radio-host
+    //    cadence. Falls back to the original on any error so this step
+    //    can never block a shoutout from airing.
+    // 2. radioHostTransform: mechanical polish on whatever we have now
+    //    (short phrase splits, contractions, quote emphasis).
+    const humanized = await humanizeScript(plain);
+    const radioText = radioHostTransform(humanized);
     mp3 = await synthesizeMp3(radioText, apiKey);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "synthesis failed";

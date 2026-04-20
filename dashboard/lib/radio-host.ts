@@ -20,7 +20,13 @@ function ensureTerminal(text: string): string {
 
 function normalizeForSpeech(text: string): string {
   return text
-    .replace(/\s+/g, " ")
+    // Preserve newlines — when the humanize step has already split into
+    // radio phrases we don't want to flatten its work. Collapse only
+    // horizontal whitespace.
+    .replace(/[ \t]+/g, " ")
+    // Clamp runs of 3+ newlines down to a double break; Aura reads a
+    // blank line as a noticeable beat, perfect for a "…thinking" gap.
+    .replace(/\n{3,}/g, "\n\n")
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, ", ")
     .replace(/\((.*?)\)/g, ", $1, ")
@@ -119,15 +125,24 @@ function addRadioCadence(line: string): string {
 export function radioHostTransform(text: string): string {
   const cleaned = normalizeForSpeech(text);
 
-  // Break into sentences
-  const sentences =
-    cleaned
-      .match(/[^.!?]+[.!?]?/g)
-      ?.map((s) => s.trim())
-      .filter(Boolean) ?? [];
+  // If the input already has line breaks (typically from humanizeScript),
+  // treat each non-empty line as a pre-split phrase. Run splitToPhrases
+  // only on lines that still came through too long — otherwise the
+  // humanize step's intentional pacing gets destroyed by sentence-level
+  // re-splitting.
+  const preLined = cleaned.includes("\n");
 
-  // Split long sentences into short phrases, then apply radio cadence
-  const lines = sentences.flatMap(splitToPhrases).map(addRadioCadence);
+  const units = preLined
+    ? cleaned
+        .split(/\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : cleaned
+        .match(/[^.!?]+[.!?]?/g)
+        ?.map((s) => s.trim())
+        .filter(Boolean) ?? [];
+
+  const lines = units.flatMap(splitToPhrases).map(addRadioCadence);
 
   return lines.join("\n");
 }
