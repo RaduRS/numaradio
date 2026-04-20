@@ -13,6 +13,8 @@ export interface LibraryTrack {
   createdAt: string;
   audioStreamUrl: string | null;
   artworkUrl: string | null;
+  votesUp: number;
+  votesDown: number;
 }
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
@@ -30,7 +32,9 @@ const LIBRARY_TRACKS_SQL = `
     t."airingPolicy",
     t."createdAt",
     audio."publicUrl" AS audio_stream_url,
-    art."publicUrl"   AS artwork_url
+    art."publicUrl"   AS artwork_url,
+    COALESCE(v.up, 0)   AS votes_up,
+    COALESCE(v.down, 0) AS votes_down
   FROM "Track" t
   JOIN "Station" s ON s.id = t."stationId"
   LEFT JOIN LATERAL (
@@ -47,6 +51,13 @@ const LIBRARY_TRACKS_SQL = `
     ORDER BY "createdAt" DESC
     LIMIT 1
   ) art ON true
+  LEFT JOIN LATERAL (
+    SELECT
+      COUNT(*) FILTER (WHERE value = 1)  AS up,
+      COUNT(*) FILTER (WHERE value = -1) AS down
+    FROM "TrackVote"
+    WHERE "trackId" = t.id
+  ) v ON true
   WHERE s.slug = $1
     AND t."airingPolicy" = 'library'
   ORDER BY t."createdAt" DESC
@@ -66,6 +77,8 @@ interface RawRow {
   createdAt: Date;
   audio_stream_url: string | null;
   artwork_url: string | null;
+  votes_up: string | number;
+  votes_down: string | number;
 }
 
 export async function fetchLibraryTracks(pool: Pool): Promise<LibraryTrack[]> {
@@ -83,6 +96,10 @@ export async function fetchLibraryTracks(pool: Pool): Promise<LibraryTrack[]> {
     createdAt: r.createdAt.toISOString(),
     audioStreamUrl: r.audio_stream_url,
     artworkUrl: r.artwork_url,
+    // pg returns bigints as strings; coerce explicitly.
+    votesUp: typeof r.votes_up === "string" ? parseInt(r.votes_up, 10) : r.votes_up,
+    votesDown:
+      typeof r.votes_down === "string" ? parseInt(r.votes_down, 10) : r.votes_down,
   }));
 }
 

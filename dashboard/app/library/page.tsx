@@ -198,6 +198,7 @@ export default function LibraryPage() {
                     <th className="text-left px-2 py-2">Artist</th>
                     <th className="text-right px-2 py-2 w-16">Time</th>
                     <th className="text-left px-2 py-2 w-24">Genre</th>
+                    <th className="text-right px-2 py-2 w-24">Votes</th>
                     <th className="text-left px-2 py-2 w-20">Status</th>
                     <th className="text-right px-4 py-2 w-32"></th>
                   </tr>
@@ -225,6 +226,25 @@ export default function LibraryPage() {
                           {fmtDuration(t.durationSeconds)}
                         </td>
                         <td className="px-2 py-2 text-fg-mute text-xs">{t.genre ?? "—"}</td>
+                        <td className="px-2 py-2 text-right font-mono text-xs tabular-nums">
+                          <span
+                            className={
+                              t.votesUp > 0 ? "text-accent" : "text-fg-mute"
+                            }
+                          >
+                            ▲ {t.votesUp}
+                          </span>
+                          <span className="mx-1.5 text-fg-mute opacity-50">·</span>
+                          <span
+                            className={
+                              t.votesDown > 0
+                                ? "text-[var(--bad)]"
+                                : "text-fg-mute"
+                            }
+                          >
+                            ▼ {t.votesDown}
+                          </span>
+                        </td>
                         <td className="px-2 py-2">
                           <Badge variant="outline" className={statusBadgeClass(t.trackStatus)}>
                             {t.trackStatus}
