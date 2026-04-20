@@ -88,22 +88,40 @@ export async function POST(req: Request) {
   const durationMs = (track.durationSeconds ?? 180) * 1000;
   const expectedEndAt = new Date(startedAt.getTime() + durationMs);
 
-  await prisma.nowPlaying.upsert({
-    where: { stationId: station.id },
-    create: {
-      stationId: station.id,
-      currentTrackId: track.id,
-      startedAt,
-      expectedEndAt,
-      lastHeartbeatAt: startedAt,
-    },
-    update: {
-      currentTrackId: track.id,
-      startedAt,
-      expectedEndAt,
-      lastHeartbeatAt: startedAt,
-    },
+  const trackMeta = await prisma.track.findUnique({
+    where: { id: track.id },
+    select: { title: true },
   });
+
+  await prisma.$transaction([
+    prisma.nowPlaying.upsert({
+      where: { stationId: station.id },
+      create: {
+        stationId: station.id,
+        currentTrackId: track.id,
+        startedAt,
+        expectedEndAt,
+        lastHeartbeatAt: startedAt,
+      },
+      update: {
+        currentTrackId: track.id,
+        startedAt,
+        expectedEndAt,
+        lastHeartbeatAt: startedAt,
+      },
+    }),
+    prisma.playHistory.create({
+      data: {
+        stationId: station.id,
+        trackId: track.id,
+        segmentType: "audio_track",
+        titleSnapshot: trackMeta?.title ?? null,
+        startedAt,
+        durationSeconds: track.durationSeconds,
+        completedNormally: true,
+      },
+    }),
+  ]);
 
   return Response.json({ ok: true, trackId: track.id, startedAt });
 }
