@@ -87,12 +87,25 @@ export async function fetchSunoMetadata(uuid: string): Promise<FetchSunoResult> 
   };
 }
 
-// Parse the freeform tags string Suno renders into the song page. Format is
-// loose — multiple comma/period-separated sentences. We look for:
-//   * BPM: 116.
-//   * Key: C Minor.   (also "Key: C# Major", "Key: Eb Major")
-//   * Mood: mysterious, dark, cool, hypnotic.
-//   * the first line, which is a comma-separated list of genre-ish labels
+// Known mood-ish adjectives Suno sprinkles into track descriptions.
+// Used as a fallback when there's no explicit "Mood:" label.
+const MOOD_WORDS = new Set([
+  "euphoric", "chill", "mysterious", "warm", "cool", "dark", "bright",
+  "anthemic", "intimate", "dreamy", "uplifting", "melancholic", "hypnotic",
+  "romantic", "nostalgic", "sun-kissed", "sun kissed", "emotional",
+  "energetic", "calm", "groovy", "soulful", "mellow", "soft", "punchy",
+  "haunting", "moody", "playful", "tender", "hopeful",
+]);
+
+// Parse the freeform tags string Suno renders into the song page. Format
+// is loose and evolves — as of 2026-04 we've seen three shapes:
+//   A) "Deep House, Moody Atmospheric.\nBPM: 116. Key: C Minor.\nMood: ..."
+//   B) "Genre: Nu-Disco, Groovy.\n..."
+//   C) flat descriptor: "melodic edm tropical progressive house 122 bpm f
+//      minor euphoric warm anthemic ... \nreference modern EDM, Progressive
+//      house, Electro house, Dance-pop ... \nexclude ..."
+// We try the labelled form first (A/B) and fall back to the reference
+// line + inline mood-word scan for C.
 export function parseTags(tags: string): {
   bpm?: number;
   musicalKey?: string;
@@ -107,30 +120,65 @@ export function parseTags(tags: string): {
   );
   const moodMatch = tags.match(/\bMood\s*:\s*([^\n.]+)/i);
 
-  // First line (before the first newline OR before "Production:"/"Vocals:").
-  // Some Suno tags start with a label prefix like "Genre: Nu-Disco, ..." —
-  // strip those before splitting so we don't capture "Genre: Nu-Disco" as a
-  // literal genre.
+  // ── Genres ───────────────────────────────────────────────────
+  // Primary path: first line, comma-separated, Genre:/Style: prefix stripped.
   const firstLine = (tags.split(/\n|(?=Production:|Vocals:)/)[0] ?? "").replace(
     /^(Genre|Style|Vibe|Tags?)\s*:\s*/i,
     "",
   );
-  const genres = firstLine
+  let genres = firstLine
     .split(/,|;|\./)
     .map((s) => s.trim())
     .filter(
       (s) =>
         s.length > 0 &&
         s.length < 40 &&
-        !/^(BPM|Key|Mood|Production|Vocals)\b/i.test(s),
+        !/^(BPM|Key|Mood|Production|Vocals|Drums|Bass|Lead|Pads|Vocal|Arrangement|Reference|Exclude)\b/i.test(
+          s,
+        ),
     );
 
-  const moods = moodMatch
+  // Fallback: flat-descriptor format (shape C) puts comma-separated genres
+  // on a later "reference" line. Prefer that over the first line if the
+  // first line came back with nothing comma-sized.
+  if (genres.length === 0) {
+    const refMatch = tags.match(/\breference\b\s+([^\n]+)/i);
+    if (refMatch) {
+      genres = refMatch[1]
+        .split(/,|;|\band\b/i)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && s.length < 40);
+    }
+  }
+
+  // ── Moods ────────────────────────────────────────────────────
+  // Primary: explicit "Mood: word1, word2" label.
+  let moods = moodMatch
     ? moodMatch[1]
         .split(/,|;/)
         .map((s) => s.trim())
         .filter((s) => s.length > 0 && s.length < 30)
     : [];
+
+  // Fallback: scan the first line of the flat-descriptor format for known
+  // mood adjectives. Deduped, preserves first-occurrence order.
+  if (moods.length === 0) {
+    const seen = new Set<string>();
+    const words = firstLine.toLowerCase().split(/[,.\s]+/);
+    for (let i = 0; i < words.length; i++) {
+      // Check single-word moods.
+      if (MOOD_WORDS.has(words[i]) && !seen.has(words[i])) {
+        seen.add(words[i]);
+        moods.push(words[i]);
+      }
+      // And the one two-word mood we care about ("sun kissed").
+      const bigram = `${words[i]} ${words[i + 1] ?? ""}`;
+      if (MOOD_WORDS.has(bigram) && !seen.has(bigram)) {
+        seen.add(bigram);
+        moods.push(bigram);
+      }
+    }
+  }
 
   const musicalKey = keyMatch
     ? `${keyMatch[1]} ${normalizeKeyFlavor(keyMatch[2])}`
