@@ -1,0 +1,18 @@
+[Unit]
+Description=Numa Radio — queue daemon (priority queue + Liquidsoap socket)
+After=network-online.target numa-liquidsoap.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=marku
+WorkingDirectory=/home/marku/saas/numaradio
+EnvironmentFile=/etc/numa/env
+ExecStart=/usr/bin/npm run queue:daemon
+Restart=always
+RestartSec=2s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

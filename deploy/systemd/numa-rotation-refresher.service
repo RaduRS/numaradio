@@ -1,0 +1,11 @@
+[Unit]
+Description=Numa Radio — regenerate /etc/numa/playlist.m3u from Neon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=marku
+WorkingDirectory=/home/marku/saas/numaradio
+EnvironmentFile=/etc/numa/env
+ExecStart=/usr/bin/npm run refresh-rotation

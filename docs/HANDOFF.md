@@ -70,7 +70,7 @@ sudo systemctl enable --now numa-rotation-refresher.timer
 sudo systemctl enable --now numa-queue-daemon.service
 sudo systemctl restart numa-liquidsoap  # picks up new numa.liq
 ```
-Then verify `curl -sS http://127.0.0.1:4000/status | jq .` returns `{"socket":"connected",...}`. The `deploy/systemd/` files DO NOT YET EXIST — they will be created in the next session by the user. (The agent didn't create them since systemd install requires sudo and is out of subagent scope.)
+Then verify `curl -sS http://127.0.0.1:4000/status | jq .` returns `{"socket":"connected",...}`. The unit files live in `deploy/systemd/` in this repo — the commands above copy them into place. Only the `sudo` install steps require operator action; the copy-in is deliberately manual so the operator reviews any changes before they land under `/etc/systemd/`.
 
 ## Vault location (product decisions / design / policy)
 

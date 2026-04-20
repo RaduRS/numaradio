@@ -1,0 +1,11 @@
+[Unit]
+Description=Numa Radio — rotation refresh every 2 minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=2min
+Persistent=true
+Unit=numa-rotation-refresher.service
+
+[Install]
+WantedBy=timers.target
