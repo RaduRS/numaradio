@@ -5,6 +5,7 @@ import { LoadingIcon, PauseIcon, PlayIcon } from "./Icons";
 
 type Props = {
   variant?: "primary" | "ghost";
+  size?: "default" | "sm";
   label?: string;
   showIcon?: boolean;
   className?: string;
@@ -13,13 +14,16 @@ type Props = {
 
 export function ListenLiveButton({
   variant = "primary",
+  size = "default",
   label,
   showIcon = true,
   className = "",
   style,
 }: Props) {
   const { status, toggle } = usePlayer();
-  const cls = `btn btn-${variant} ${className}`.trim();
+  const cls = `btn btn-${variant} ${size === "sm" ? "btn-sm" : ""} ${className}`
+    .replace(/\s+/g, " ")
+    .trim();
 
   const text =
     label ??

@@ -211,6 +211,14 @@ section { position: relative; }
   display: inline-block;
 }
 
+/* Compact button — navbar-sized, sits at ~36px tall next to the logo. */
+.btn-sm {
+  padding: 8px 16px;
+  gap: 8px;
+  font-size: 12px;
+}
+.btn-sm .btn-icon { width: 11px; height: 11px; }
+
 /* ============ KEYFRAMES ============ */
 
 @keyframes pulseDot {

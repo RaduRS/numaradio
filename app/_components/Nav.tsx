@@ -16,7 +16,7 @@ export function Nav() {
           <div className="live-chip">
             <span className="dot" /> On Air
           </div>
-          <ListenLiveButton />
+          <ListenLiveButton size="sm" />
         </div>
       </div>
     </nav>
