@@ -1506,6 +1506,10 @@
 @media (max-width: 640px) {
   .shell { padding: 0 20px; }
   .nav-links { display: none; }
+  /* Phone-mockups on a phone are redundant — the user is literally
+     looking at the real thing. Keep the section head + feature copy +
+     CTA buttons; drop the illustrations. */
+  .mobile-showcase .phones { display: none; }
   /* Live chip is redundant with the Listen Live button; drop it on mobile
      so the navbar doesn't overflow. */
   .nav .live-chip { display: none; }
