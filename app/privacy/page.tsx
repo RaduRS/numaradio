@@ -93,9 +93,10 @@ export default function PrivacyPage() {
           <strong style={{ color: "var(--fg)" }}>Counting visitors.</strong>{" "}
           Every 30 seconds, while the tab is visible, your browser pings our
           server with that UUID so the operator dashboard can show a live
-          count of how many people have the site open. The server keeps a
-          row per UUID with a timestamp; rows older than five minutes are
-          deleted.
+          count of how many people have the site open. Because the UUID is
+          one-per-browser (not one-per-tab), opening the site in three tabs
+          still counts as one person. The server keeps a row per UUID with
+          a timestamp; rows older than five minutes are deleted.
         </p>
         <p>
           <strong style={{ color: "var(--fg)" }}>Remembering your votes.</strong>{" "}

@@ -19,7 +19,7 @@ export function StatusPills({ data, isStale }: Props) {
       {/* Row 1 — live status + now playing */}
       <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
         <div
-          className={`inline-flex items-center gap-3 self-start rounded-full border px-5 py-2.5 text-sm font-medium ${
+          className={`inline-flex items-center gap-3 justify-self-start self-center rounded-full border px-5 py-2.5 text-sm font-medium ${
             live
               ? "border-accent text-accent bg-[var(--accent-soft)]"
               : "border-[var(--bad)] text-[var(--bad)]"
