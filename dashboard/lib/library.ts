@@ -1,0 +1,202 @@
+import type { Pool } from "pg";
+
+export interface LibraryTrack {
+  id: string;
+  title: string;
+  artist: string | null;
+  durationSeconds: number | null;
+  bpm: number | null;
+  genre: string | null;
+  mood: string | null;
+  trackStatus: string;
+  airingPolicy: string;
+  createdAt: string;
+  audioStreamUrl: string | null;
+  artworkUrl: string | null;
+}
+
+const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
+
+const LIBRARY_TRACKS_SQL = `
+  SELECT
+    t.id,
+    t.title,
+    t."artistDisplay" AS artist,
+    t."durationSeconds",
+    t.bpm,
+    t.genre,
+    t.mood,
+    t."trackStatus",
+    t."airingPolicy",
+    t."createdAt",
+    audio."publicUrl" AS audio_stream_url,
+    art."publicUrl"   AS artwork_url
+  FROM "Track" t
+  JOIN "Station" s ON s.id = t."stationId"
+  LEFT JOIN LATERAL (
+    SELECT "publicUrl"
+    FROM "TrackAsset"
+    WHERE "trackId" = t.id AND "assetType" = 'audio_stream'
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  ) audio ON true
+  LEFT JOIN LATERAL (
+    SELECT "publicUrl"
+    FROM "TrackAsset"
+    WHERE "trackId" = t.id AND "assetType" = 'artwork_primary'
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  ) art ON true
+  WHERE s.slug = $1
+    AND t."airingPolicy" = 'library'
+  ORDER BY t."createdAt" DESC
+  LIMIT 1000
+`;
+
+interface RawRow {
+  id: string;
+  title: string;
+  artist: string | null;
+  durationSeconds: number | null;
+  bpm: number | null;
+  genre: string | null;
+  mood: string | null;
+  trackStatus: string;
+  airingPolicy: string;
+  createdAt: Date;
+  audio_stream_url: string | null;
+  artwork_url: string | null;
+}
+
+export async function fetchLibraryTracks(pool: Pool): Promise<LibraryTrack[]> {
+  const result = await pool.query<RawRow>(LIBRARY_TRACKS_SQL, [STATION_SLUG]);
+  return result.rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    artist: r.artist,
+    durationSeconds: r.durationSeconds,
+    bpm: r.bpm,
+    genre: r.genre,
+    mood: r.mood,
+    trackStatus: r.trackStatus,
+    airingPolicy: r.airingPolicy,
+    createdAt: r.createdAt.toISOString(),
+    audioStreamUrl: r.audio_stream_url,
+    artworkUrl: r.artwork_url,
+  }));
+}
+
+const RESOLVE_PUSH_SQL = `
+  SELECT
+    t.id,
+    t.title,
+    t."airingPolicy",
+    audio."publicUrl" AS audio_stream_url
+  FROM "Track" t
+  JOIN "Station" s ON s.id = t."stationId"
+  LEFT JOIN LATERAL (
+    SELECT "publicUrl"
+    FROM "TrackAsset"
+    WHERE "trackId" = t.id AND "assetType" = 'audio_stream'
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  ) audio ON true
+  WHERE t.id = $1 AND s.slug = $2
+  LIMIT 1
+`;
+
+export interface ResolvedPushTarget {
+  id: string;
+  title: string;
+  airingPolicy: string;
+  audioStreamUrl: string | null;
+}
+
+export async function resolvePushTarget(
+  trackId: string,
+  pool: Pool,
+): Promise<ResolvedPushTarget | null> {
+  const result = await pool.query<{
+    id: string;
+    title: string;
+    airingPolicy: string;
+    audio_stream_url: string | null;
+  }>(RESOLVE_PUSH_SQL, [trackId, STATION_SLUG]);
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    airingPolicy: row.airingPolicy,
+    audioStreamUrl: row.audio_stream_url,
+  };
+}
+
+export interface DaemonStatus {
+  socket?: string;
+  lastPushes: unknown[];
+  lastFailures: unknown[];
+}
+
+const DAEMON_URL = process.env.NUMA_DAEMON_URL ?? "http://127.0.0.1:4000";
+
+export async function pushToDaemon(
+  body: { trackId: string; sourceUrl: string; reason?: string },
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 3_000,
+): Promise<{ ok: true; queueItemId: string } | { ok: false; status: number; error: string }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetcher(`${DAEMON_URL}/push`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: text || `HTTP ${res.status}` };
+    }
+    let parsed: { queueItemId?: string };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return { ok: false, status: 502, error: "daemon returned non-json body" };
+    }
+    if (!parsed.queueItemId) {
+      return { ok: false, status: 502, error: "daemon response missing queueItemId" };
+    }
+    return { ok: true, queueItemId: parsed.queueItemId };
+  } catch (e) {
+    return {
+      ok: false,
+      status: 502,
+      error: e instanceof Error ? e.message : "daemon unreachable",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function fetchDaemonStatus(
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 2_000,
+): Promise<DaemonStatus> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetcher(`${DAEMON_URL}/status`, { signal: ctl.signal });
+    if (!res.ok) return { lastPushes: [], lastFailures: [] };
+    const json = (await res.json()) as DaemonStatus;
+    return {
+      socket: json.socket,
+      lastPushes: Array.isArray(json.lastPushes) ? json.lastPushes : [],
+      lastFailures: Array.isArray(json.lastFailures) ? json.lastFailures : [],
+    };
+  } catch {
+    return { lastPushes: [], lastFailures: [] };
+  } finally {
+    clearTimeout(timer);
+  }
+}

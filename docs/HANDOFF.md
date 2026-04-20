@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-20 (on-demand queue + Neon rotation LIVE on Orion)
+Last updated: 2026-04-20 (dashboard /library page built — needs manual restart to go live)
 
 ## Where we are
 
@@ -45,6 +45,29 @@ The station is live and listenable from any browser worldwide.
 - Plan: `docs/superpowers/plans/2026-04-19-operator-dashboard.md`
 - Acceptance checklist: `dashboard/ACCEPTANCE.md`
 - To redeploy after a code change: `git pull && cd dashboard && npm run build && sudo systemctl restart numa-dashboard`
+
+**Dashboard `/library` page — BUILT, needs restart to go live**
+- ✅ New page at `https://dashboard.numaradio.com/library` for browsing the
+  library and pushing a track to the priority queue with one click.
+- ✅ Search by title/artist, filter by `trackStatus` (ready/draft/failed/other),
+  table with artwork thumbnails, duration, genre, status badge.
+- ✅ "Play Next" button per row → `POST /api/library/push` → forwards to
+  `http://127.0.0.1:4000/push` (the existing queue daemon). Reason is recorded
+  as `dashboard:<cf-access-email>` for audit.
+- ✅ "Recent priority pushes" panel below the table reads the daemon's
+  existing `/status` endpoint (`lastPushes` + `lastFailures`), polled every 5s.
+- ✅ Nav link from main dashboard header: "Library →".
+- ✅ 18 unit tests for `dashboard/lib/library.ts` (all pass: `cd dashboard && npm test`).
+- ✅ `cd dashboard && npm run build` compiles cleanly.
+- ⚠ **Running service still on old build.** The build artifact is in
+  `dashboard/.next/` on Orion, but `sudo systemctl restart numa-dashboard`
+  needs an interactive password, so Claude could not flip it live. To ship:
+  ```bash
+  sudo systemctl restart numa-dashboard
+  # then verify:
+  curl -s http://127.0.0.1:3001/api/library/tracks | jq '.tracks | length'
+  ```
+- Spec: `docs/superpowers/specs/2026-04-20-dashboard-library-card-design.md`
 
 **On-demand queue + Neon rotation — LIVE**
 - ✅ `numa-queue-daemon.service` active on Orion, loopback `:4000`. Exposes
