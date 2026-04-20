@@ -1,0 +1,32 @@
+# Allow marku to restart Numa services without a password prompt.
+# Install / reinstall with:
+#   sudo install -m 0440 -o root -g root /tmp/numa-nopasswd.sudoers /etc/sudoers.d/numa-nopasswd
+#   sudo visudo -c   # should print "parsed OK"
+#
+# Scope is intentionally narrow: only restart/reload/start/stop/status of
+# specific service/timer units. Password is still required for anything else.
+# Both `foo` and `foo.service` spellings are listed so the rule matches however
+# you type it.
+
+Cmnd_Alias NUMA_UNITS = \
+    /usr/bin/systemctl restart numa-dashboard, \
+    /usr/bin/systemctl restart numa-dashboard.service, \
+    /usr/bin/systemctl reload numa-dashboard, \
+    /usr/bin/systemctl reload numa-dashboard.service, \
+    /usr/bin/systemctl start numa-dashboard, \
+    /usr/bin/systemctl start numa-dashboard.service, \
+    /usr/bin/systemctl stop numa-dashboard, \
+    /usr/bin/systemctl stop numa-dashboard.service, \
+    /usr/bin/systemctl status numa-dashboard, \
+    /usr/bin/systemctl status numa-dashboard.service, \
+    /usr/bin/systemctl restart cloudflared, \
+    /usr/bin/systemctl restart cloudflared.service, \
+    /usr/bin/systemctl reload cloudflared, \
+    /usr/bin/systemctl reload cloudflared.service, \
+    /usr/bin/systemctl restart numa-queue-daemon, \
+    /usr/bin/systemctl restart numa-queue-daemon.service, \
+    /usr/bin/systemctl restart numa-liquidsoap, \
+    /usr/bin/systemctl restart numa-liquidsoap.service, \
+    /usr/bin/systemctl restart numa-rotation-refresher.timer
+
+marku ALL=(root) NOPASSWD: NUMA_UNITS
