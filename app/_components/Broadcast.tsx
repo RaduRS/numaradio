@@ -34,9 +34,14 @@ type BroadcastPayload = {
 // within a few seconds, slow enough not to hammer the CDN.
 const POLL_MS = 6_000;
 // Ramp up polling near the expected track boundary so the now-playing swap
-// feels instant instead of "we'll catch it in 6s".
-const BOUNDARY_POLL_MS = 2_000;
-const BOUNDARY_WINDOW_MS = 20_000;
+// feels instant instead of "we'll catch it in 6s". Widened window so more
+// boundary moments fall inside it.
+const BOUNDARY_POLL_MS = 1_000;
+const BOUNDARY_WINDOW_MS = 30_000;
+// When we first see a new trackId, fire one follow-up request ~1s later to
+// catch any lag between NowPlaying being written and PlayHistory catching
+// up (they're one transaction but the CDN can cache them separately).
+const TRACK_CHANGE_FOLLOWUP_MS = 1_000;
 const TICK_MS = 1_000;
 
 function initials(title: string): string {
@@ -73,6 +78,8 @@ function useBroadcastFeed() {
   const mounted = useRef(true);
   const dataRef = useRef<BroadcastPayload>(data);
   dataRef.current = data;
+  const lastTrackIdRef = useRef<string | null>(null);
+  const followUpIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -86,7 +93,30 @@ function useBroadcastFeed() {
         });
         if (!r.ok) return;
         const json = (await r.json()) as BroadcastPayload;
-        if (mounted.current) setData(json);
+        if (!mounted.current) return;
+        setData(json);
+
+        // Track-change detection: if the trackId just flipped, schedule
+        // one extra fetch in a second to pick up any downstream updates
+        // (e.g. the new row's PlayHistory insertion that was cached
+        // separately).
+        const nextId = json.nowPlaying.isPlaying
+          ? json.nowPlaying.trackId
+          : null;
+        if (
+          lastTrackIdRef.current !== null &&
+          nextId !== null &&
+          lastTrackIdRef.current !== nextId
+        ) {
+          if (followUpIdRef.current !== null) {
+            clearTimeout(followUpIdRef.current);
+          }
+          followUpIdRef.current = window.setTimeout(() => {
+            followUpIdRef.current = null;
+            if (mounted.current) poll();
+          }, TRACK_CHANGE_FOLLOWUP_MS);
+        }
+        lastTrackIdRef.current = nextId;
       } catch {
         /* network blip — keep prior */
       }
@@ -124,6 +154,7 @@ function useBroadcastFeed() {
     return () => {
       mounted.current = false;
       clearTimeout(timeoutId);
+      if (followUpIdRef.current !== null) clearTimeout(followUpIdRef.current);
       clearInterval(tickId);
       ctrl.abort();
     };

@@ -25,10 +25,10 @@ const HISTORY_LIMIT = 4;
 const STALE_GRACE_SECONDS = 30;
 
 const HEADERS = {
-  // Tight CDN TTL — this feed is used to surface track changes live, so
-  // stale-while-revalidate on top of a longer s-maxage makes the UI feel
-  // sluggish (~20s behind) on every track boundary. Keep both windows low.
-  "Cache-Control": "public, s-maxage=2, stale-while-revalidate=5",
+  // Very tight CDN TTL — this feed surfaces live track changes. Any extra
+  // staleness gets perceived by the listener as "the UI is lying about
+  // what I'm hearing". One second fresh, two seconds while revalidating.
+  "Cache-Control": "public, s-maxage=1, stale-while-revalidate=2",
 };
 
 type TrackSummary = {

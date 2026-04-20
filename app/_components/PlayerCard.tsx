@@ -12,6 +12,64 @@ import { LiveClock } from "./LiveClock";
 import { Waveform } from "./Waveform";
 import { useNowPlaying } from "./useNowPlaying";
 
+function VolumeIcon({ muted, level }: { muted: boolean; level: number }) {
+  // Speaker body + varying number of wave arcs based on volume level.
+  // When muted or zero, render the speaker with a slash.
+  const showWave1 = !muted && level > 0;
+  const showWave2 = !muted && level > 0.5;
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      style={{ width: 16, height: 16, opacity: 0.85 }}
+    >
+      <path d="M3 8v4h3l4 3V5L6 8H3z" />
+      {showWave1 && <path d="M12 7.4a3 3 0 010 5.2V7.4z" />}
+      {showWave2 && (
+        <path d="M14 4.8a6 6 0 010 10.4v-1.6a4.5 4.5 0 000-7.2V4.8z" />
+      )}
+      {muted && (
+        <path
+          d="M13 7l5 6M18 7l-5 6"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          fill="none"
+        />
+      )}
+    </svg>
+  );
+}
+
+function VolumeControl() {
+  const { volume, isMuted, setVolume, toggleMute } = usePlayer();
+  const displayed = isMuted ? 0 : volume;
+  return (
+    <div className="vol">
+      <button
+        type="button"
+        onClick={toggleMute}
+        className="vol-icon-btn"
+        aria-label={isMuted ? "Unmute" : "Mute"}
+      >
+        <VolumeIcon muted={isMuted} level={volume} />
+      </button>
+      <div className="vol-bar">
+        <div className="fill" style={{ width: `${displayed * 100}%` }} />
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={displayed}
+          onChange={(e) => setVolume(parseFloat(e.target.value))}
+          aria-label="Volume"
+          className="vol-range"
+        />
+      </div>
+    </div>
+  );
+}
+
 function initials(title: string | undefined): string {
   if (!title) return "··";
   const words = title.split(/\s+/).filter(Boolean);
@@ -94,16 +152,7 @@ export function PlayerCard() {
             </span>
           </div>
         </div>
-        <div className="vol">
-          <svg
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            style={{ width: 16, height: 16, opacity: 0.7 }}
-          >
-            <path d="M3 8v4h3l4 3V5L6 8H3zm11 2a3 3 0 00-1.5-2.6v5.2A3 3 0 0014 10zm-1.5-5.5v1.5A5 5 0 0116 10a5 5 0 01-3.5 4.8v1.5A6.5 6.5 0 0018 10a6.5 6.5 0 00-5.5-5.5z" />
-          </svg>
-          <div className="vol-bar"><div className="fill" /></div>
-        </div>
+        <VolumeControl />
       </div>
 
       <div className="lena-card">

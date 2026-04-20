@@ -11,6 +11,9 @@ import {
 import { useNowPlaying } from "./useNowPlaying";
 
 const STREAM_URL = "https://api.numaradio.com/stream";
+const VOLUME_STORAGE_KEY = "numa.volume";
+const MUTED_STORAGE_KEY = "numa.muted";
+const DEFAULT_VOLUME = 0.8;
 
 export type PlayerStatus = "idle" | "loading" | "playing" | "error";
 
@@ -21,6 +24,10 @@ type PlayerState = {
   toggle: () => void;
   play: () => void;
   pause: () => void;
+  volume: number;
+  isMuted: boolean;
+  setVolume: (v: number) => void;
+  toggleMute: () => void;
 };
 
 const PlayerContext = createContext<PlayerState | null>(null);
@@ -34,6 +41,63 @@ export function usePlayer(): PlayerState {
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [status, setStatus] = useState<PlayerStatus>("idle");
+  const [volume, setVolumeState] = useState<number>(DEFAULT_VOLUME);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+
+  // Hydrate volume + mute from localStorage after mount (avoids SSR/CSR
+  // hydration mismatch).
+  useEffect(() => {
+    try {
+      const vRaw = window.localStorage.getItem(VOLUME_STORAGE_KEY);
+      if (vRaw !== null) {
+        const v = parseFloat(vRaw);
+        if (Number.isFinite(v)) setVolumeState(Math.max(0, Math.min(1, v)));
+      }
+      const mRaw = window.localStorage.getItem(MUTED_STORAGE_KEY);
+      if (mRaw === "true") setIsMuted(true);
+    } catch {
+      /* localStorage unavailable (private mode, SSR) — keep defaults */
+    }
+  }, []);
+
+  // Apply volume/mute to the real audio element whenever they change.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = isMuted ? 0 : volume;
+    audio.muted = isMuted;
+  }, [volume, isMuted]);
+
+  const setVolume = useCallback((v: number) => {
+    const clamped = Math.max(0, Math.min(1, v));
+    setVolumeState(clamped);
+    try {
+      window.localStorage.setItem(VOLUME_STORAGE_KEY, String(clamped));
+    } catch {
+      /* ignore */
+    }
+    // Dragging the slider above 0 implicitly unmutes.
+    if (clamped > 0 && isMuted) {
+      setIsMuted(false);
+      try {
+        window.localStorage.setItem(MUTED_STORAGE_KEY, "false");
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [isMuted]);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(MUTED_STORAGE_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   const play = useCallback(async () => {
     const audio = audioRef.current;
@@ -102,6 +166,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     toggle,
     play,
     pause,
+    volume,
+    isMuted,
+    setVolume,
+    toggleMute,
   };
 
   return (
