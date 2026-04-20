@@ -3,6 +3,7 @@ import { Archivo, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { PlayerProvider } from "./_components/PlayerProvider";
+import { MiniPlayer } from "./_components/MiniPlayer";
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -71,8 +72,12 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {/* One PlayerProvider for the whole app — keeps the <audio> element
             alive across client-side navigations so playback doesn't cut
-            out when the user moves between /, /about, /submit, etc. */}
-        <PlayerProvider>{children}</PlayerProvider>
+            out when the user moves between /, /about, /submit, etc.
+            MiniPlayer sits here too so the floating controls survive nav. */}
+        <PlayerProvider>
+          {children}
+          <MiniPlayer />
+        </PlayerProvider>
         <Script
           id="ld-json"
           type="application/ld+json"

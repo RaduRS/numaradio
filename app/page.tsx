@@ -7,7 +7,6 @@ import { Requests } from "./_components/Requests";
 import { Schedule } from "./_components/Schedule";
 import { Mobile } from "./_components/Mobile";
 import { Footer } from "./_components/Footer";
-import { MiniPlayer } from "./_components/MiniPlayer";
 
 export default function Home() {
   return (
@@ -21,7 +20,6 @@ export default function Home() {
       <Schedule />
       <Mobile />
       <Footer />
-      <MiniPlayer />
     </>
   );
 }

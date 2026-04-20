@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { usePlayer } from "./PlayerProvider";
 import { LoadingIcon, PauseIcon, PlayIcon } from "./Icons";
 import { useNowPlaying } from "./useNowPlaying";
@@ -10,16 +11,23 @@ const SCROLL_TRIGGER = 520; // roughly past the hero
 export function MiniPlayer() {
   const { isPlaying, isLoading, toggle } = usePlayer();
   const np = useNowPlaying();
-  const [show, setShow] = useState(false);
+  const pathname = usePathname();
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     function onScroll() {
-      setShow(window.scrollY > SCROLL_TRIGGER);
+      setScrolled(window.scrollY > SCROLL_TRIGGER);
     }
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Home page has a full hero player — show mini only after scrolling past
+  // it, otherwise the two players overlap. On every other route the
+  // mini-player is the only controls on screen, so show it straight away.
+  const isHome = pathname === "/";
+  const show = isHome ? scrolled : true;
 
   return (
     <div className={`mini-player ${show ? "show" : ""}`} id="mini-player">
