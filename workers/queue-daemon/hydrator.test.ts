@@ -49,3 +49,22 @@ test("hydrate does nothing when there are no staged items", async () => {
   });
   assert.deepEqual(sent, []);
 });
+
+test("hydrate routes shoutouts to overlay_queue and music to priority", async () => {
+  const sent: string[] = [];
+  await hydrate({
+    listStaged: async () => [
+      { id: "q1", trackId: "t1", positionIndex: 1, queueType: "music" },
+      { id: "q2", trackId: "t2", positionIndex: 2, queueType: "shoutout" },
+      { id: "q3", trackId: "t3", positionIndex: 3 },
+    ],
+    resolveAssetUrl: async (tid) => `https://b2/${tid}.mp3`,
+    markFailed: async () => {},
+    send: async (line) => void sent.push(line),
+  });
+  assert.deepEqual(sent, [
+    "priority.push https://b2/t1.mp3",
+    "overlay_queue.push https://b2/t2.mp3",
+    "priority.push https://b2/t3.mp3",
+  ]);
+});

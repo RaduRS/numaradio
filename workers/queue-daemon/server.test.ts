@@ -57,6 +57,18 @@ test("POST /push forwards body to handler and returns its result", async () => {
   });
 });
 
+test("POST /push forwards the kind discriminator to the handler", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    await hit(port, "/push", { trackId: "t1", sourceUrl: "u1", kind: "shoutout" });
+    assert.deepEqual(deps.__pushed[0], {
+      trackId: "t1",
+      sourceUrl: "u1",
+      kind: "shoutout",
+    });
+  });
+});
+
 test("POST /push returns 400 on invalid JSON", async () => {
   const deps = mkDeps();
   await withServer(deps, async (port) => {

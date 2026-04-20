@@ -40,9 +40,14 @@ async function listStaged(): Promise<StagedItem[]> {
       queueStatus: { in: ["planned", "staged"] },
     },
     orderBy: { positionIndex: "asc" },
-    select: { id: true, trackId: true, positionIndex: true },
+    select: { id: true, trackId: true, positionIndex: true, queueType: true },
   });
-  return rows.map((r) => ({ id: r.id, trackId: r.trackId, positionIndex: r.positionIndex }));
+  return rows.map((r) => ({
+    id: r.id,
+    trackId: r.trackId,
+    positionIndex: r.positionIndex,
+    queueType: r.queueType === "shoutout" ? "shoutout" : "music",
+  }));
 }
 
 async function markFailed(queueItemId: string, reasonCode: string): Promise<void> {
@@ -69,6 +74,14 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   });
   if (!track) throw Object.assign(new Error("unknown track"), { statusCode: 400 });
 
+  const kind = body.kind ?? "music";
+  // Overlay voice goes to a dedicated Liquidsoap source
+  // (`overlay_queue.push`) that's mixed on top of music via smooth_add.
+  // Music goes through the classic priority queue that switches at track
+  // boundary. See docs/superpowers/specs/2026-04-20-radio-feel-design.md.
+  const telnetQueue = kind === "shoutout" ? "overlay_queue" : "priority";
+  const queueType = kind === "shoutout" ? "shoutout" : "music";
+
   const position = await nextPositionIndex(track.stationId);
   const sourceObjectType = body.requestId ? "request" : "track";
   const sourceObjectId = body.requestId ?? body.trackId;
@@ -76,7 +89,7 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   const item = await prisma.queueItem.create({
     data: {
       stationId: track.stationId,
-      queueType: "music",
+      queueType,
       sourceObjectType,
       sourceObjectId,
       trackId: body.trackId,
@@ -93,7 +106,7 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   // hydrator re-sends on reconnect.
   lastPushes.push({ at: new Date().toISOString(), trackId: body.trackId, url: body.sourceUrl });
   sock
-    .send(`priority.push ${body.sourceUrl}`)
+    .send(`${telnetQueue}.push ${body.sourceUrl}`)
     .catch((err) =>
       lastFailures.push({
         at: new Date().toISOString(),

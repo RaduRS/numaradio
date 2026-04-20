@@ -211,7 +211,12 @@ export async function generateShoutout(
     input.source.kind === "agent"
       ? `shoutout:${input.source.sender ?? "-"}`
       : `booth:${input.source.requesterName ?? "-"}`;
-  const push = await pushToDaemon({ trackId, sourceUrl, reason: reasonPrefix });
+  const push = await pushToDaemon({
+    trackId,
+    sourceUrl,
+    reason: reasonPrefix,
+    kind: "shoutout",
+  });
   if (!push.ok) {
     throw new ShoutoutError(push.status, "queue_push_failed", push.error);
   }

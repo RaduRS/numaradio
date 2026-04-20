@@ -1,4 +1,12 @@
-export type StagedItem = { id: string; trackId: string | null; positionIndex: number };
+export type StagedItem = {
+  id: string;
+  trackId: string | null;
+  positionIndex: number;
+  // "music" → priority.push, "shoutout" → overlay_queue.push. Defaults to
+  // "music" if a pre-existing row was created before queueType routing
+  // landed.
+  queueType?: "music" | "shoutout";
+};
 
 export interface HydrateDeps {
   listStaged(): Promise<StagedItem[]>;
@@ -19,6 +27,7 @@ export async function hydrate(deps: HydrateDeps): Promise<void> {
       await deps.markFailed(item.id, "hydrate_missing_asset");
       continue;
     }
-    await deps.send(`priority.push ${url}`);
+    const queue = item.queueType === "shoutout" ? "overlay_queue" : "priority";
+    await deps.send(`${queue}.push ${url}`);
   }
 }

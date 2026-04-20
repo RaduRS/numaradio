@@ -158,7 +158,15 @@ export interface DaemonStatus {
 const DAEMON_URL = process.env.NUMA_DAEMON_URL ?? "http://127.0.0.1:4000";
 
 export async function pushToDaemon(
-  body: { trackId: string; sourceUrl: string; reason?: string },
+  body: {
+    trackId: string;
+    sourceUrl: string;
+    reason?: string;
+    // Routes the push: "shoutout" goes to Liquidsoap's overlay_queue
+    // (voice on top of music with sidechain ducking); "music" (default)
+    // goes to the priority music queue.
+    kind?: "music" | "shoutout";
+  },
   fetcher: typeof fetch = fetch,
   timeoutMs = 3_000,
 ): Promise<{ ok: true; queueItemId: string } | { ok: false; status: number; error: string }> {

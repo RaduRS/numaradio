@@ -1,10 +1,16 @@
 import type { IncomingMessage, ServerResponse, RequestListener } from "node:http";
 
+export type PushKind = "music" | "shoutout";
+
 export type PushBody = {
   trackId: string;
   sourceUrl: string;
   requestId?: string;
   reason?: string;
+  // Routes to a different Liquidsoap source. Shoutouts go to the overlay
+  // queue (voice on top of music), music goes to the priority music queue
+  // (replaces rotation at track boundary). Default: "music".
+  kind?: PushKind;
 };
 
 export type OnTrackBody = {
