@@ -46,6 +46,7 @@ export function Footer() {
             <ul>
               <li><Link href="/about">About Lena</Link></li>
               <li><Link href="/submit">Submit Music</Link></li>
+              <li><Link href="/privacy">Privacy</Link></li>
             </ul>
           </div>
         </div>
