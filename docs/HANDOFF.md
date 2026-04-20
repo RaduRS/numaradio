@@ -1,8 +1,8 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-20 (radio-feel overhaul — overlay voice mixing with
-sidechain duck, 5s crossfade, shoutout pill + pending spinner; Liquidsoap
-rewrite **committed but not yet restarted**)
+Last updated: 2026-04-20 (radio-feel overhaul LIVE on Orion — overlay voice
+mixing with sidechain duck, 5s crossfade, shoutout pill + pending spinner;
+smoke-tested end-to-end on production)
 
 ## Where we are
 
@@ -193,7 +193,8 @@ Restart needs your eyes on the stream.
   Queue daemon and `generateShoutout()` route shoutouts to Liquidsoap's
   `overlay_queue` via a `kind: "shoutout"` push. QueueItem rows tagged
   `queueType='shoutout'` and filtered out of Up Next.
-- ⚠ **Phase 3 — needs your live restart.** `liquidsoap/numa.liq` is now:
+- ✅ **Phase 3 — LIVE on Orion** (restarted + smoke-tested 2026-04-20 22:07).
+  `liquidsoap/numa.liq` is now:
   - 5s crossfade between music tracks (`crossfade(duration=5., …)`).
   - Lena rides on top of music via `smooth_add(duration=0.5, p=0.5, normal=music_bed, special=voice)`
     — music bed ducks to 50% (≈ −6 dB) while she talks, 500 ms fade in/out.
@@ -204,23 +205,29 @@ Restart needs your eyes on the stream.
   - Old single-`fallback` graph kept in a commented-out rollback block at
     the bottom of the file.
 
-To take Phase 3 live on Orion:
+Already live. If a future tweak to `numa.liq` needs shipping:
 ```bash
 git pull
-sudo systemctl restart numa-queue-daemon numa-liquidsoap
+sudo systemctl restart numa-liquidsoap
 ```
-Watch `journalctl -u numa-liquidsoap -f` — errors will be explicit. If
-things go sideways, uncomment the rollback block at the end of
-`liquidsoap/numa.liq`, rebuild, `sudo systemctl restart numa-liquidsoap`.
+(The sudoers drop-in allows this password-free for `marku`, and for
+Claude too via the same user.) Watch `journalctl -u numa-liquidsoap -f`
+— errors are explicit. Rollback: uncomment the preserved old-graph block
+at the end of `numa.liq`, rebuild, restart.
 
-Smoke test (in order):
-1. Normal listening → music plays.
-2. Dashboard `/shoutouts` → Compose → "Send to Lena" → expect: pill
-   appears on `numaradio.com`, music ducks audibly, title/artwork do NOT
-   change, pill clears after Lena ends, music restores.
-3. Push two back-to-back library tracks via `/library` → expect: 5 s
-   crossfade, no hard cut.
-4. Stack two shoutouts → expect: sequential, not overlapping each other.
+Bug caught & fixed during rollout:
+- Liquidsoap's `source.on_end` defaults to `delay=5.` (fires when ≤5s
+  remain). For a typical shoutout that fires ~3s after start,
+  prematurely clearing NowSpeaking. Pinned to `delay=0.2` so the end
+  callback fires at the actual audio end.
+
+Remaining smoke tests to do by ear:
+1. Submit a shoutout → music should duck audibly ~50% (–6 dB) while
+   Lena speaks; underlying title/artwork must NOT change; pill clears
+   right when she ends; music restores over ~0.5s.
+2. Two library pushes back-to-back → 5s crossfade, no hard cut, no
+   silence.
+3. Two shoutouts in quick succession → sequential, not simultaneous.
 
 **Next for NanoClaw × Numa Radio:**
 1. Song generation endpoint (`POST /api/generate/song`) — MiniMax
