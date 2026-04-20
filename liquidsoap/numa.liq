@@ -14,26 +14,33 @@ settings.frame.audio.samplerate.set(44100)
 settings.log.stdout.set(true)
 settings.log.level.set(3)
 
+# ─── Local control socket (loopback only) ──────────────────────────
+settings.server.telnet.set(true)
+settings.server.telnet.bind_addr.set("127.0.0.1")
+settings.server.telnet.port.set(1234)
+
 playlist_file = "/etc/numa/playlist.m3u"
 
-# Reload whenever the file changes on disk — no restart required.
-source = playlist.reloadable(reload_mode="watch", playlist_file)
+# ─── Sources ───────────────────────────────────────────────────────
+priority = request.queue(id="priority")
 
-# ─── Now-playing notification ─────────────────────────────────────
-# POST { sourceUrl } to the API on every track boundary so the website can
-# show truthful elapsed time. Fire-and-forget; we ignore failures so a
-# transient API blip never affects audio playback.
+rotation = playlist.reloadable(
+  id="rotation",
+  reload_mode="watch",
+  playlist_file
+)
 
+# ─── Now-playing notification ──────────────────────────────────────
 api_url = environment.get(
   default="https://numaradio.com/api/internal/track-started",
   "NUMA_TRACK_API_URL"
 )
+daemon_url = environment.get(
+  default="http://127.0.0.1:4000/on-track",
+  "NUMA_DAEMON_TRACK_URL"
+)
 
 def notify_track_started(metadata) =
-  # playlist.reloadable pre-downloads HTTP items to /tmp, so "filename" is the
-  # local cache path, not the original B2 URL. Prefer fields that retain the
-  # original remote URL; include title/artist so the API can fall back to an
-  # ID3 lookup when no URL field is useful.
   filename = metadata["filename"]
   source_url = metadata["source_url"]
   initial_uri = metadata["initial_uri"]
@@ -52,10 +59,10 @@ def notify_track_started(metadata) =
   )
   if src != "" or title != "" then
     secret = environment.get(default="", "INTERNAL_API_SECRET")
+    body = json.stringify({sourceUrl=src, title=title, artist=artist})
     if secret == "" then
-      log.severe("[numa] INTERNAL_API_SECRET not set — skipping notify")
+      log.severe("[numa] INTERNAL_API_SECRET not set — skipping Vercel notify")
     else
-      body = json.stringify({sourceUrl=src, title=title, artist=artist})
       try
         response = http.post(
           headers=[
@@ -66,22 +73,34 @@ def notify_track_started(metadata) =
           api_url
         )
         if response.status_code != 200 then
-          log.severe("[numa] track-started POST failed: " ^ string(response.status_code))
+          log.severe("[numa] track-started POST to Vercel failed: " ^ string(response.status_code))
         end
       catch err do
-        log.severe("[numa] track-started POST error: " ^ string(err))
+        log.severe("[numa] track-started POST to Vercel error: " ^ string(err))
       end
+    end
+    # Also notify the local daemon. Loopback-only, no auth needed.
+    try
+      _ = http.post(
+        headers=[("Content-Type", "application/json")],
+        data=body,
+        daemon_url
+      )
+    catch err do
+      log.severe("[numa] track-started POST to daemon error: " ^ string(err))
     end
   end
 end
 
-# Liquidsoap 2.2.4 method form: returns unit, mutates the source in place.
-# The callback fires on every track boundary even without a reassignment.
-source.on_track(notify_track_started)
-log.important("[numa] notify pipeline ready, api=" ^ api_url)
+# ─── Composite source with track-boundary safety ───────────────────
+# track_sensitive=true: sources only switch at track boundaries. A
+# priority push mid-song waits for the current song to finish. A
+# rotation reload mid-song also waits.
+source = fallback(track_sensitive=true, [priority, rotation, blank()])
 
-# mksafe wraps the source so a stall or empty playlist falls back to silence
-# instead of disconnecting Icecast.
+source.on_track(notify_track_started)
+log.important("[numa] notify pipeline ready, api=" ^ api_url ^ " daemon=" ^ daemon_url)
+
 source = mksafe(source)
 
 output.icecast(
