@@ -97,13 +97,21 @@ def notify_track_started(metadata) =
   end
 end
 
+# ─── Track-boundary notification ───────────────────────────────────
+# Attach the callback to each concrete source (priority, rotation) —
+# NOT to the fallback wrapper. `fallback` only emits on_track at its
+# own switch boundaries (e.g. blank→rotation). Playlist-internal track
+# transitions inside `rotation` are invisible to the wrapper, so they
+# must be hooked at the playlist source directly.
+priority.on_track(notify_track_started)
+rotation.on_track(notify_track_started)
+
 # ─── Composite source with track-boundary safety ───────────────────
 # track_sensitive=true: sources only switch at track boundaries. A
 # priority push mid-song waits for the current song to finish. A
 # rotation reload mid-song also waits.
 source = fallback(track_sensitive=true, [priority, rotation, blank()])
 
-source.on_track(notify_track_started)
 log.important("[numa] notify pipeline ready, api=" ^ api_url ^ " daemon=" ^ daemon_url)
 
 source = mksafe(source)
