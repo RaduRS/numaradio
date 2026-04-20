@@ -1,80 +1,109 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { PlayerProvider } from "../_components/PlayerProvider";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { ListenLiveButton } from "../_components/ListenLiveButton";
 
-const PLATFORMS = [
+type Platform = "ios" | "android" | "desktop";
+
+const WHY = [
   {
-    label: "iOS",
-    steps: [
-      {
-        title: "Open numaradio.com",
-        body:
-          "In Safari on iOS 16.4 or later, Chrome, Edge, Firefox, and Orion all work too.",
-      },
-      {
-        title: "Tap Share",
-        body:
-          "Square with the up-arrow — bottom of the screen on iPhone, top-right on iPad.",
-      },
-      {
-        title: "Add to Home Screen",
-        body: 'Scroll down in the share sheet, tap it, then "Add".',
-      },
-      {
-        title: "Launch",
-        body: "Numa opens full-bleed with lock-screen playback controls.",
-      },
-    ],
+    title: "Launches full-bleed",
+    body: "No browser chrome, no URL bar. Just Numa.",
   },
   {
-    label: "Android",
-    steps: [
-      {
-        title: "Open numaradio.com",
-        body:
-          "Chrome, Samsung Internet, Edge, Firefox, Opera — all support installing.",
-      },
-      {
-        title: "Look for the install banner",
-        body: 'Or open the three-dot menu and pick "Install app".',
-      },
-      {
-        title: "Confirm",
-        body: 'Tap "Install" in the prompt that appears.',
-      },
-      {
-        title: "Launch from your drawer",
-        body:
-          "Numa appears with its icon in your app drawer, indistinguishable from native.",
-      },
-    ],
+    title: "Lock-screen playback",
+    body: "Track metadata and controls on your lock screen, same as Apple Music or Spotify.",
   },
   {
-    label: "Desktop",
-    steps: [
-      {
-        title: "Open numaradio.com",
-        body:
-          "Chrome, Edge, Brave, and Arc on Windows / macOS / Linux. Safari 17+ on macOS works too.",
-      },
-      {
-        title: "Click the install icon",
-        body:
-          "Small monitor-with-arrow icon on the right of the address bar. In Safari it's File → Add to Dock.",
-      },
-      {
-        title: "Click Install",
-        body: "Numa opens in its own window, lands in Applications / Start menu.",
-      },
-      {
-        title: "Pin it to your dock",
-        body: "Clean window, no tabs or URL bar. Background audio works just like Apple Music.",
-      },
-    ],
+    title: "Keeps playing in background",
+    body: "Switch apps, lock your phone, take a call. Audio doesn't stop.",
+  },
+  {
+    title: "Instant updates",
+    body: "No app store review queue. New features land the moment we ship them.",
   },
 ];
+
+const STEPS: Record<Platform, { title: string; body: React.ReactNode }[]> = {
+  ios: [
+    {
+      title: "Open numaradio.com",
+      body: "In Safari on iOS 16.4 or later, Chrome, Edge, Firefox, and Orion all work too.",
+    },
+    {
+      title: "Tap Share",
+      body: "Square with the up-arrow — bottom of the screen on iPhone, top-right on iPad.",
+    },
+    {
+      title: "Add to Home Screen",
+      body: (
+        <>
+          Scroll down in the share sheet, tap it, then{" "}
+          <strong style={{ color: "var(--fg)" }}>Add</strong>.
+        </>
+      ),
+    },
+    {
+      title: "Launch",
+      body: "Numa opens full-bleed with lock-screen playback controls.",
+    },
+  ],
+  android: [
+    {
+      title: "Open numaradio.com",
+      body: "Chrome, Samsung Internet, Edge, Firefox, Opera — all support installing.",
+    },
+    {
+      title: "Look for the install banner",
+      body: (
+        <>
+          Or open the three-dot menu and pick{" "}
+          <strong style={{ color: "var(--fg)" }}>Install app</strong>.
+        </>
+      ),
+    },
+    {
+      title: "Confirm",
+      body: (
+        <>
+          Tap <strong style={{ color: "var(--fg)" }}>Install</strong> in the
+          prompt that appears.
+        </>
+      ),
+    },
+    {
+      title: "Launch from your drawer",
+      body: "Numa appears with its icon in your app drawer, indistinguishable from native.",
+    },
+  ],
+  desktop: [
+    {
+      title: "Open numaradio.com",
+      body: "Chrome, Edge, Brave, and Arc on Windows / macOS / Linux. Safari 17+ on macOS works too.",
+    },
+    {
+      title: "Click the install icon",
+      body: (
+        <>
+          Small monitor-with-arrow icon on the right of the address bar. In
+          Safari it&apos;s <em>File → Add to Dock</em>.
+        </>
+      ),
+    },
+    {
+      title: "Click Install",
+      body: "Numa opens in its own window, lands in Applications / Start menu.",
+    },
+    {
+      title: "Pin it to your dock",
+      body: "Clean window, no tabs or URL bar. Background audio works just like Apple Music.",
+    },
+  ],
+};
 
 const FAQS = [
   {
@@ -103,255 +132,674 @@ const FAQS = [
   },
 ];
 
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2.5}>
+      <path d="M4 10l4 4 8-8" />
+    </svg>
+  );
+}
+
+function IosLogo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+    </svg>
+  );
+}
+
+function AndroidLogo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 18c0 .55.45 1 1 1h1v3.5a1.5 1.5 0 003 0V19h2v3.5a1.5 1.5 0 003 0V19h1c.55 0 1-.45 1-1V8H6v10zM3.5 8a1.5 1.5 0 00-1.5 1.5v7a1.5 1.5 0 003 0v-7c0-.83-.67-1.5-1.5-1.5zm17 0a1.5 1.5 0 00-1.5 1.5v7a1.5 1.5 0 003 0v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3a.5.5 0 00-.7-.7l-1.48 1.48A6 6 0 0012 1a6 6 0 00-2.65.62L7.87.14a.5.5 0 00-.7.7l1.3 1.3A5.99 5.99 0 006 7h12a6 6 0 00-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z" />
+    </svg>
+  );
+}
+
+function DesktopLogo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <rect x="2.5" y="4" width="19" height="13" rx="1.5" />
+      <path d="M7 21h10M12 17v4" />
+    </svg>
+  );
+}
+
+function AppPreview() {
+  return (
+    <div className="app-preview show">
+      <div className="app-header" style={{ marginTop: 24 }}>
+        <div className="app-logo">
+          Numa<span className="accent">·</span>Radio
+        </div>
+        <div className="app-live">On Air</div>
+      </div>
+      <div className="app-art">
+        SF
+        <div className="art-meta">
+          <div className="track-num">Track · 04</div>
+          <div className="eq" style={{ height: 10 }}>
+            <span /><span /><span /><span /><span />
+          </div>
+        </div>
+      </div>
+      <div className="app-track">
+        <div className="tt">Slow Fade, Brighter</div>
+        <div className="ta">Russell Ross · Nightshore EP</div>
+      </div>
+      <div className="app-progress">
+        <div className="fill" />
+      </div>
+      <div className="app-controls">
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          style={{ width: 14, height: 14, opacity: 0.6 }}
+        >
+          <path d="M6 4v12L2 10zM18 4v12l-8-6z" />
+        </svg>
+        <div className="app-play">
+          <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 14, height: 14 }}>
+            <path d="M4 3v14l12-7z" />
+          </svg>
+        </div>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          style={{ width: 14, height: 14, opacity: 0.6 }}
+        >
+          <path d="M14 4v12l4-6zM2 4v12l8-6z" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function IosPhone({ step }: { step: number }) {
+  const showShareSheet = step === 2 || step === 3;
+  const showHome = step === 4;
+  return (
+    <div className="phone-frame">
+      <div className="phone-frame-notch" />
+      <div className="phone-inner">
+        <div className="phone-stat">
+          <span>2:47</span>
+          <span>●●● ▲</span>
+        </div>
+
+        {step === 1 && (
+          <div className="browser-chrome" style={{ top: 40 }}>
+            <div className="dot-row">
+              <span /><span /><span />
+            </div>
+            <div className="url">
+              <span className="lock">●</span>numaradio.com
+            </div>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.3}
+              style={{ width: 12, height: 12, color: "var(--fg-dim)", flexShrink: 0 }}
+            >
+              <path d="M10 3v10m0 0l-4-4m4 4l4-4M4 17h12" />
+            </svg>
+          </div>
+        )}
+
+        {!showHome && <AppPreview />}
+
+        <div className={`share-sheet${showShareSheet ? " show" : ""}`}>
+          <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 10 }}>
+            numaradio.com
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.06)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                style={{ width: 18, height: 18, color: "var(--fg-dim)" }}
+              >
+                <path d="M10 4l6 6h-4v5H8v-5H4z" />
+              </svg>
+            </div>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.06)",
+              }}
+            />
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.06)",
+              }}
+            />
+          </div>
+          <div className="share-row">
+            <span>Copy</span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              style={{ width: 14, height: 14, opacity: 0.6 }}
+            >
+              <rect x="5" y="5" width="12" height="12" rx="1" />
+              <path d="M3 13V5a2 2 0 012-2h8" />
+            </svg>
+          </div>
+          <div className="share-row">
+            <span>Add to Reading List</span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              style={{ width: 14, height: 14, opacity: 0.6 }}
+            >
+              <rect x="5" y="5" width="12" height="12" rx="1" />
+            </svg>
+          </div>
+          <div className="share-row highlight">
+            <span>Add to Home Screen</span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              style={{ width: 14, height: 14 }}
+            >
+              <rect x="4" y="4" width="12" height="12" rx="2" />
+              <path d="M10 6v8M6 10h8" />
+            </svg>
+          </div>
+          <div className="share-row">
+            <span>Markup</span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              style={{ width: 14, height: 14, opacity: 0.6 }}
+            >
+              <path d="M4 16L14 6l2 2L6 18z" />
+            </svg>
+          </div>
+        </div>
+
+        <div className={`home-screen${showHome ? " show" : ""}`}>
+          {["Messages", "Maps", "Photos", "Settings", "Safari", "Mail", "Calendar"].map((label) => (
+            <div key={label} className="hs-icon">
+              <div className="tile" />
+              <div className="tile-label">{label}</div>
+            </div>
+          ))}
+          <div className="hs-icon numa">
+            <div className="tile">N</div>
+            <div className="tile-label">Numa Radio</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AndroidPhone({ step }: { step: number }) {
+  const showBanner = step === 2 || step === 3;
+  const showHome = step === 4;
+  return (
+    <div className="phone-frame">
+      <div className="phone-frame-notch" />
+      <div className="phone-inner">
+        <div className="phone-stat">
+          <span>2:47</span>
+          <span>●●● ▲</span>
+        </div>
+
+        {step === 1 && (
+          <div className="browser-chrome" style={{ top: 40 }}>
+            <div className="url">
+              <span className="lock">●</span>numaradio.com
+            </div>
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              style={{ width: 14, height: 14, color: "var(--fg-dim)", flexShrink: 0 }}
+            >
+              <circle cx="10" cy="4" r="1.5" />
+              <circle cx="10" cy="10" r="1.5" />
+              <circle cx="10" cy="16" r="1.5" />
+            </svg>
+          </div>
+        )}
+
+        {!showHome && <AppPreview />}
+
+        {showBanner && (
+          <div
+            className="share-sheet show"
+            style={{ bottom: 60, top: "auto" }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background:
+                    "radial-gradient(circle at 30% 30%, var(--accent), #1A3A3A 65%),#0B0C0E",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800,
+                  color: "#0A0D0E",
+                  fontSize: 14,
+                }}
+              >
+                N
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 500 }}>
+                  Install Numa Radio
+                </div>
+                <div
+                  style={{
+                    fontSize: 9,
+                    color: "var(--fg-dim)",
+                    fontFamily: "var(--font-mono)",
+                  }}
+                >
+                  numaradio.com
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                justifyContent: "flex-end",
+              }}
+            >
+              <div style={{ padding: "6px 12px", fontSize: 10, color: "var(--fg-dim)" }}>
+                Not now
+              </div>
+              <div
+                style={{
+                  padding: "6px 12px",
+                  fontSize: 10,
+                  background: "var(--accent)",
+                  color: "#0A0D0E",
+                  borderRadius: 4,
+                  fontWeight: 600,
+                }}
+              >
+                Install
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={`home-screen${showHome ? " show" : ""}`}>
+          {["Phone", "Gmail", "Maps", "Chrome", "Photos", "Play", "Camera"].map((label) => (
+            <div key={label} className="hs-icon">
+              <div className="tile" />
+              <div className="tile-label">{label}</div>
+            </div>
+          ))}
+          <div className="hs-icon numa">
+            <div className="tile">N</div>
+            <div className="tile-label">Numa Radio</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DesktopPreview() {
+  return (
+    <div className="phone-preview" style={{ maxWidth: "none" }}>
+      <div
+        className="phone-frame"
+        style={{
+          aspectRatio: "16 / 11",
+          maxWidth: "none",
+          borderRadius: 14,
+          borderWidth: 10,
+        }}
+      >
+        <div className="phone-inner" style={{ padding: 0 }}>
+          <div
+            className="browser-chrome"
+            style={{ position: "static", borderRadius: 0 }}
+          >
+            <div className="dot-row">
+              <span /><span /><span />
+            </div>
+            <div className="url">
+              <span className="lock">●</span>numaradio.com{" "}
+              <span style={{ marginLeft: "auto", color: "var(--accent)" }}>⊕</span>
+            </div>
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              style={{ width: 12, height: 12, color: "var(--fg-dim)", flexShrink: 0 }}
+            >
+              <circle cx="10" cy="4" r="1.5" />
+              <circle cx="10" cy="10" r="1.5" />
+              <circle cx="10" cy="16" r="1.5" />
+            </svg>
+          </div>
+          <div className="install-prompt show">
+            <div className="ip-title">Install Numa Radio?</div>
+            <div className="ip-url">numaradio.com</div>
+            <div className="ip-actions">
+              <div className="ip-btn ghost">Cancel</div>
+              <div className="ip-btn primary">Install</div>
+            </div>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              display: "grid",
+              gridTemplateColumns: "1fr 1.4fr",
+              gap: 16,
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                aspectRatio: "1",
+                borderRadius: 12,
+                background:
+                  "radial-gradient(circle at 30% 20%, #2A4E4B, transparent 60%),radial-gradient(circle at 70% 80%, #4FD1C5, transparent 55%),linear-gradient(135deg, #1A1E23, #0F1114)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "var(--font-display)",
+                fontWeight: 800,
+                fontSize: 48,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              SF
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "var(--red-live)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span
+                  style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: "50%",
+                    background: "var(--red-live)",
+                    boxShadow: "0 0 4px var(--red-live)",
+                  }}
+                />
+                On Air · Lena
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800,
+                  fontSize: 22,
+                  lineHeight: 1,
+                  textTransform: "uppercase",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Slow Fade, Brighter
+              </div>
+              <div style={{ fontSize: 11, color: "var(--fg-dim)" }}>
+                Russell Ross · Nightshore EP
+              </div>
+              <div
+                style={{
+                  height: 3,
+                  borderRadius: 2,
+                  background: "rgba(255,255,255,0.1)",
+                  position: "relative",
+                  marginTop: 6,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "62%",
+                    background: "var(--accent)",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AddToHomeScreen() {
+  const [platform, setPlatform] = useState<Platform>("ios");
+  const [step, setStep] = useState<Record<Platform, number>>({
+    ios: 1,
+    android: 1,
+    desktop: 1,
+  });
+
+  const activeStep = step[platform];
+  const steps = STEPS[platform];
+
+  function selectStep(n: number) {
+    setStep((s) => ({ ...s, [platform]: n }));
+  }
+
   return (
     <PlayerProvider>
       <Nav />
 
-      <section style={{ padding: "80px 0 60px" }}>
+      <section className="install-hero">
         <div className="shell">
-          <Link
-            href="/"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              color: "var(--fg-mute)",
-              marginBottom: 40,
-            }}
-          >
-            ← Back to Numa Radio
-          </Link>
-
-          <div className="eyebrow" style={{ marginBottom: 24 }}>
-            Numa Radio · Installable Web App
-          </div>
-          <h1
-            style={{
-              fontFamily: "var(--font-display)",
-              fontWeight: 800,
-              fontStretch: "125%",
-              fontSize: "clamp(56px, 8vw, 120px)",
-              lineHeight: 0.88,
-              letterSpacing: "-0.025em",
-              textTransform: "uppercase",
-              marginBottom: 32,
-            }}
-          >
-            Put Numa<br />on your<br />
-            <span
-              style={{
-                color: "var(--accent)",
-                fontStyle: "italic",
-                fontStretch: "100%",
-              }}
+          <Link className="back" href="/">
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              style={{ width: 12, height: 12 }}
             >
-              home screen.
-            </span>
-          </h1>
-          <p
-            style={{
-              fontSize: 18,
-              lineHeight: 1.55,
-              color: "var(--fg-dim)",
-              maxWidth: 480,
-              marginBottom: 40,
-            }}
-          >
-            Numa installs from your browser — no app store, no signup. Once
-            it&apos;s on your home screen it behaves like any audio app:
-            full-bleed, lock-screen controls, background playback.
-          </p>
+              <path d="M13 4l-6 6 6 6" />
+            </svg>
+            Back to Numa Radio
+          </Link>
+          <div className="install-grid">
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 24 }}>
+                Numa Radio · Installable Web App
+              </div>
+              <h1>
+                Put Numa<br />on your<br />
+                <span className="accent">home screen.</span>
+              </h1>
+              <p className="lead">
+                Numa installs from your browser — no app store, no signup. Once
+                it&apos;s on your home screen it behaves like any audio app:
+                full-bleed, lock-screen controls, background playback.
+              </p>
+            </div>
+            <div className="why-list">
+              {WHY.map((w) => (
+                <div key={w.title} className="why-item">
+                  <div className="check">
+                    <CheckIcon />
+                  </div>
+                  <div>
+                    <h4>{w.title}</h4>
+                    <p>{w.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      {PLATFORMS.map((p) => (
-        <section
-          key={p.label}
-          style={{ padding: "60px 0", borderTop: "1px solid var(--line)" }}
-        >
-          <div className="shell">
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                fontWeight: 800,
-                fontStretch: "125%",
-                fontSize: "clamp(36px, 4vw, 56px)",
-                lineHeight: 0.95,
-                letterSpacing: "-0.02em",
-                textTransform: "uppercase",
-                marginBottom: 32,
-              }}
-            >
-              {p.label}
-            </h2>
-            <ol
-              style={{
-                listStyle: "none",
-                display: "flex",
-                flexDirection: "column",
-                gap: 0,
-              }}
-            >
-              {p.steps.map((s, i) => (
-                <li
-                  key={i}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "56px 1fr",
-                    gap: 24,
-                    padding: "28px 0",
-                    borderTop: "1px solid var(--line)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontWeight: 800,
-                      fontStretch: "125%",
-                      fontSize: 40,
-                      lineHeight: 1,
-                      color: "var(--fg-mute)",
-                      letterSpacing: "-0.02em",
-                    }}
-                  >
-                    {String(i + 1).padStart(2, "0")}
-                  </div>
-                  <div>
-                    <h3
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontWeight: 700,
-                        fontStretch: "115%",
-                        fontSize: 26,
-                        lineHeight: 1.05,
-                        textTransform: "uppercase",
-                        marginBottom: 8,
-                      }}
-                    >
-                      {s.title}
-                    </h3>
-                    <p
-                      style={{
-                        color: "var(--fg-dim)",
-                        fontSize: 15,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {s.body}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-      ))}
-
-      <section style={{ padding: "80px 0 40px", borderTop: "1px solid var(--line)" }}>
+      <section className="platform-section">
         <div className="shell">
-          <div className="eyebrow" style={{ marginBottom: 20 }}>
-            Questions we get
+          <div className="platform-head">
+            <h2>
+              Pick your<br />device.
+            </h2>
+            <p>
+              Three short steps on whatever you use. The destination is the
+              same: Numa, one tap away, every time.
+            </p>
           </div>
-          <h2
-            style={{
-              fontFamily: "var(--font-display)",
-              fontWeight: 800,
-              fontStretch: "125%",
-              fontSize: "clamp(36px, 4.5vw, 56px)",
-              lineHeight: 0.95,
-              letterSpacing: "-0.02em",
-              textTransform: "uppercase",
-              marginBottom: 48,
-            }}
-          >
-            Wait,<br />but —
-          </h2>
+
+          <div className="platform-tabs" role="tablist">
+            <button
+              className={`ptab${platform === "ios" ? " active" : ""}`}
+              onClick={() => setPlatform("ios")}
+              role="tab"
+              aria-selected={platform === "ios"}
+            >
+              <IosLogo />
+              iOS
+            </button>
+            <button
+              className={`ptab${platform === "android" ? " active" : ""}`}
+              onClick={() => setPlatform("android")}
+              role="tab"
+              aria-selected={platform === "android"}
+            >
+              <AndroidLogo />
+              Android
+            </button>
+            <button
+              className={`ptab${platform === "desktop" ? " active" : ""}`}
+              onClick={() => setPlatform("desktop")}
+              role="tab"
+              aria-selected={platform === "desktop"}
+            >
+              <DesktopLogo />
+              Desktop
+            </button>
+          </div>
+
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 1,
-              background: "var(--line)",
-              border: "1px solid var(--line)",
-              borderRadius: 12,
-              overflow: "hidden",
-            }}
+            className="steps-wrap"
+            style={
+              platform === "desktop"
+                ? { gridTemplateColumns: "1fr 1.2fr" }
+                : undefined
+            }
           >
+            <div className="steps-list">
+              {steps.map((s, i) => {
+                const n = i + 1;
+                return (
+                  <div
+                    key={i}
+                    className={`step-row${activeStep === n ? " active" : ""}`}
+                    onClick={() => selectStep(n)}
+                  >
+                    <div className="step-num-lg">
+                      {String(n).padStart(2, "0")}
+                    </div>
+                    <div className="step-body">
+                      <h3>{s.title}</h3>
+                      <p>{s.body}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {platform === "ios" && (
+              <div className="phone-preview">
+                <IosPhone step={activeStep} />
+              </div>
+            )}
+            {platform === "android" && (
+              <div className="phone-preview">
+                <AndroidPhone step={activeStep} />
+              </div>
+            )}
+            {platform === "desktop" && <DesktopPreview />}
+          </div>
+        </div>
+      </section>
+
+      <section className="faq-section">
+        <div className="shell">
+          <div className="faq-head">
+            <div className="eyebrow" style={{ marginBottom: 20 }}>
+              Questions we get
+            </div>
+            <h2>
+              Wait,<br />but —
+            </h2>
+          </div>
+          <div className="faq-grid">
             {FAQS.map((f) => (
-              <div
-                key={f.q}
-                style={{ background: "var(--bg-1)", padding: "24px 28px" }}
-              >
-                <h4
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 500,
-                    marginBottom: 8,
-                    color: "var(--fg)",
-                  }}
-                >
-                  {f.q}
-                </h4>
-                <p
-                  style={{
-                    fontSize: 14,
-                    color: "var(--fg-dim)",
-                    lineHeight: 1.55,
-                  }}
-                >
-                  {f.a}
-                </p>
+              <div key={f.q} className="faq-item">
+                <h4>{f.q}</h4>
+                <p>{f.a}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section
-        style={{
-          textAlign: "center",
-          padding: "80px 0 60px",
-          borderTop: "1px solid var(--line)",
-        }}
-      >
+      <section className="cta-footer">
         <div className="shell">
-          <h2
-            style={{
-              fontFamily: "var(--font-display)",
-              fontWeight: 800,
-              fontStretch: "125%",
-              fontSize: "clamp(40px, 6vw, 80px)",
-              lineHeight: 0.92,
-              letterSpacing: "-0.02em",
-              textTransform: "uppercase",
-              marginBottom: 20,
-            }}
-          >
+          <h2>
             Good to go?<br />
-            <span
-              style={{
-                color: "var(--accent)",
-                fontStyle: "italic",
-                fontStretch: "100%",
-              }}
-            >
-              press play.
-            </span>
+            <span className="accent">press play.</span>
           </h2>
-          <p
-            style={{
-              color: "var(--fg-dim)",
-              fontSize: 16,
-              marginBottom: 32,
-            }}
-          >
-            Lena&apos;s been on the mic for hours. Come listen.
-          </p>
+          <p>Lena&apos;s been on the mic for hours. Come listen.</p>
           <ListenLiveButton
             label="Listen on numaradio.com"
             style={{ padding: "16px 28px", fontSize: 15 }}
