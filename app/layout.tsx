@@ -69,6 +69,14 @@ export default function RootLayout({
       lang="en"
       className={`${archivo.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full`}
     >
+      <head>
+        {/* Warm DNS + TCP + TLS to the Icecast stream origin before the
+            user clicks play. Shaves a few hundred ms off first-play
+            latency, almost free. dns-prefetch as a fallback for older
+            browsers. */}
+        <link rel="preconnect" href="https://api.numaradio.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://api.numaradio.com" />
+      </head>
       <body className="min-h-full flex flex-col">
         {/* One PlayerProvider for the whole app — keeps the <audio> element
             alive across client-side navigations so playback doesn't cut
