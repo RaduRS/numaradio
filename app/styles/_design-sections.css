@@ -1464,14 +1464,59 @@
 @media (max-width: 640px) {
   .shell { padding: 0 20px; }
   .nav-links { display: none; }
+  /* Live chip is redundant with the Listen Live button; drop it on mobile
+     so the navbar doesn't overflow. */
+  .nav .live-chip { display: none; }
+  .nav-right { gap: 10px; }
+  .nav-inner { height: 56px; }
+
   .hero { padding: 48px 0 80px; }
   .hero-stats { flex-wrap: wrap; gap: 24px; }
   .hero-ctas { flex-wrap: wrap; }
+
+  /* Format flow cards: shrink the 36px uppercase headline so words like
+     CONTINUOUS don't run off the right edge. */
+  .flow-cell { padding: 28px 22px; min-height: auto; }
+  .flow-cell h3 { font-size: 26px; overflow-wrap: anywhere; }
+  .flow-cell .desc { overflow-wrap: anywhere; }
+
   .sched-grid { grid-template-columns: 1fr; }
-  .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+
+  .mobile-showcase { padding: 80px 0; }
+  .phones { gap: 14px; max-width: 100%; }
+  .phone { border-radius: 28px; border-width: 6px; padding: 10px; }
+  .phone.phone-2 { transform: translateY(20px); }
+  .phone-notch { width: 56px; height: 16px; }
+  .phone-status { font-size: 9px; padding: 4px 6px 10px; }
+
+  .footer { padding: 64px 0 32px; }
+  .footer-grid { grid-template-columns: 1fr; gap: 32px; margin-bottom: 48px; }
+  .footer-brand h4 { font-size: 38px; }
   .footer-base { flex-direction: column; gap: 16px; text-align: center; }
+
   .mini-player { bottom: 12px; width: calc(100% - 24px); padding: 10px; }
   .mp-req-btn { display: none; }
+
+  /* Queue rows: position number is noise on a narrow screen; the REQUEST
+     badge needs to stay, but the title/artist column needs more room so
+     titles don't wrap after every second word. */
+  .queue-item {
+    grid-template-columns: 44px 1fr auto auto;
+    gap: 10px;
+    padding: 12px;
+  }
+  .queue-item .q-pos { display: none; }
+  .queue-item .q-art { width: 44px; height: 44px; font-size: 13px; }
+  .queue-item .q-dur { font-size: 11px; }
+  .queue-item .q-tag-req { font-size: 9px; padding: 3px 6px; }
+  .q-info .q-title { font-size: 14px; }
+  .q-info .q-artist { font-size: 12px; }
+
+  .now-track-lg .title { font-size: 36px; }
+  .broadcast-art .glyph { font-size: 180px; }
+
+  /* Content pages (/about, /submit) — collapse 2-col grid to 1 col. */
+  .about-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
 }
 
 /* ============ TWEAKS PANEL ============ */

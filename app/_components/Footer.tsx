@@ -41,6 +41,13 @@ export function Footer() {
               <li><Link href="/add-to-home-screen">Add to Home Screen</Link></li>
             </ul>
           </div>
+          <div className="footer-col">
+            <div className="label">Station</div>
+            <ul>
+              <li><Link href="/about">About Lena</Link></li>
+              <li><Link href="/submit">Submit Music</Link></li>
+            </ul>
+          </div>
         </div>
         <div className="footer-base">
           <span>© 2026 Numa Radio · Broadcasting from everywhere</span>
