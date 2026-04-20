@@ -110,7 +110,14 @@ rotation.on_track(notify_track_started)
 # track_sensitive=true: sources only switch at track boundaries. A
 # priority push mid-song waits for the current song to finish. A
 # rotation reload mid-song also waits.
-source = fallback(track_sensitive=true, [priority, rotation, blank()])
+#
+# Do NOT include blank() here. blank() never ends a track, so once the
+# fallback selected it (e.g. at cold start before rotation had loaded
+# its first request) track_sensitive=true would lock the stream on
+# silence forever. mksafe() below provides the silence safety net using
+# track_sensitive=false internally, which can switch back to a real
+# source the moment one becomes available.
+source = fallback(track_sensitive=true, [priority, rotation])
 
 log.important("[numa] notify pipeline ready, api=" ^ api_url ^ " daemon=" ^ daemon_url)
 
