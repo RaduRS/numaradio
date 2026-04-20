@@ -5,6 +5,7 @@ import { basename, extname, join } from "node:path";
 import { parseFile } from "music-metadata";
 import { prisma } from "../lib/db";
 import { putObject, publicUrl } from "../lib/storage";
+import { fetchSunoMetadata } from "../lib/suno";
 
 const SEED_DIR = join(process.cwd(), "seed");
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
@@ -82,14 +83,40 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
   const title = tags.title?.trim() ?? basename(fileName, extname(fileName));
   const artist = normalizeArtist(tags.artist);
   const commentText = tags.comment?.[0]?.text ?? tags.comment?.[0]?.toString() ?? "";
-  const bpm = parseBpm(commentText);
-  const musicalKey = parseKey(commentText);
+  let bpm = parseBpm(commentText);
+  let musicalKey = parseKey(commentText);
   const sunoId = parseSunoId(commentText);
   const hashtags = parseHashtags(commentText);
-  const { genre, mood } = deriveGenreAndMood(hashtags);
+  let { genre, mood } = deriveGenreAndMood(hashtags);
   const lyrics = tags.lyrics?.[0]?.text;
   const durationSec = meta.format.duration ? Math.round(meta.format.duration) : undefined;
   const sunoUrl = sunoId ? `https://suno.com/song/${sunoId}` : undefined;
+
+  // Suno stopped including BPM/key/structured-genre in ID3 comments around
+  // late 2025. If we have a Suno UUID but ID3 didn't give us those, scrape
+  // the public song page for the server-rendered metadata blob.
+  let sunoRawTags: string | undefined;
+  let sunoModel: string | undefined;
+  let sunoGenres: string[] = [];
+  let sunoMoods: string[] = [];
+  const needsSunoLookup = sunoId && (!bpm || !musicalKey || !genre);
+  if (needsSunoLookup) {
+    const result = await fetchSunoMetadata(sunoId!);
+    if (result.ok) {
+      bpm = bpm ?? result.data.bpm;
+      musicalKey = musicalKey ?? result.data.musicalKey;
+      sunoGenres = result.data.genres;
+      sunoMoods = result.data.moods;
+      sunoRawTags = result.data.rawTags;
+      sunoModel = result.data.modelVersion;
+      // Promote the first Suno genre/mood into our single-field slots if the
+      // hashtag whitelist didn't already pick something.
+      if (!genre && sunoGenres.length) genre = sunoGenres[0];
+      if (!mood && sunoMoods.length) mood = sunoMoods[0];
+    } else {
+      console.log(`  ↳ Suno metadata lookup failed: ${result.reason}`);
+    }
+  }
 
   // Idempotency: dedupe on Suno ID
   if (sunoId) {
@@ -118,6 +145,10 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
       provenanceJson: {
         sunoId,
         sunoUrl,
+        sunoRawTags,
+        sunoModel,
+        sunoGenres,
+        sunoMoods,
         rawComment: commentText,
         hashtags,
         key: musicalKey,
@@ -129,7 +160,7 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
         bitrate: meta.format.bitrate,
         channels: meta.format.numberOfChannels,
         ingestedAt: new Date().toISOString(),
-        ingestVersion: 1,
+        ingestVersion: 2,
       },
       airingPolicy: "library",
       safetyStatus: "approved",

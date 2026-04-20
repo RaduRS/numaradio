@@ -9,6 +9,7 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "ingest:seed": "tsx scripts/ingest-seed.ts",
+    "backfill:suno": "tsx scripts/backfill-suno-metadata.ts",
     "refresh-rotation": "tsx scripts/refresh-rotation.ts",
     "queue:push": "tsx scripts/queue-push.ts",
     "queue:daemon": "tsx workers/queue-daemon/index.ts",
