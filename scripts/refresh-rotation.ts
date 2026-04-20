@@ -7,7 +7,16 @@ import { PrismaClient } from "@prisma/client";
 export type RotationTrack = { id: string; url: string; title: string };
 
 const PLAYLIST_PATH = process.env.NUMA_PLAYLIST_PATH ?? "/etc/numa/playlist.m3u";
-const RECENT_WINDOW = 20;
+const MAX_RECENT_WINDOW = 20;
+
+// Size the "avoid recent" window so that the non-recent pool is at least 2
+// tracks. With a small library the fixed 20-slot window would always cover
+// every track (pool=0 → fallback to full library → Liquidsoap's per-reload
+// reshuffle could put the just-played track next). Pool=2 keeps the
+// just-played out while preserving shuffle randomness.
+export function recentWindowFor(librarySize: number): number {
+  return Math.max(1, Math.min(MAX_RECENT_WINDOW, librarySize - 2));
+}
 
 export function buildPlaylist(
   library: RotationTrack[],
@@ -59,10 +68,11 @@ async function main() {
       return asset?.publicUrl ? [{ id: t.id, url: asset.publicUrl, title: t.title }] : [];
     });
 
+    const window = recentWindowFor(library.length);
     const recent = await prisma.playHistory.findMany({
       where: { stationId: station.id, trackId: { not: null } },
       orderBy: { startedAt: "desc" },
-      take: RECENT_WINDOW,
+      take: window,
       select: { trackId: true },
     });
     const recentIds = new Set(recent.map((r) => r.trackId!).filter(Boolean));
