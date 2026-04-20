@@ -30,6 +30,11 @@ export function StatusPills({ data, isStale }: Props) {
         {listeners !== null ? `${listeners} listener${listeners === 1 ? "" : "s"}` : "— listeners"}
         {peak !== null ? <span className="ml-2 opacity-60">peak {peak}</span> : null}
       </div>
+      <div className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
+        {data?.site?.visitors !== null && data?.site?.visitors !== undefined
+          ? `${data.site.visitors} on the site`
+          : "— on the site"}
+      </div>
       <div className="text-sm text-fg-dim">
         {np ? (
           <>

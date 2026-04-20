@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { PlayerProvider } from "./_components/PlayerProvider";
 import { MiniPlayer } from "./_components/MiniPlayer";
+import { PresenceHeartbeat } from "./_components/PresenceHeartbeat";
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -86,6 +87,7 @@ export default function RootLayout({
           {children}
           <MiniPlayer />
         </PlayerProvider>
+        <PresenceHeartbeat />
         <Script
           id="ld-json"
           type="application/ld+json"

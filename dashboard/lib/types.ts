@@ -22,4 +22,10 @@ export interface StatusSnapshot {
     b2: { ok: boolean; latencyMs?: number; error?: string };
     tunnel: { ok: boolean; connections: number; error?: string };
   };
+  site: {
+    // Anonymous presence count — people with numaradio.com open right now,
+    // regardless of whether they've pressed play. Null means the query
+    // failed (Neon down, table missing) and the pill should say "—".
+    visitors: number | null;
+  };
 }

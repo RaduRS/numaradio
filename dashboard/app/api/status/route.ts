@@ -7,6 +7,7 @@ import {
 import { fetchIcecastStatus } from "@/lib/icecast";
 import { fetchTunnelHealth, type TunnelHealth } from "@/lib/cloudflared";
 import { checkNeon, checkB2, type HealthPing } from "@/lib/health";
+import { fetchSiteVisitors } from "@/lib/presence";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(): Promise<NextResponse> {
   const icecastUrl = process.env.ICECAST_STATUS_URL ?? "http://localhost:8000/status-json.xsl";
   const metricsUrl = process.env.CLOUDFLARED_METRICS_URL ?? "http://127.0.0.1:20241/metrics";
 
-  const [icecastResult, servicesResult, neon, b2, tunnel] = await Promise.all([
+  const [icecastResult, servicesResult, neon, b2, tunnel, visitors] = await Promise.all([
     fetchIcecastStatus(icecastUrl, "/stream").then(
       (v) => ({ ok: true as const, v }),
       (e) => ({ ok: false as const, e }),
@@ -34,6 +35,7 @@ export async function GET(): Promise<NextResponse> {
     checkNeon(),
     checkB2(),
     fetchTunnelHealth(metricsUrl),
+    fetchSiteVisitors(),
   ]);
 
   const stream = buildStreamSnapshot(publicUrl, icecastResult, tunnel);
@@ -44,6 +46,7 @@ export async function GET(): Promise<NextResponse> {
       stream,
       services: servicesResult,
       health: { neon, b2, tunnel } as { neon: HealthPing; b2: HealthPing; tunnel: unknown },
+      site: { visitors },
     },
     { headers: { "Cache-Control": "no-store" } },
   );

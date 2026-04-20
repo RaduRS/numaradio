@@ -412,3 +412,15 @@ model SystemEvent {
 
   @@index([eventType, processedAt, createdAt])
 }
+
+// Anonymous presence counter. The client generates a random sessionId in
+// memory only (no cookie, no localStorage) and pings /api/presence/heartbeat
+// every ~30 seconds while the tab is visible. The dashboard counts rows
+// where lastSeenAt is within the last minute to show "people on the site".
+// No PII, no cross-session linking, no persistent identifier.
+model SiteVisitor {
+  sessionId  String   @id
+  lastSeenAt DateTime @default(now())
+
+  @@index([lastSeenAt])
+}
