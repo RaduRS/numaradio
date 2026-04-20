@@ -1,6 +1,6 @@
 import { ListenLiveButton } from "./ListenLiveButton";
 import { ListenerCount } from "./ListenerCount";
-import { MusicNoteIcon } from "./Icons";
+import { SparklesIcon } from "./Icons";
 import { PlayerCard } from "./PlayerCard";
 
 export function Hero() {
@@ -30,7 +30,7 @@ export function Hero() {
           <div className="hero-ctas">
             <ListenLiveButton />
             <a className="btn btn-ghost" href="#requests">
-              <MusicNoteIcon className="btn-icon" />
+              <SparklesIcon className="btn-icon" />
               Request a Song
             </a>
           </div>

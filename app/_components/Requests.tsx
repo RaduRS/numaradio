@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MegaphoneIcon, MusicNoteIcon, SendIcon, CopyIcon, BlueskyIcon } from "./Icons";
+import { MegaphoneIcon, SparklesIcon, SendIcon, CopyIcon, BlueskyIcon } from "./Icons";
 
 // Two request types only: Song + Shoutout. Suno-link tab dropped per
 // Decisions Log 2026-04-19 — listener-pasted URLs can't be rights-verified.
@@ -76,7 +76,7 @@ export function Requests() {
                 aria-selected={tab === "song"}
               >
                 <span className="rt-ico">
-                  <MusicNoteIcon className="" />
+                  <SparklesIcon className="" />
                 </span>
                 <span className="rt-label">Song request</span>
               </button>

@@ -14,6 +14,7 @@ import {
   Rss,
   Send,
   Share2,
+  Sparkles,
   ThumbsUp,
   ThumbsDown,
 } from "lucide-react";
@@ -98,4 +99,10 @@ export function ThumbsUpIcon({ className = "", size }: IconProps) {
 
 export function ThumbsDownIcon({ className = "", size }: IconProps) {
   return <ThumbsDown className={className} size={size} strokeWidth={1.8} />;
+}
+
+// "Numa writes you a song" CTA glyph — sparkles reads as AI-generated
+// rather than Music2's "play this existing song" connotation.
+export function SparklesIcon({ className = "", size }: IconProps) {
+  return <Sparkles className={className} size={size} strokeWidth={1.8} />;
 }

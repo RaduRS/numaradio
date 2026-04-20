@@ -2391,8 +2391,14 @@
 }
 @media (max-width: 640px) {
   .install-hero { padding: 40px 0 32px; }
-  .platform-tabs { width: 100%; overflow-x: auto; }
-  .ptab { padding: 10px 16px; }
+  /* Spread the iOS / Android / Desktop tabs evenly across the row
+     instead of letting them cluster on the left. */
+  .platform-tabs { width: 100%; display: flex; }
+  .ptab {
+    flex: 1 1 0;
+    padding: 10px 12px;
+    justify-content: center;
+  }
   .step-row { grid-template-columns: 44px 1fr; gap: 16px; padding: 24px 0; }
   .step-num-lg { font-size: 32px; }
 }
