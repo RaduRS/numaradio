@@ -25,7 +25,10 @@ const HISTORY_LIMIT = 4;
 const STALE_GRACE_SECONDS = 30;
 
 const HEADERS = {
-  "Cache-Control": "public, s-maxage=5, stale-while-revalidate=15",
+  // Tight CDN TTL — this feed is used to surface track changes live, so
+  // stale-while-revalidate on top of a longer s-maxage makes the UI feel
+  // sluggish (~20s behind) on every track boundary. Keep both windows low.
+  "Cache-Control": "public, s-maxage=2, stale-while-revalidate=5",
 };
 
 type TrackSummary = {
@@ -132,7 +135,11 @@ export async function GET() {
 
   // ── Now playing ──────────────────────────────────────────────
   let nowPlaying: NowPlayingPayload = { isPlaying: false };
-  let currentTrackId: string | null = null;
+  // Track the currently-playing row's startedAt so we can drop just the
+  // matching PlayHistory entry later without also dropping older plays of
+  // the same track (which would wipe history when a user re-requests a
+  // previously-aired song).
+  let currentStartedAtMs: number | null = null;
 
   if (np?.currentTrackId && np.startedAt) {
     const expired =
@@ -154,7 +161,7 @@ export async function GET() {
         },
       });
       if (track) {
-        currentTrackId = track.id;
+        currentStartedAtMs = np.startedAt.getTime();
         nowPlaying = {
           isPlaying: true,
           trackId: track.id,
@@ -181,8 +188,15 @@ export async function GET() {
       : null;
 
   // ── Just played ──────────────────────────────────────────────
+  // Drop only the literal current-track row (matched by startedAt) — not
+  // every row with the same trackId. Otherwise a re-requested track would
+  // vanish from history as soon as it became current.
   const justPlayed: JustPlayedPayload = history
-    .filter((row) => row.trackId !== currentTrackId)
+    .filter(
+      (row) =>
+        currentStartedAtMs === null ||
+        row.startedAt.getTime() < currentStartedAtMs,
+    )
     .slice(0, HISTORY_LIMIT)
     .map((row) => {
       const t = row.track;

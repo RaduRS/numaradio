@@ -2249,6 +2249,28 @@
   color: var(--fg-dim);
   max-width: 520px;
 }
+
+/* Red pulsing "Live" indicator used in the Broadcast section's Just
+   Played / Up Next head. Shares the same dot style and animation as the
+   navbar .live-chip so the whole site says "live" with the same tell. */
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--red-live);
+}
+.live-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red-live);
+  box-shadow: 0 0 8px var(--red-live);
+  animation: pulseDot 1.6s ease-in-out infinite;
+}
 .cta-footer p {
   color: var(--fg-dim);
   font-size: 16px;

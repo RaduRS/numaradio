@@ -30,7 +30,13 @@ type BroadcastPayload = {
   justPlayed: JustPlayedItem[];
 };
 
-const POLL_MS = 15_000;
+// Base polling — fast enough that a fresh request or track change shows up
+// within a few seconds, slow enough not to hammer the CDN.
+const POLL_MS = 6_000;
+// Ramp up polling near the expected track boundary so the now-playing swap
+// feels instant instead of "we'll catch it in 6s".
+const BOUNDARY_POLL_MS = 2_000;
+const BOUNDARY_WINDOW_MS = 20_000;
 const TICK_MS = 1_000;
 
 function initials(title: string): string {
@@ -65,6 +71,8 @@ function useBroadcastFeed() {
   });
   const [now, setNow] = useState<number>(() => Date.now());
   const mounted = useRef(true);
+  const dataRef = useRef<BroadcastPayload>(data);
+  dataRef.current = data;
 
   useEffect(() => {
     mounted.current = true;
@@ -84,15 +92,38 @@ function useBroadcastFeed() {
       }
     }
 
+    // Dynamic polling: tight (2s) within the last 20s of a track so the
+    // now-playing swap catches up fast; relaxed (6s) otherwise.
+    function scheduleNext() {
+      const current = dataRef.current.nowPlaying;
+      let delay = POLL_MS;
+      if (current.isPlaying && current.durationSeconds) {
+        const endsAt =
+          new Date(current.startedAt).getTime() +
+          current.durationSeconds * 1000;
+        const msUntilEnd = endsAt - Date.now();
+        if (msUntilEnd <= BOUNDARY_WINDOW_MS) {
+          delay = BOUNDARY_POLL_MS;
+        }
+      }
+      return window.setTimeout(async () => {
+        if (!mounted.current) return;
+        await poll();
+        if (!mounted.current) return;
+        timeoutId = scheduleNext();
+      }, delay);
+    }
+
     poll();
-    const pollId = setInterval(poll, POLL_MS);
-    const tickId = setInterval(() => {
+    let timeoutId = scheduleNext();
+
+    const tickId = window.setInterval(() => {
       if (mounted.current) setNow(Date.now());
     }, TICK_MS);
 
     return () => {
       mounted.current = false;
-      clearInterval(pollId);
+      clearTimeout(timeoutId);
       clearInterval(tickId);
       ctrl.abort();
     };
@@ -193,7 +224,10 @@ export function Broadcast() {
           <div className="broadcast-next">
             <div className="up-next-head">
               <h3>{upNext ? "Up Next" : "Just Played"}</h3>
-              <div className="eyebrow">Auto-updating · Live</div>
+              <div className="live-pill">
+                <span className="dot" />
+                Live
+              </div>
             </div>
             <div className="queue-list">
               {upNext && (
