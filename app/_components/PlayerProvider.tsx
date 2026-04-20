@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useNowPlaying } from "./useNowPlaying";
 
 const STREAM_URL = "https://api.numaradio.com/stream";
 
@@ -107,7 +108,61 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerContext.Provider value={value}>
       {/* Single shared audio element — never unmounted. */}
       <audio ref={audioRef} preload="none" />
+      <MediaSessionSync />
       {children}
     </PlayerContext.Provider>
   );
+}
+
+// Mirrors now-playing + player state into the Media Session API so that
+// iOS Control Center / Android notifications / lock-screen show track
+// metadata and can drive play/pause remotely.
+function MediaSessionSync() {
+  const { isPlaying, play, pause } = usePlayer();
+  const np = useNowPlaying();
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+      return;
+    }
+    if (!np.title) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: np.title,
+      artist: np.artistDisplay ?? "",
+      album: "Numa Radio",
+      artwork: np.artworkUrl
+        ? [
+            {
+              src: np.artworkUrl,
+              sizes: "512x512",
+              type: "image/jpeg",
+            },
+          ]
+        : [],
+    });
+  }, [np.title, np.artistDisplay, np.artworkUrl]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+      return;
+    }
+    navigator.mediaSession.setActionHandler("play", () => play());
+    navigator.mediaSession.setActionHandler("pause", () => pause());
+    navigator.mediaSession.setActionHandler("stop", () => pause());
+    // This is live radio — nothing to seek to.
+    navigator.mediaSession.setActionHandler("seekto", null);
+    navigator.mediaSession.setActionHandler("seekbackward", null);
+    navigator.mediaSession.setActionHandler("seekforward", null);
+    navigator.mediaSession.setActionHandler("previoustrack", null);
+    navigator.mediaSession.setActionHandler("nexttrack", null);
+  }, [play, pause]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+      return;
+    }
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
+
+  return null;
 }
