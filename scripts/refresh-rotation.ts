@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 
-export type RotationTrack = { id: string; url: string };
+export type RotationTrack = { id: string; url: string; title: string };
 
 const PLAYLIST_PATH = process.env.NUMA_PLAYLIST_PATH ?? "/etc/numa/playlist.m3u";
 const RECENT_WINDOW = 20;
@@ -44,6 +44,7 @@ async function main() {
       },
       select: {
         id: true,
+        title: true,
         assets: {
           where: { assetType: "audio_stream" },
           take: 1,
@@ -52,9 +53,10 @@ async function main() {
       },
     });
 
-    const library: RotationTrack[] = tracks
-      .filter((t) => t.assets[0]?.publicUrl)
-      .map((t) => ({ id: t.id, url: t.assets[0].publicUrl }));
+    const library: RotationTrack[] = tracks.flatMap((t) => {
+      const asset = t.assets[0];
+      return asset?.publicUrl ? [{ id: t.id, url: asset.publicUrl, title: t.title }] : [];
+    });
 
     const recent = await prisma.playHistory.findMany({
       where: { stationId: station.id, trackId: { not: null } },
@@ -70,7 +72,7 @@ async function main() {
     await writeFile(tmpPath, content, "utf8");
     await rename(tmpPath, PLAYLIST_PATH);
 
-    const firstTitles = library.slice(0, 3).map((t) => t.id).join(", ");
+    const firstTitles = library.slice(0, 3).map((t) => t.title).join(", ");
     console.log(
       `[refresh-rotation] library=${library.length} excluded=${recentIds.size} wrote=${PLAYLIST_PATH} sample=[${firstTitles}]`,
     );

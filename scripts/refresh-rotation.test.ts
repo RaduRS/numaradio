@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildPlaylist } from "./refresh-rotation.ts";
 
-type T = { id: string; url: string };
-const t = (id: string, url: string): T => ({ id, url });
+type T = { id: string; url: string; title: string };
+const t = (id: string, url: string): T => ({ id, url, title: id });
 
 test("buildPlaylist excludes recent track ids and returns one url per line", () => {
   const library: T[] = [t("a", "https://b2/a.mp3"), t("b", "https://b2/b.mp3"), t("c", "https://b2/c.mp3")];
