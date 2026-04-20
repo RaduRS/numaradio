@@ -202,13 +202,27 @@ overlay_queue = source.on_end(
 music_bed = fallback(track_sensitive=true, [priority, rotation])
 music_bed = crossfade(duration=5., music_bed)
 
-# ─── Voice overlay: normalize + gain ───────────────────────────────
-# normalize keeps Lena's loudness stable regardless of per-call Deepgram
-# output. amplify(2.0) adds ~+6dB of ceiling gain on top; smooth_add's
-# duck keeps her clearly above the bed (0.5 of bed = -6 dB) without
-# clipping.
-voice = normalize(overlay_queue)
-voice = amplify(2.0, voice)
+# ─── Voice overlay: broadcast-style compressor + limiter ──────────
+# Measured on 2026-04-20: Deepgram Aura output sits ~11 dB below music
+# in RMS (-28.6 dBFS vs -17.4 dBFS). A pure amplify to catch up (+14 dB)
+# would blow past 0 dBFS on peaks. `normalize` caps at gain_max=12 and
+# its up=10s attack means short clips never reach target.
+#
+# Proper fix: compress + limit. pre_gain=14 lifts the average to music
+# level; threshold=-12 + ratio=4 tames peaks that would otherwise clip;
+# gain=2 puts voice clearly above the ducked bed; limit catches any
+# stragglers at -1 dBFS.
+voice = compress(
+  attack=5.,
+  release=100.,
+  threshold=-12.,
+  ratio=4.,
+  knee=3.,
+  pre_gain=14.,
+  gain=2.,
+  overlay_queue
+)
+voice = limit(threshold=-1., voice)
 
 # ─── Mix: voice rides on top, bed ducks while she speaks ───────────
 # smooth_add p=0.5 → bed drops to 50% (≈ -6 dB) when voice has content.
