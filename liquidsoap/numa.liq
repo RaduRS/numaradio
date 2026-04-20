@@ -186,7 +186,11 @@ rotation.on_track(notify_track_started)
 # end-of-track is signaled via source.on_end which wraps the source and
 # returns a new one — we reassign so the mix uses the wrapped version.
 overlay_queue.on_track(notify_shoutout_started)
+# delay=0.2: fire when ≤0.2 s of audio remains, so the pill clears just
+# before the voice actually ends (imperceptible). Default is 5 s, which
+# for a ~6 s shoutout fires almost immediately — wrong for our UI signal.
 overlay_queue = source.on_end(
+  delay=0.2,
   overlay_queue,
   fun (_, _) -> notify_shoutout_ended()
 )
