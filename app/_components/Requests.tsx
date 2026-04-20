@@ -13,11 +13,16 @@ const REVIEW_LINES = [
   "Not every submission is guaranteed to play.",
 ];
 
+type StatusTone = "none" | "success" | "pending" | "error";
+
 export function Requests() {
   const [tab, setTab] = useState<Tab>("song");
   const [reviewIdx, setReviewIdx] = useState(0);
   const [sending, setSending] = useState(false);
   const [sendLabel, setSendLabel] = useState("Send to the booth");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [statusTone, setStatusTone] = useState<StatusTone>("none");
+  const [formKey, setFormKey] = useState(0); // bump to reset uncontrolled form
 
   useEffect(() => {
     const id = setInterval(
@@ -27,15 +32,86 @@ export function Requests() {
     return () => clearInterval(id);
   }, []);
 
-  // TODO Phase 5: POST to /api/requests or /api/shoutouts. Stub for now.
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setStatusMessage("");
+    setStatusTone("none");
+
+    if (tab === "song") {
+      // Song generation isn't wired yet — keep the stub until the /api/booth/song endpoint ships.
+      setSending(true);
+      setSendLabel("✓ In the queue");
+      setTimeout(() => {
+        setSendLabel("Send another");
+        setSending(false);
+      }, 1_600);
+      return;
+    }
+
+    const form = new FormData(e.currentTarget);
+    const who = String(form.get("who") ?? "").trim();
+    const requesterName = String(form.get("requesterName") ?? "").trim();
+    const message = String(form.get("message") ?? "").trim();
+
+    const parts: string[] = [];
+    if (who) parts.push(`This one's going out to ${who}.`);
+    if (message) parts.push(message);
+    const text = parts.join(" ").trim();
+
+    if (text.length < 4) {
+      setStatusTone("error");
+      setStatusMessage("Add a short message for Lena to read.");
+      return;
+    }
+
     setSending(true);
-    setSendLabel("✓ In the queue");
-    setTimeout(() => {
-      setSendLabel("Send another");
+    setSendLabel("Sending…");
+
+    try {
+      const res = await fetch("/api/booth/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          requesterName: requesterName || undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        status?: string;
+        message?: string;
+        error?: string;
+      };
+
+      if (res.ok && data.ok && data.status === "queued") {
+        setStatusTone("success");
+        setStatusMessage(data.message ?? "Shoutout queued — Lena will read it next.");
+        setSendLabel("✓ In the queue");
+        setFormKey((k) => k + 1);
+      } else if (res.ok && data.status === "held") {
+        setStatusTone("pending");
+        setStatusMessage(data.message ?? "Waiting on a moderator.");
+        setSendLabel("✓ Received");
+        setFormKey((k) => k + 1);
+      } else if (data.status === "blocked") {
+        setStatusTone("error");
+        setStatusMessage(data.message ?? "That one can't go on air.");
+        setSendLabel("Send to the booth");
+      } else {
+        setStatusTone("error");
+        setStatusMessage(data.error ?? data.message ?? "Couldn't send — try again.");
+        setSendLabel("Send to the booth");
+      }
+    } catch {
+      setStatusTone("error");
+      setStatusMessage("Network hiccup — try again in a moment.");
+      setSendLabel("Send to the booth");
+    } finally {
       setSending(false);
-    }, 1_600);
+      setTimeout(() => {
+        setSendLabel((label) => (label.startsWith("✓") ? "Send another" : label));
+      }, 2_000);
+    }
   }
 
   return (
@@ -93,7 +169,7 @@ export function Requests() {
               </button>
             </div>
 
-            <form onSubmit={submit}>
+            <form onSubmit={submit} key={formKey}>
               {tab === "song" ? (
                 <div className="req-input-group">
                   <input
@@ -108,11 +184,24 @@ export function Requests() {
                 </div>
               ) : (
                 <div className="req-input-group">
-                  <input className="req-input" placeholder="Who it's for…" />
-                  <input className="req-input" placeholder="Your name or city" />
+                  <input
+                    name="who"
+                    className="req-input"
+                    placeholder="Who it's for…"
+                    maxLength={60}
+                  />
+                  <input
+                    name="requesterName"
+                    className="req-input"
+                    placeholder="Your name or city"
+                    maxLength={60}
+                  />
                   <textarea
+                    name="message"
                     className="req-input req-textarea"
                     placeholder="Your message — keep it short so we get through more."
+                    maxLength={220}
+                    required
                   />
                 </div>
               )}
@@ -125,6 +214,24 @@ export function Requests() {
                 <span>{sendLabel}</span>
                 <SendIcon className="btn-icon" />
               </button>
+
+              {statusTone !== "none" && (
+                <div
+                  role="status"
+                  style={{
+                    marginTop: 12,
+                    fontSize: 13,
+                    color:
+                      statusTone === "success"
+                        ? "var(--accent)"
+                        : statusTone === "error"
+                          ? "#e85a4f"
+                          : "var(--fg-mute)",
+                  }}
+                >
+                  {statusMessage}
+                </div>
+              )}
             </form>
 
             <div className="req-review">

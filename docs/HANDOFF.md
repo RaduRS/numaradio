@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-20 (dashboard /library page built — needs manual restart to go live)
+Last updated: 2026-04-20 (shoutout pipeline live end-to-end via NanoClaw + Telegram)
 
 ## Where we are
 
@@ -90,6 +90,52 @@ The station is live and listenable from any browser worldwide.
 - ✅ 27 unit tests: `npm test`.
 
 **NanoClaw integration seam:** when NanoClaw exists, its final step is `POST http://127.0.0.1:4000/push` with `{ trackId, sourceUrl, requestId?, reason? }`. No protocol negotiation — just that one call.
+
+**Shoutout pipeline via NanoClaw — LIVE end-to-end (2026-04-20)**
+- ✅ Dashboard endpoint `POST /api/generate/shoutout` at
+  `dashboard/app/api/generate/shoutout/route.ts`. Body:
+  `{ text, sender?, requestId? }` (2000-char cap). Flow: radio-host transform →
+  Deepgram Aura (`aura-2-asteria-en` = "Lena", fallback `aura-asteria-en`) →
+  MP3 → B2 `stations/numaradio/tracks/{id}/audio/stream.mp3` →
+  `Track` + `TrackAsset` rows (`sourceType=external_import`,
+  `airingPolicy=request_only`, `safetyStatus=approved`,
+  `trackStatus=ready`, `artistDisplay="Lena"`) →
+  `POST :4000/push` via `pushToDaemon()`. Track id is `crypto.randomUUID()`
+  (raw pg in the dashboard, not Prisma — the public site/root app keeps the
+  Prisma stack).
+- ✅ Helpers ported from `~/examples/read-for-me` into
+  `dashboard/lib/radio-host.ts` and `dashboard/lib/strip-markdown.ts`.
+- ✅ Dashboard bind fix: `dashboard/package.json` start script is now
+  `next start -H 0.0.0.0 -p 3001` (previously bound IPv6-only so Docker
+  containers on the IPv4 bridge got `connection refused`).
+- ✅ NanoClaw agent is briefed via `groups/*/CLAUDE.md` "Numa Radio" section
+  to curl the endpoint from inside the container using
+  `http://host.docker.internal:3001/api/generate/shoutout`.
+- ✅ Confirmed end-to-end: Telegram `@nanoOrion_bot` → agent (MiniMax-M2.7
+  brain via NanoClaw's credential proxy) → dashboard endpoint →
+  Deepgram → B2 → Neon → queue → Liquidsoap → aired on stream.
+- **To redeploy after a code change:** `cd dashboard && npm run build &&
+  sudo systemctl restart numa-dashboard` (unit owns `/etc/systemd/system/`,
+  requires sudo password — agents cannot restart this).
+
+**NanoClaw location:** `/home/marku/nanoclaw/` on this machine (separate repo).
+The user's fork is `mark-blue-evans/nanoclaw` with `upstream` →
+`qwibitai/nanoclaw`. NanoClaw uses **MiniMax-M2.7** as the agent brain (not
+real Claude) — its credential proxy rewrites outbound Anthropic-SDK requests
+to the MiniMax endpoint. See
+`/home/marku/.claude/projects/-home-marku-nanoclaw/memory/project_numaradio_integration.md`.
+
+**Next for NanoClaw × Numa Radio:**
+1. Song generation endpoint (`POST /api/generate/song`) — MiniMax
+   `music_generation` API, async, polls 2-3 min, re-hosts audio on B2,
+   same `Track` flow. Reference code: `~/examples/make-noise/app/api/music/`.
+2. Public **booth** tab on `numaradio.com` — listeners submit shoutout text →
+   IP rate limit (3/hour, 10/day) + MiniMax moderation classifier
+   ("ok / hold / reject"); "ok" auto-airs via the existing dashboard endpoint,
+   "hold" queues for operator approval, "reject" is silently dropped.
+3. Dashboard chat widget on `dashboard.numaradio.com` — a chat box that talks
+   to NanoClaw via a new HTTP channel (NanoClaw-side code), with progress
+   callbacks ("Song queued — Lena will read it next").
 
 **Spec:** `docs/superpowers/specs/2026-04-20-on-demand-track-queue-design.md`
 **Plan:** `docs/superpowers/plans/2026-04-20-on-demand-track-queue.md`
