@@ -1,6 +1,8 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-20 (listener booth + dashboard shoutouts panel live; `npm run deploy` + passwordless restarts)
+Last updated: 2026-04-20 (radio-feel overhaul — overlay voice mixing with
+sidechain duck, 5s crossfade, shoutout pill + pending spinner; Liquidsoap
+rewrite **committed but not yet restarted**)
 
 ## Where we are
 
@@ -171,6 +173,54 @@ to the MiniMax endpoint. See
   `numa-dashboard`, `cloudflared`, `numa-queue-daemon`, `numa-liquidsoap`,
   and `numa-rotation-refresher.timer` without a password. Scope is a strict
   Cmnd_Alias — no wildcards, both `foo` and `foo.service` spellings listed.
+
+**Radio-feel overhaul — 2026-04-20 (final commit of the day)**
+Spec: `docs/superpowers/specs/2026-04-20-radio-feel-design.md`
+Plan: `docs/superpowers/plans/2026-04-20-radio-feel.md`
+
+Phase 1 + 2 are shipped to `main` — safe to deploy to Vercel as-is. Phase 3
+is **committed but not yet restarted on Orion**. The new Liquidsoap script
+passes `liquidsoap --check` but hasn't been run against live Icecast yet.
+Restart needs your eyes on the stream.
+
+- ✅ **Phase 1** — `NowSpeaking` migration applied to Neon; broadcast /
+  now-playing APIs return a `shoutout` field; Hero `PlayerCard` + `MiniPlayer`
+  render a "• Lena on air" pill when a shoutout overlay is active; public
+  booth form submit shows a spinner on both tabs (shoutout real, song still
+  stub).
+- ✅ **Phase 2** — new routes `app/api/internal/shoutout-started/route.ts`
+  + `app/api/internal/shoutout-ended/route.ts` (Vercel auto-deploys).
+  Queue daemon and `generateShoutout()` route shoutouts to Liquidsoap's
+  `overlay_queue` via a `kind: "shoutout"` push. QueueItem rows tagged
+  `queueType='shoutout'` and filtered out of Up Next.
+- ⚠ **Phase 3 — needs your live restart.** `liquidsoap/numa.liq` is now:
+  - 5s crossfade between music tracks (`crossfade(duration=5., …)`).
+  - Lena rides on top of music via `smooth_add(duration=0.5, p=0.5, normal=music_bed, special=voice)`
+    — music bed ducks to 50% (≈ −6 dB) while she talks, 500 ms fade in/out.
+  - Voice = `normalize(overlay_queue)` + `amplify(2.0, …)` so she sits
+    consistently above the ducked bed.
+  - `overlay_queue.on_track` + `source.on_end(overlay_queue, …)` notify
+    Vercel on start/end of each shoutout.
+  - Old single-`fallback` graph kept in a commented-out rollback block at
+    the bottom of the file.
+
+To take Phase 3 live on Orion:
+```bash
+git pull
+sudo systemctl restart numa-queue-daemon numa-liquidsoap
+```
+Watch `journalctl -u numa-liquidsoap -f` — errors will be explicit. If
+things go sideways, uncomment the rollback block at the end of
+`liquidsoap/numa.liq`, rebuild, `sudo systemctl restart numa-liquidsoap`.
+
+Smoke test (in order):
+1. Normal listening → music plays.
+2. Dashboard `/shoutouts` → Compose → "Send to Lena" → expect: pill
+   appears on `numaradio.com`, music ducks audibly, title/artwork do NOT
+   change, pill clears after Lena ends, music restores.
+3. Push two back-to-back library tracks via `/library` → expect: 5 s
+   crossfade, no hard cut.
+4. Stack two shoutouts → expect: sequential, not overlapping each other.
 
 **Next for NanoClaw × Numa Radio:**
 1. Song generation endpoint (`POST /api/generate/song`) — MiniMax

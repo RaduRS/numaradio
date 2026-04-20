@@ -1,13 +1,21 @@
-# Numa Radio — minimal live stream
+# Numa Radio — live stream with overlay voice + crossfade + sidechain duck
 #
-# Reads /etc/numa/playlist.m3u (auto-refreshed by a separate cron later) and
-# pipes the audio to Icecast at mount /stream.
+# Sources:
+#   rotation       — library shuffled playlist (/etc/numa/playlist.m3u)
+#   priority       — music song-requests (dashboard /library, NanoClaw music)
+#   overlay_queue  — Lena's voice (shoutouts). Mixed ON TOP of music with
+#                    smooth_add: the music bed ducks to 50% when she talks.
 #
-# At each track boundary, POSTs to /api/internal/track-started so the website
-# can show a truthful elapsed/duration progress bar.
+# Music-to-music transitions crossfade over 5s. Voice has +3dB gain and is
+# LUFS-normalized so Lena stays at a consistent loudness regardless of
+# Deepgram output. See docs/superpowers/specs/2026-04-20-radio-feel-design.md.
+#
+# At each track boundary the relevant source POSTs to Vercel + the local
+# daemon for now-playing updates. Overlay gets its own start/end hooks for
+# the "• Lena on air" pill.
 #
 # Required env (in /etc/numa/env):
-#   ICECAST_SOURCE_PASSWORD   — Icecast source password from setup step 1
+#   ICECAST_SOURCE_PASSWORD   — Icecast source password
 #   INTERNAL_API_SECRET       — shared secret matching Vercel env
 
 settings.frame.audio.samplerate.set(44100)
@@ -15,10 +23,8 @@ settings.log.stdout.set(true)
 settings.log.level.set(3)
 
 # ─── Local control socket (loopback only) ──────────────────────────
-# settings.server.timeout defaults to 30s and causes idle telnet
-# connections to drop — which makes the queue daemon's reconnect loop
-# thrash (re-hydrating staged items every ~30s). Loopback-only with no
-# untrusted consumers, so disable the timeout entirely.
+# Disable idle timeout so the queue daemon's persistent telnet connection
+# doesn't churn. Loopback only, no untrusted consumers.
 settings.server.telnet.set(true)
 settings.server.telnet.bind_addr.set("127.0.0.1")
 settings.server.telnet.port.set(1234)
@@ -27,18 +33,16 @@ settings.server.timeout.set(-1.)
 playlist_file = "/etc/numa/playlist.m3u"
 
 # ─── Sources ───────────────────────────────────────────────────────
+# Music song-requests. Unchanged semantics: preempts rotation at track
+# boundary via fallback(track_sensitive=true).
 priority = request.queue(id="priority")
 
-# `playlist.reloadable` is deprecated in Liquidsoap 2.2+, and its
-# `reload_mode="watch"` uses inotify — which goes deaf when the
-# refresher atomically rewrites /etc/numa/playlist.m3u (tmp→rename
-# changes the inode, and the watcher keeps listening on the old one).
-# That's why a track added after boot never showed up in rotation.
-#
-# Use the current `playlist` source with time-based polling instead.
-# Liquidsoap re-reads the file every 120s, coincident with the
-# refresher's write cadence, so newly-ingested tracks air within
-# roughly one refresh cycle.
+# Lena's voice overlay. Mixed ON TOP of music; never replaces it. The
+# daemon pushes shoutouts here with `overlay_queue.push <url>`.
+overlay_queue = request.queue(id="overlay_queue")
+
+# Rotation playlist — polled every 2 min in sync with the refresher's
+# atomic tmp→rename. Fisher–Yates shuffled.
 rotation = playlist(
   id="rotation",
   reload=120,
@@ -46,10 +50,18 @@ rotation = playlist(
   playlist_file
 )
 
-# ─── Now-playing notification ──────────────────────────────────────
+# ─── Now-playing notification (music) ──────────────────────────────
 api_url = environment.get(
   default="https://numaradio.com/api/internal/track-started",
   "NUMA_TRACK_API_URL"
+)
+shoutout_started_url = environment.get(
+  default="https://numaradio.com/api/internal/shoutout-started",
+  "NUMA_SHOUTOUT_STARTED_URL"
+)
+shoutout_ended_url = environment.get(
+  default="https://numaradio.com/api/internal/shoutout-ended",
+  "NUMA_SHOUTOUT_ENDED_URL"
 )
 daemon_url = environment.get(
   default="http://127.0.0.1:4000/on-track",
@@ -95,7 +107,6 @@ def notify_track_started(metadata) =
         log.severe("[numa] track-started POST to Vercel error: " ^ string(err))
       end
     end
-    # Also notify the local daemon. Loopback-only, no auth needed.
     try
       _ = http.post(
         headers=[("Content-Type", "application/json")],
@@ -108,29 +119,110 @@ def notify_track_started(metadata) =
   end
 end
 
-# ─── Track-boundary notification ───────────────────────────────────
-# Attach the callback to each concrete source (priority, rotation) —
-# NOT to the fallback wrapper. `fallback` only emits on_track at its
-# own switch boundaries (e.g. blank→rotation). Playlist-internal track
-# transitions inside `rotation` are invisible to the wrapper, so they
-# must be hooked at the playlist source directly.
+# ─── Shoutout-started / ended notifications (voice overlay) ────────
+# Fired on the overlay source, NOT through the normal track pipeline —
+# shoutouts must never touch NowPlaying.
+def notify_shoutout_started(metadata) =
+  source_url = metadata["source_url"]
+  initial_uri = metadata["initial_uri"]
+  filename = metadata["filename"]
+  title = metadata["title"]
+  artist = metadata["artist"]
+  src = if source_url != "" then source_url
+        elsif initial_uri != "" then initial_uri
+        else filename end
+  log.important("[numa] shoutout start: src=" ^ src)
+  secret = environment.get(default="", "INTERNAL_API_SECRET")
+  if secret != "" then
+    body = json.stringify({sourceUrl=src, title=title, artist=artist})
+    try
+      r = http.post(
+        headers=[
+          ("Content-Type", "application/json"),
+          ("x-internal-secret", secret)
+        ],
+        data=body,
+        shoutout_started_url
+      )
+      if r.status_code != 200 then
+        log.severe("[numa] shoutout-started POST failed: " ^ string(r.status_code))
+      end
+    catch err do
+      log.severe("[numa] shoutout-started POST error: " ^ string(err))
+    end
+  end
+end
+
+def notify_shoutout_ended() =
+  log.important("[numa] shoutout end")
+  secret = environment.get(default="", "INTERNAL_API_SECRET")
+  if secret != "" then
+    try
+      r = http.post(
+        headers=[
+          ("Content-Type", "application/json"),
+          ("x-internal-secret", secret)
+        ],
+        data="{}",
+        shoutout_ended_url
+      )
+      if r.status_code != 200 then
+        log.severe("[numa] shoutout-ended POST failed: " ^ string(r.status_code))
+      end
+    catch err do
+      log.severe("[numa] shoutout-ended POST error: " ^ string(err))
+    end
+  end
+end
+
+# ─── Hooks ─────────────────────────────────────────────────────────
+# Music track-boundary notifications — keep hooked on the concrete sources
+# (fallback/cross wrappers don't emit on playlist-internal transitions).
 priority.on_track(notify_track_started)
 rotation.on_track(notify_track_started)
 
-# ─── Composite source with track-boundary safety ───────────────────
-# track_sensitive=true: sources only switch at track boundaries. A
-# priority push mid-song waits for the current song to finish. A
-# rotation reload mid-song also waits.
-#
-# Do NOT include blank() here. blank() never ends a track, so once the
-# fallback selected it (e.g. at cold start before rotation had loaded
-# its first request) track_sensitive=true would lock the stream on
-# silence forever. mksafe() below provides the silence safety net using
-# track_sensitive=false internally, which can switch back to a real
-# source the moment one becomes available.
-source = fallback(track_sensitive=true, [priority, rotation])
+# Overlay: start on each new overlay track; end when the current overlay
+# track finishes (remaining seconds reach 0). on_track fires per item;
+# end-of-track is signaled via source.on_end which wraps the source and
+# returns a new one — we reassign so the mix uses the wrapped version.
+overlay_queue.on_track(notify_shoutout_started)
+overlay_queue = source.on_end(
+  overlay_queue,
+  fun (_, _) -> notify_shoutout_ended()
+)
 
-log.important("[numa] notify pipeline ready, api=" ^ api_url ^ " daemon=" ^ daemon_url)
+# ─── Music bed: fallback + 5s crossfade ────────────────────────────
+# track_sensitive=true: music-level switches (priority vs rotation) still
+# wait for a track boundary, matching today's behavior. cross(5.) applies
+# a 5-second crossfade to all music-to-music transitions inside the bed.
+music_bed = fallback(track_sensitive=true, [priority, rotation])
+music_bed = crossfade(duration=5., music_bed)
+
+# ─── Voice overlay: normalize + gain ───────────────────────────────
+# normalize keeps Lena's loudness stable regardless of per-call Deepgram
+# output. amplify(2.0) adds ~+6dB of ceiling gain on top; smooth_add's
+# duck keeps her clearly above the bed (0.5 of bed = -6 dB) without
+# clipping.
+voice = normalize(overlay_queue)
+voice = amplify(2.0, voice)
+
+# ─── Mix: voice rides on top, bed ducks while she speaks ───────────
+# smooth_add p=0.5 → bed drops to 50% (≈ -6 dB) when voice has content.
+# duration=0.5s sets the attack/release fade for the duck. Voice plays
+# unducked on top.
+source = smooth_add(
+  duration=0.5,
+  p=0.5,
+  normal=music_bed,
+  special=voice
+)
+
+log.important(
+  "[numa] pipeline ready: api=" ^ api_url ^
+  " shoutout_start=" ^ shoutout_started_url ^
+  " shoutout_end=" ^ shoutout_ended_url ^
+  " daemon=" ^ daemon_url
+)
 
 source = mksafe(source)
 
@@ -146,3 +238,13 @@ output.icecast(
   genre="Various",
   source
 )
+
+# ─── Rollback escape hatch (previous graph) ────────────────────────
+# If smooth_add / cross cause issues, comment out the block above from
+# `music_bed = ...` through `source = smooth_add(...)` and uncomment:
+#
+# source = fallback(track_sensitive=true, [priority, rotation])
+# source = mksafe(source)
+#
+# Then `sudo systemctl restart numa-liquidsoap`. Shoutouts will replace
+# music at track boundaries (pre-2026-04-20 behavior).
