@@ -29,9 +29,20 @@ playlist_file = "/etc/numa/playlist.m3u"
 # ─── Sources ───────────────────────────────────────────────────────
 priority = request.queue(id="priority")
 
-rotation = playlist.reloadable(
+# `playlist.reloadable` is deprecated in Liquidsoap 2.2+, and its
+# `reload_mode="watch"` uses inotify — which goes deaf when the
+# refresher atomically rewrites /etc/numa/playlist.m3u (tmp→rename
+# changes the inode, and the watcher keeps listening on the old one).
+# That's why a track added after boot never showed up in rotation.
+#
+# Use the current `playlist` source with time-based polling instead.
+# Liquidsoap re-reads the file every 120s, coincident with the
+# refresher's write cadence, so newly-ingested tracks air within
+# roughly one refresh cycle.
+rotation = playlist(
   id="rotation",
-  reload_mode="watch",
+  reload=120,
+  reload_mode="seconds",
   playlist_file
 )
 
