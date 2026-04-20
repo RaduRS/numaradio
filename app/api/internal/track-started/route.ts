@@ -51,11 +51,11 @@ export async function POST(req: Request) {
   let trackId: string | null = body.trackId ?? null;
   if (!trackId && body.sourceUrl) trackId = extractTrackId(body.sourceUrl);
 
-  let track: { id: string; stationId: string; durationSeconds: number | null } | null = null;
+  let track: { id: string; stationId: string; durationSeconds: number | null; title: string } | null = null;
   if (trackId) {
     track = await prisma.track.findUnique({
       where: { id: trackId },
-      select: { id: true, stationId: true, durationSeconds: true },
+      select: { id: true, stationId: true, durationSeconds: true, title: true },
     });
   }
   if (!track && body.title) {
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
           ? { artistDisplay: { equals: body.artist, mode: "insensitive" } }
           : {}),
       },
-      select: { id: true, stationId: true, durationSeconds: true },
+      select: { id: true, stationId: true, durationSeconds: true, title: true },
       orderBy: { updatedAt: "desc" },
     });
   }
@@ -87,11 +87,6 @@ export async function POST(req: Request) {
   const startedAt = new Date();
   const durationMs = (track.durationSeconds ?? 180) * 1000;
   const expectedEndAt = new Date(startedAt.getTime() + durationMs);
-
-  const trackMeta = await prisma.track.findUnique({
-    where: { id: track.id },
-    select: { title: true },
-  });
 
   await prisma.$transaction([
     prisma.nowPlaying.upsert({
@@ -115,7 +110,7 @@ export async function POST(req: Request) {
         stationId: station.id,
         trackId: track.id,
         segmentType: "audio_track",
-        titleSnapshot: trackMeta?.title ?? null,
+        titleSnapshot: track.title,
         startedAt,
         durationSeconds: track.durationSeconds,
         completedNormally: true,
