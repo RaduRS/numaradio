@@ -8,7 +8,6 @@ export type RotationTrack = { id: string; url: string; title: string };
 
 const PLAYLIST_PATH = process.env.NUMA_PLAYLIST_PATH ?? "/etc/numa/playlist.m3u";
 const RECENT_WINDOW = 20;
-const MIN_POOL = 5;
 
 export function buildPlaylist(
   library: RotationTrack[],
@@ -17,8 +16,10 @@ export function buildPlaylist(
 ): string {
   if (library.length === 0) return "";
   const excluded = library.filter((t) => !recentIds.has(t.id));
-  const minPool = Math.min(MIN_POOL, library.length - 1);
-  const pool = excluded.length < minPool ? library : excluded;
+  // Only fall back to the full library when the exclusion is empty; a pool of
+  // 1 is still preferable to letting a just-played track air again. See the
+  // 2026-04-20 repeat/starvation bug in the test file for why.
+  const pool = excluded.length === 0 ? library : excluded;
   // Fisher–Yates
   const a = pool.slice();
   for (let i = a.length - 1; i > 0; i--) {
