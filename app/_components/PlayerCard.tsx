@@ -110,6 +110,12 @@ export function PlayerCard() {
       </div>
 
       <div className="now-info">
+        {np.shoutout?.active && (
+          <div className="shoutout-pill" role="status" aria-live="polite">
+            <span className="dot" aria-hidden />
+            Lena on air
+          </div>
+        )}
         <div className="track">{title}</div>
         <div className="artist">{artist.toUpperCase()}</div>
         <div className="now-actions">

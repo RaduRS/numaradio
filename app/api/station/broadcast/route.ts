@@ -52,10 +52,15 @@ type JustPlayedPayload = Array<
   TrackSummary & { startedAt: string; durationSeconds?: number }
 >;
 
+type ShoutoutPayload =
+  | { active: false }
+  | { active: true; startedAt: string; expectedEndAt: string };
+
 type BroadcastPayload = {
   nowPlaying: NowPlayingPayload;
   upNext: UpNextPayload;
   justPlayed: JustPlayedPayload;
+  shoutout: ShoutoutPayload;
 };
 
 function respond(payload: BroadcastPayload): Response {
@@ -69,6 +74,7 @@ const EMPTY: BroadcastPayload = {
   nowPlaying: { isPlaying: false },
   upNext: null,
   justPlayed: [],
+  shoutout: { active: false },
 };
 
 export async function GET() {
@@ -80,13 +86,19 @@ export async function GET() {
 
   const stationId = station.id;
 
-  const [np, upNextRow, history] = await Promise.all([
+  const [np, ns, upNextRow, history] = await Promise.all([
     prisma.nowPlaying.findUnique({ where: { stationId } }),
+    prisma.nowSpeaking.findUnique({ where: { stationId } }),
     prisma.queueItem.findFirst({
       where: {
         stationId,
         priorityBand: "priority_request",
         queueStatus: { in: ["planned", "staged"] },
+        // Shoutouts ride a separate overlay source and are never songs; they
+        // must not appear in Up Next even if a push accidentally landed on
+        // the music queue. Defense in depth — the on-host daemon already
+        // routes by kind.
+        queueType: { not: "shoutout" },
       },
       orderBy: { positionIndex: "asc" },
       select: {
@@ -211,5 +223,21 @@ export async function GET() {
       };
     });
 
-  return respond({ nowPlaying, upNext, justPlayed });
+  // ── Shoutout (voice overlay) ─────────────────────────────────
+  // The bed keeps showing in title/artwork while Lena talks on top.
+  // This flag tells the Hero to render a "• Lena on air" pill so the
+  // listener knows why the music just ducked.
+  let shoutout: ShoutoutPayload = { active: false };
+  if (ns?.expectedEndAt) {
+    const expiredMs = Date.now() - ns.expectedEndAt.getTime();
+    if (expiredMs <= STALE_GRACE_SECONDS * 1000) {
+      shoutout = {
+        active: true,
+        startedAt: ns.startedAt.toISOString(),
+        expectedEndAt: ns.expectedEndAt.toISOString(),
+      };
+    }
+  }
+
+  return respond({ nowPlaying, upNext, justPlayed, shoutout });
 }

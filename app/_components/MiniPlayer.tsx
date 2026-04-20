@@ -58,7 +58,16 @@ export function MiniPlayer() {
         }
       />
       <div className="mp-meta">
-        <div className="mp-label">On Air · Lena</div>
+        <div className="mp-label">
+          {np.shoutout?.active ? (
+            <span className="shoutout-pill inline">
+              <span className="dot" aria-hidden />
+              Lena on air
+            </span>
+          ) : (
+            "On Air · Lena"
+          )}
+        </div>
         <div className="mp-title">
           {np.title ?? "—"}
           <span className="sep"> · </span>

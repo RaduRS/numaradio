@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 
+export type ShoutoutStatus =
+  | { active: false }
+  | { active: true; startedAt: string; expectedEndAt: string };
+
 export type NowPlaying = {
   isPlaying: boolean;
   trackId?: string;
@@ -10,6 +14,7 @@ export type NowPlaying = {
   durationSeconds?: number;
   startedAt?: string;
   artworkUrl?: string;
+  shoutout?: ShoutoutStatus;
 };
 
 const POLL_MS = 15_000; // network — track changes are infrequent

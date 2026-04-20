@@ -24,10 +24,15 @@ type JustPlayedItem = TrackSummary & {
   durationSeconds?: number;
 };
 
+type ShoutoutPayload =
+  | { active: false }
+  | { active: true; startedAt: string; expectedEndAt: string };
+
 type BroadcastPayload = {
   nowPlaying: NowPlayingPayload;
   upNext: UpNextPayload;
   justPlayed: JustPlayedItem[];
+  shoutout: ShoutoutPayload;
 };
 
 // Base polling — fast enough that a fresh request or track change shows up
@@ -73,6 +78,7 @@ function useBroadcastFeed() {
     nowPlaying: { isPlaying: false },
     upNext: null,
     justPlayed: [],
+    shoutout: { active: false },
   });
   const [now, setNow] = useState<number>(() => Date.now());
   const mounted = useRef(true);

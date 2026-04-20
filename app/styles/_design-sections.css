@@ -170,6 +170,39 @@
 .now-info {
   margin-bottom: 20px;
 }
+
+/* "Lena on air" pill — lights up when a shoutout is overlaying music.
+ * Doesn't change the title/artwork (the bed is what's playing); just
+ * tells the listener why the music just ducked. */
+.shoutout-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--red-live) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--red-live) 40%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--red-live);
+}
+.shoutout-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red-live);
+  box-shadow: 0 0 10px var(--red-live);
+  animation: pulseDot 1.6s ease-in-out infinite;
+}
+/* Inline variant used in the mini-player where space is tight. */
+.shoutout-pill.inline {
+  margin-bottom: 0;
+  padding: 2px 8px;
+  font-size: 9px;
+}
 .now-info .track {
   font-family: var(--font-display);
   font-weight: 700;

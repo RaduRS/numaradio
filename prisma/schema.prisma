@@ -350,6 +350,19 @@ model NowPlaying {
   updatedAt          DateTime  @updatedAt
 }
 
+// One row per station. Tracks which shoutout (voice overlay) is currently
+// airing on top of the music bed. Cleared when the shoutout ends or ages out
+// via expectedEndAt + 30s grace. See docs/superpowers/specs/2026-04-20-
+// radio-feel-design.md.
+model NowSpeaking {
+  stationId       String   @id
+  trackId         String
+  startedAt       DateTime
+  expectedEndAt   DateTime
+  lastHeartbeatAt DateTime
+  updatedAt       DateTime @updatedAt
+}
+
 model PlayHistory {
   id                String    @id @default(cuid())
   stationId         String

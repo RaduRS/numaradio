@@ -10,6 +10,10 @@ export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 
+type ShoutoutPayload =
+  | { active: false }
+  | { active: true; startedAt: string; expectedEndAt: string };
+
 type Response = {
   isPlaying: boolean;
   trackId?: string;
@@ -18,6 +22,7 @@ type Response = {
   durationSeconds?: number;
   startedAt?: string;
   artworkUrl?: string;
+  shoutout: ShoutoutPayload;
 };
 
 const HEADERS = {
@@ -31,7 +36,7 @@ export async function GET() {
   });
   if (!station) {
     return new globalThis.Response(
-      JSON.stringify({ isPlaying: false } satisfies Response),
+      JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
       { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
     );
   }
@@ -41,7 +46,7 @@ export async function GET() {
   });
   if (!np?.currentTrackId || !np.startedAt) {
     return new globalThis.Response(
-      JSON.stringify({ isPlaying: false } satisfies Response),
+      JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
       { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
     );
   }
@@ -55,7 +60,7 @@ export async function GET() {
     const expiredMs = Date.now() - np.expectedEndAt.getTime();
     if (expiredMs > STALE_GRACE_SECONDS * 1000) {
       return new globalThis.Response(
-        JSON.stringify({ isPlaying: false } satisfies Response),
+        JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
         { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
       );
     }
@@ -77,9 +82,27 @@ export async function GET() {
   });
   if (!track) {
     return new globalThis.Response(
-      JSON.stringify({ isPlaying: false } satisfies Response),
+      JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
       { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
     );
+  }
+
+  // Shoutout overlay status — lets the Hero render a "• Lena on air" pill
+  // without lying about what's in the title/artwork. See broadcast/route.ts
+  // for the equivalent assembly.
+  const ns = await prisma.nowSpeaking.findUnique({
+    where: { stationId: station.id },
+  });
+  let shoutout: ShoutoutPayload = { active: false };
+  if (ns?.expectedEndAt) {
+    const expiredMs = Date.now() - ns.expectedEndAt.getTime();
+    if (expiredMs <= STALE_GRACE_SECONDS * 1000) {
+      shoutout = {
+        active: true,
+        startedAt: ns.startedAt.toISOString(),
+        expectedEndAt: ns.expectedEndAt.toISOString(),
+      };
+    }
   }
 
   const payload: Response = {
@@ -90,6 +113,7 @@ export async function GET() {
     durationSeconds: track.durationSeconds ?? undefined,
     startedAt: np.startedAt.toISOString(),
     artworkUrl: track.assets[0]?.publicUrl,
+    shoutout,
   };
 
   return new globalThis.Response(JSON.stringify(payload), {

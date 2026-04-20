@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MegaphoneIcon, SparklesIcon, SendIcon, CopyIcon, BlueskyIcon } from "./Icons";
+import {
+  MegaphoneIcon,
+  SparklesIcon,
+  SendIcon,
+  CopyIcon,
+  BlueskyIcon,
+  LoadingIcon,
+} from "./Icons";
 
 // Two request types only: Song + Shoutout. Suno-link tab dropped per
 // Decisions Log 2026-04-19 — listener-pasted URLs can't be rights-verified.
@@ -39,12 +46,16 @@ export function Requests() {
 
     if (tab === "song") {
       // Song generation isn't wired yet — keep the stub until the /api/booth/song endpoint ships.
+      // Still show the pending spinner so the UX matches what the real endpoint will feel like.
       setSending(true);
-      setSendLabel("✓ In the queue");
+      setSendLabel("Sending…");
+      setTimeout(() => {
+        setSendLabel("✓ In the queue");
+        setSending(false);
+      }, 1_200);
       setTimeout(() => {
         setSendLabel("Send another");
-        setSending(false);
-      }, 1_600);
+      }, 2_400);
       return;
     }
 
@@ -210,9 +221,14 @@ export function Requests() {
                 type="submit"
                 className="btn btn-primary req-send"
                 disabled={sending}
+                aria-busy={sending}
               >
                 <span>{sendLabel}</span>
-                <SendIcon className="btn-icon" />
+                {sending ? (
+                  <LoadingIcon className="btn-icon" />
+                ) : (
+                  <SendIcon className="btn-icon" />
+                )}
               </button>
 
               {statusTone !== "none" && (
