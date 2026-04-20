@@ -550,8 +550,10 @@
 
 .broadcast-grid {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 64px;
+  /* Fixed width for the art column so the cover doesn't dominate —
+     the real focus of this section is the live list. */
+  grid-template-columns: 400px 1fr;
+  gap: 56px;
   margin-top: 64px;
 }
 

@@ -48,26 +48,6 @@ export function PlayerCard() {
         }
       >
         {!cover && <div className="art-inner">{coverInitials}</div>}
-        <div className="art-overlay" />
-        <div className="art-meta">
-          <div className="track-no">{np.isPlaying ? "Now Airing" : "Off Air"}</div>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                color: "var(--accent)",
-              }}
-            >
-              Live
-            </span>
-            <div className="eq eq-lg">
-              <span /><span /><span /><span /><span />
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="now-info">

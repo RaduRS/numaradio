@@ -184,17 +184,6 @@ export function Broadcast() {
                   : undefined
               }
             >
-              <div className="tape">
-                {live ? "On Air · Live" : "Off Air"}
-              </div>
-              <div className="tape-r">
-                {live?.startedAt
-                  ? new Date(live.startedAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "—"}
-              </div>
               {!art && <div className="glyph">{artGlyph}</div>}
             </div>
             <div className="now-track-lg">
