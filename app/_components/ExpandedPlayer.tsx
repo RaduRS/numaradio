@@ -6,7 +6,15 @@ import { ExpandedPlayerDesktop } from "./ExpandedPlayerDesktop";
 import { ExpandedPlayerMobile } from "./ExpandedPlayerMobile";
 
 // Must match the .ep-shell transition duration in _expanded-player.css.
-const EXIT_MS = 320;
+const ANIM_MS = 320;
+
+function flipTransform(source: DOMRect, target: DOMRect): string {
+  const dx = source.left - target.left;
+  const dy = source.top - target.top;
+  const sx = source.width / target.width;
+  const sy = source.height / target.height;
+  return `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+}
 
 export function ExpandedPlayer() {
   const { isExpanded, collapse, expandSourceRect } = usePlayer();
@@ -19,12 +27,19 @@ export function ExpandedPlayer() {
   // before unmounting.
   function handleClose() {
     if (exiting) return;
+    const shell = shellRef.current;
+    if (shell && expandSourceRect) {
+      // Apply the source-rect transform with the CSS-defined transition active;
+      // the shell visually morphs back over ANIM_MS before we unmount.
+      const targetRect = shell.getBoundingClientRect();
+      shell.style.transform = flipTransform(expandSourceRect, targetRect);
+    }
     setExiting(true);
     exitTimerRef.current = window.setTimeout(() => {
       collapse();
       setExiting(false);
       exitTimerRef.current = null;
-    }, EXIT_MS);
+    }, ANIM_MS);
   }
 
   useEffect(() => {
@@ -77,9 +92,11 @@ export function ExpandedPlayer() {
     chevRef.current?.focus();
   }, [mounted]);
 
-  // FLIP: capture source rect on open, set initial transform on the shell,
-  // then add `.open` next frame so CSS animates to identity. On close, we
-  // remove `.open` so CSS animates the shell back to that same transform.
+  // FLIP open: render the shell at its identity rect, synchronously apply the
+  // inverse transform with transitions disabled, force a reflow, then on the
+  // next frame clear the inline styles so the CSS-defined transition takes
+  // the shell back to identity. This guarantees the source-rect state is
+  // committed before the animation runs.
   useLayoutEffect(() => {
     if (!isExpanded) {
       setMounted(false);
@@ -90,18 +107,20 @@ export function ExpandedPlayer() {
 
     if (expandSourceRect) {
       const targetRect = shell.getBoundingClientRect();
-      const dx = expandSourceRect.left - targetRect.left;
-      const dy = expandSourceRect.top - targetRect.top;
-      const sx = expandSourceRect.width / targetRect.width;
-      const sy = expandSourceRect.height / targetRect.height;
-      shell.style.setProperty(
-        "--ep-initial-transform",
-        `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
-      );
+      shell.style.transition = "none";
+      shell.style.transform = flipTransform(expandSourceRect, targetRect);
     } else {
-      shell.style.setProperty("--ep-initial-transform", "scale(0.9)");
+      shell.style.transition = "none";
+      shell.style.transform = "scale(0.9)";
     }
-    const id = requestAnimationFrame(() => setMounted(true));
+    // Force the browser to commit the inverse-transform paint.
+    void shell.offsetWidth;
+
+    const id = requestAnimationFrame(() => {
+      shell.style.transition = "";
+      shell.style.transform = "";
+      setMounted(true);
+    });
     return () => cancelAnimationFrame(id);
   }, [isExpanded, expandSourceRect]);
 

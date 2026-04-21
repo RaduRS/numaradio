@@ -11,8 +11,24 @@ const REVIEW_LINES = [
   "Not every submission is guaranteed to play.",
 ];
 
-export function RequestForm({ initialTab = "song" }: { initialTab?: Tab }) {
-  const [tab, setTab] = useState<Tab>(initialTab);
+export function RequestForm({
+  initialTab = "song",
+  tab: controlledTab,
+  onTabChange,
+}: {
+  initialTab?: Tab;
+  // When `tab` + `onTabChange` are passed, the form is controlled (parent owns
+  // the sub-tab state). Otherwise it falls back to internal state seeded from
+  // `initialTab`.
+  tab?: Tab;
+  onTabChange?: (tab: Tab) => void;
+}) {
+  const [internalTab, setInternalTab] = useState<Tab>(initialTab);
+  const tab = controlledTab ?? internalTab;
+  const setTab = (next: Tab) => {
+    if (onTabChange) onTabChange(next);
+    else setInternalTab(next);
+  };
   const [reviewIdx, setReviewIdx] = useState(0);
   const [sending, setSending] = useState(false);
   const [sendLabel, setSendLabel] = useState("Send to the booth");

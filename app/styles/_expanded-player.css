@@ -26,13 +26,12 @@
   display: flex;
   flex-direction: column;
   transform-origin: top left;
-  transform: var(--ep-initial-transform, none);
-  /* Shell stays at full opacity throughout — the .ep-root backdrop handles
-     the fade-in/out feeling, while the shell purely morphs both ways. */
+  /* Default transform is identity; the open/close FLIP is driven by inline
+     styles in ExpandedPlayer.tsx (apply inverse transform synchronously
+     without transition, force reflow, then clear inline styles to animate to
+     identity). The shell stays at full opacity throughout — the .ep-root
+     backdrop handles the fade-in/out feeling. */
   transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
-}
-.ep-root.open .ep-shell {
-  transform: none;
 }
 
 @media (max-width: 899px) {
@@ -102,6 +101,7 @@
 }
 
 .ep-booth-art {
+  position: relative;
   width: 70%;
   max-width: 420px;
   aspect-ratio: 1;
@@ -302,6 +302,7 @@
   color: var(--fg-mute);
 }
 .ep-listen-art {
+  position: relative;
   width: 78vw;
   max-width: 340px;
   aspect-ratio: 1;
@@ -309,6 +310,19 @@
   background-size: cover;
   background-position: center;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* Floating vote pills, anchored to the artwork's bottom-right so the action
+   feels tied to the track itself rather than to a generic toolbar row. */
+.ep-art-vote {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  background: rgba(10, 13, 14, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .ep-listen-track {
   text-align: center;
@@ -379,6 +393,25 @@
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--fg-dim);
+}
+
+/* Mobile trims: drop the bitrate label and the volume slider — phones have
+   OS-level volume control + lockscreen affordances, and the bitrate detail
+   reads as engineer-flavored noise on a small screen. */
+@media (max-width: 899px) {
+  .ep-controls .ep-status .lbl { display: none; }
+  .ep-controls .vol { display: none; }
+}
+
+/* Lift the lone Share button so it doesn't read as a forgotten leftover now
+   that vote pills have moved onto the artwork. */
+.ep-actions .share-pill {
+  border: 1px solid rgba(79, 209, 197, 0.4);
+  color: var(--fg);
+}
+.ep-actions .share-pill:hover {
+  background: rgba(79, 209, 197, 0.1);
+  border-color: var(--accent);
 }
 
 .ep-listen-lena {
