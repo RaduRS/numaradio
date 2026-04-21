@@ -93,6 +93,7 @@
     linear-gradient(180deg, var(--bg-2), var(--bg-1));
   padding: 28px;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .player-card::before {
@@ -1441,6 +1442,7 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--line-strong);
+  cursor: pointer;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(79, 209, 197, 0.1);
   display: flex;
   align-items: center;
