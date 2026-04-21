@@ -5,19 +5,44 @@ import { usePlayer } from "./PlayerProvider";
 import { ExpandedPlayerDesktop } from "./ExpandedPlayerDesktop";
 import { ExpandedPlayerMobile } from "./ExpandedPlayerMobile";
 
+// Must match the .ep-shell transition duration in _expanded-player.css.
+const EXIT_MS = 320;
+
 export function ExpandedPlayer() {
   const { isExpanded, collapse, expandSourceRect } = usePlayer();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const exitTimerRef = useRef<number | null>(null);
+
+  // Wrap collapse so the shell can reverse-animate back to the source rect
+  // before unmounting.
+  function handleClose() {
+    if (exiting) return;
+    setExiting(true);
+    exitTimerRef.current = window.setTimeout(() => {
+      collapse();
+      setExiting(false);
+      exitTimerRef.current = null;
+    }, EXIT_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isExpanded) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") collapse();
+      if (e.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isExpanded, collapse]);
+  }, [isExpanded]);
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -42,7 +67,7 @@ export function ExpandedPlayer() {
     const t = e.changedTouches[0];
     const dy = t.clientY - start.y;
     const dx = Math.abs(t.clientX - start.x);
-    if (dy > 80 && dx < 60) collapse();
+    if (dy > 80 && dx < 60) handleClose();
   }
 
   // Focus the chevron on open so keyboard users can Esc / Enter to dismiss.
@@ -53,7 +78,8 @@ export function ExpandedPlayer() {
   }, [mounted]);
 
   // FLIP: capture source rect on open, set initial transform on the shell,
-  // then add `.open` next frame so CSS animates to identity.
+  // then add `.open` next frame so CSS animates to identity. On close, we
+  // remove `.open` so CSS animates the shell back to that same transform.
   useLayoutEffect(() => {
     if (!isExpanded) {
       setMounted(false);
@@ -81,9 +107,11 @@ export function ExpandedPlayer() {
 
   if (!isExpanded) return null;
 
+  const open = mounted && !exiting;
+
   return (
     <div
-      className={`ep-root ${mounted ? "open" : ""}`}
+      className={`ep-root ${open ? "open" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label="Expanded player"
@@ -96,14 +124,14 @@ export function ExpandedPlayer() {
             ref={chevRef}
             type="button"
             className="ep-chev"
-            onClick={collapse}
+            onClick={handleClose}
             aria-label="Close expanded player"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
               <path d="M5 7l5 6 5-6z" />
             </svg>
           </button>
-          <div className="ep-topbar-center">● On Air — Lena</div>
+          <div className="onair">On Air — Lena</div>
           <div style={{ width: 36 }} />
         </div>
         <ExpandedPlayerDesktop />

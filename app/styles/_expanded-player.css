@@ -146,15 +146,6 @@
   color: var(--fg-dim);
 }
 
-.ep-booth-controls {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  width: 100%;
-  max-width: 420px;
-  justify-content: center;
-}
-
 .ep-booth-right {
   display: flex;
   flex-direction: column;
@@ -353,13 +344,43 @@
   box-shadow: 0 0 0 1px var(--accent), 0 10px 32px var(--accent-glow);
   cursor: pointer;
 }
-.ep-listen-extras {
+/* Shared actions + controls rows used by both the desktop Booth (left
+   column) and the mobile Listen tab. Mirrors the hero PlayerCard layout. */
+.ep-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ep-controls {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 18px;
+  width: 100%;
   flex-wrap: wrap;
 }
+.ep-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ep-status .lbl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+.ep-status .val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
 .ep-listen-lena {
   width: 100%;
   background: rgba(79, 209, 197, 0.06);

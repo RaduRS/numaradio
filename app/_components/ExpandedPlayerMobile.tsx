@@ -9,6 +9,8 @@ import { RequestForm } from "./RequestForm";
 import { OnAirFeed } from "./OnAirFeed";
 import { ShareControls } from "./ShareControls";
 import { VolumeControl } from "./VolumeControl";
+import { VoteButtons } from "./VoteButtons";
+import { LiveClock } from "./LiveClock";
 
 function initials(title: string | undefined): string {
   if (!title) return "··";
@@ -18,7 +20,7 @@ function initials(title: string | undefined): string {
 }
 
 function ListenPane() {
-  const { isPlaying, isLoading, toggle } = usePlayer();
+  const { status, isPlaying, isLoading, toggle } = usePlayer();
   const { nowPlaying } = useBroadcast();
   const live = nowPlaying.isPlaying ? nowPlaying : null;
   const cover = live?.artworkUrl;
@@ -26,7 +28,7 @@ function ListenPane() {
   return (
     <div className="ep-listen">
       <div className="ep-listen-meta">
-        <span>On Air · Lena</span>
+        <span><LiveClock /></span>
         <span><ListenerCount suffix=" listening" /></span>
       </div>
       <div
@@ -52,17 +54,30 @@ function ListenPane() {
         <div className="ep-listen-title">{live?.title ?? "—"}</div>
         <div className="ep-listen-artist">{live?.artistDisplay ?? "—"}</div>
       </div>
-      <button
-        className="ep-listen-play"
-        type="button"
-        onClick={toggle}
-        aria-pressed={isPlaying}
-        aria-busy={isLoading}
-      >
-        {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
-      </button>
-      <div className="ep-listen-extras">
+      <div className="ep-actions">
+        <VoteButtons trackId={live?.trackId} />
         <ShareControls />
+      </div>
+      <div className="ep-controls">
+        <button
+          className="ep-listen-play"
+          type="button"
+          onClick={toggle}
+          aria-pressed={isPlaying}
+          aria-busy={isLoading}
+        >
+          {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
+        </button>
+        <div className="ep-status">
+          <div className="lbl">Streaming · 192kbps</div>
+          <div className="val">
+            {status === "loading"
+              ? "Connecting…"
+              : status === "error"
+                ? "Stream error — try again"
+                : "Live"}
+          </div>
+        </div>
         <VolumeControl />
       </div>
       <div className="ep-listen-lena">

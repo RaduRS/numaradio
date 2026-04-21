@@ -5,6 +5,7 @@ import { useBroadcast } from "./useBroadcast";
 import { PauseIcon, PlayIcon, LoadingIcon } from "./Icons";
 import { ShareControls } from "./ShareControls";
 import { VolumeControl } from "./VolumeControl";
+import { VoteButtons } from "./VoteButtons";
 
 function fmtDuration(totalSeconds: number | undefined): string {
   if (!totalSeconds || !Number.isFinite(totalSeconds)) return "—";
@@ -32,7 +33,7 @@ function initials(title: string | undefined): string {
 }
 
 export function ExpandedPlayerDesktop() {
-  const { isPlaying, isLoading, toggle } = usePlayer();
+  const { status, isPlaying, isLoading, toggle } = usePlayer();
   const { nowPlaying, justPlayed, now } = useBroadcast();
 
   const live = nowPlaying.isPlaying ? nowPlaying : null;
@@ -54,8 +55,11 @@ export function ExpandedPlayerDesktop() {
           <div className="ep-booth-title">{title}</div>
           <div className="ep-booth-artist">{artist}</div>
         </div>
-        <div className="ep-booth-controls">
+        <div className="ep-actions">
+          <VoteButtons trackId={live?.trackId} />
           <ShareControls />
+        </div>
+        <div className="ep-controls">
           <button
             className="btn-play"
             onClick={toggle}
@@ -65,6 +69,16 @@ export function ExpandedPlayerDesktop() {
           >
             {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>
+          <div className="ep-status">
+            <div className="lbl">Streaming · 192kbps</div>
+            <div className="val">
+              {status === "loading"
+                ? "Connecting…"
+                : status === "error"
+                  ? "Stream error — try again"
+                  : "Live"}
+            </div>
+          </div>
           <VolumeControl />
         </div>
       </div>
