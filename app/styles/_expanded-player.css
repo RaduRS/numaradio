@@ -94,10 +94,12 @@
 .ep-booth-left {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .ep-booth-art {
@@ -149,9 +151,18 @@
 .ep-booth-right {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   min-height: 0;
   overflow: hidden;
+}
+
+/* Scrollable shell for the right-column live feed so the column height
+   stays pinned to the left column while the list internally scrolls. */
+.ep-booth-feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .ep-booth-lena {
