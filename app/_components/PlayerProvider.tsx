@@ -14,6 +14,10 @@ const STREAM_URL = "https://api.numaradio.com/stream";
 const VOLUME_STORAGE_KEY = "numa.volume";
 const MUTED_STORAGE_KEY = "numa.muted";
 const DEFAULT_VOLUME = 0.8;
+// Exponential backoff for auto-reconnect after stream drops (server
+// restart, tunnel flap, etc.). Caps at 30s so the player keeps trying
+// forever but doesn't hammer the origin.
+const RECONNECT_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
 
 export type PlayerStatus = "idle" | "loading" | "playing" | "error";
 
@@ -43,6 +47,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<PlayerStatus>("idle");
   const [volume, setVolumeState] = useState<number>(DEFAULT_VOLUME);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  // User intent: "I want the stream playing". Stays true across error/retry
+  // cycles so the player keeps trying to reconnect; only flipped off by an
+  // explicit pause() call.
+  const wantPlaybackRef = useRef(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAttemptRef = useRef(0);
+  const playRef = useRef<() => void>(() => {});
 
   // Hydrate volume + mute from localStorage after mount (avoids SSR/CSR
   // hydration mismatch).
@@ -99,9 +110,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const clearRetry = useCallback(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleRetry = useCallback(() => {
+    if (!wantPlaybackRef.current) return;
+    if (retryTimeoutRef.current) return;
+    const idx = Math.min(retryAttemptRef.current, RECONNECT_DELAYS_MS.length - 1);
+    const delay = RECONNECT_DELAYS_MS[idx];
+    retryAttemptRef.current += 1;
+    retryTimeoutRef.current = setTimeout(() => {
+      retryTimeoutRef.current = null;
+      if (wantPlaybackRef.current) playRef.current();
+    }, delay);
+  }, []);
+
   const play = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return;
+    wantPlaybackRef.current = true;
+    clearRetry();
     setStatus("loading");
     // Reload the stream on every play so we never resume from a stale buffer.
     audio.src = STREAM_URL;
@@ -109,20 +141,38 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     try {
       await audio.play();
       // Browser will fire `playing` once buffered — we update status there.
-    } catch {
-      // Autoplay/permission blocked — back to idle so user can retry.
-      setStatus("idle");
+    } catch (err) {
+      // NotAllowedError = autoplay/gesture policy blocked us. User has to
+      // click again — bail without retry loop.
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        wantPlaybackRef.current = false;
+        retryAttemptRef.current = 0;
+        setStatus("idle");
+        return;
+      }
+      // Anything else is transient (network down on initial attempt etc.)
+      // — keep user intent and retry with backoff.
+      scheduleRetry();
     }
-  }, []);
+  }, [clearRetry, scheduleRetry]);
+
+  // Keep a ref to the latest `play` so scheduleRetry's setTimeout callback
+  // always calls the current closure without needing play in its deps.
+  useEffect(() => {
+    playRef.current = play;
+  }, [play]);
 
   const pause = useCallback(() => {
+    wantPlaybackRef.current = false;
+    retryAttemptRef.current = 0;
+    clearRetry();
     const audio = audioRef.current;
     if (!audio) return;
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
     setStatus("idle");
-  }, []);
+  }, [clearRetry]);
 
   const toggle = useCallback(() => {
     if (status === "playing" || status === "loading") pause();
@@ -134,7 +184,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onPlaying = () => setStatus("playing");
+    const onPlaying = () => {
+      setStatus("playing");
+      // Successful playback — reset the backoff so the *next* outage starts
+      // retrying fast again instead of from wherever we left off.
+      retryAttemptRef.current = 0;
+    };
     const onWaiting = () => {
       // `waiting` fires for both initial buffer-up and rebuffers; only show
       // loading if we aren't already playing successfully.
@@ -145,7 +200,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // it's a transient browser pause we shouldn't reflect in the UI.
       if (!audio.src) setStatus("idle");
     };
-    const onError = () => setStatus("error");
+    const onError = () => {
+      // Stream dropped (server restart, tunnel flap, Icecast 404). If the
+      // user had pressed Play, stay in "loading" and auto-retry with backoff
+      // so the stream comes back on its own when the origin is healthy again.
+      if (wantPlaybackRef.current) {
+        setStatus("loading");
+        scheduleRetry();
+      } else {
+        setStatus("error");
+      }
+    };
 
     audio.addEventListener("playing", onPlaying);
     audio.addEventListener("waiting", onWaiting);
@@ -157,7 +222,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("error", onError);
     };
-  }, []);
+  }, [scheduleRetry]);
+
+  // Clean up any pending retry timer on unmount.
+  useEffect(() => {
+    return () => clearRetry();
+  }, [clearRetry]);
 
   const value: PlayerState = {
     status,

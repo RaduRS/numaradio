@@ -12,6 +12,20 @@ $ErrorActionPreference = 'Stop'
 $taskName = 'Start WSL (Numa Radio)'
 $userId   = 'ORION\marku'
 
+# --- Install .wslconfig so the VM doesn't idle-shutdown after the task's -
+# one-shot wsl.exe call exits. Without this, the VM dies ~60s after the
+# scheduled task fires and the radio stack goes offline before anyone
+# notices. See Decisions Log 2026-04-21 (player-auto-reconnect + WSL idle).
+$repoRoot  = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$wslSrc    = Join-Path $PSScriptRoot 'wslconfig'
+$wslDst    = Join-Path $env:USERPROFILE '.wslconfig'
+if (Test-Path $wslSrc) {
+    Copy-Item -Path $wslSrc -Destination $wslDst -Force
+    Write-Host "Installed .wslconfig -> $wslDst"
+} else {
+    Write-Warning ".wslconfig source not found at $wslSrc — skipping"
+}
+
 # --- Remove any existing version (idempotent) -----------------------------
 if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
     Write-Host "Removing existing task..."

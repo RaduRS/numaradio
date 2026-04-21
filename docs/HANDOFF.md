@@ -1,8 +1,8 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-20 (radio-feel overhaul LIVE on Orion — overlay voice
-mixing with sidechain duck, 5s crossfade, shoutout pill + pending spinner;
-smoke-tested end-to-end on production)
+Last updated: 2026-04-21 (WSL idle-shutdown fix, shoutout replay-storm fix,
+audio-player auto-reconnect — all three landed after the first unattended
+restart test surfaced them)
 
 ## Where we are
 
@@ -176,15 +176,26 @@ to the MiniMax endpoint. See
 
 **WSL auto-start on Windows boot — 2026-04-21**
 Orion runs Numa Radio inside WSL2. The Windows scheduled task
-`Start WSL (Numa Radio)` now has three triggers (AtStartup / AtLogOn /
-SessionUnlock) and runs as S4U, so the radio stack comes back on air after
-unattended reboots without anyone logging in. Installer lives at
-`deploy/windows/install-autostart.ps1` (run elevated after a Windows reinstall).
-Backup of the pre-change task at `deploy/windows/Start-WSL-NumaRadio.backup.xml`.
+`Start WSL (Numa Radio)` has three triggers (AtStartup / AtLogOn /
+SessionUnlock), runs as S4U, and is paired with a `%USERPROFILE%\.wslconfig`
+that sets `vmIdleTimeout=-1` so the VM doesn't idle-shutdown ~60 s after the
+task's one-shot `wsl.exe … /bin/true` kick exits. Together: the radio stack
+comes back on air after unattended reboots without anyone logging in AND
+stays up.
+
+Installer lives at `deploy/windows/install-autostart.ps1` (run elevated after
+a Windows reinstall). It registers the scheduled task AND copies
+`deploy/windows/wslconfig` to `%USERPROFILE%\.wslconfig`. Task backup at
+`deploy/windows/Start-WSL-NumaRadio.backup.xml`.
 
 Context: on 2026-04-21 at 02:19:56 BST the host BSOD'd (bugcheck `0x0000000A`)
 and auto-rebooted at 02:31, but the stream stayed down until 07:47 because the
-task's only trigger was "at user logon." S4U + AtStartup closes that gap.
+task's only trigger was "at user logon." S4U + AtStartup closes that gap. The
+`vmIdleTimeout` step was added later the same day after a clean test-reboot
+showed WSL booting, services starting, and then WSL powering off again after
+~19 s — the `wsl.exe … /bin/true` action exits immediately, leaving no
+attached Windows-side session to keep the VM alive. `vmIdleTimeout=-1` fixes
+that. See Decisions Log 2026-04-21.
 
 **After any full Windows reboot, verify from a phone or another device:**
 `curl -sI https://api.numaradio.com/stream` should return `200` within ~90s of
@@ -194,9 +205,34 @@ POST, *without* logging into Orion. If it doesn't, check:
 `Microsoft-Windows-TaskScheduler/Operational` event log.
 
 Rollback: `schtasks /create /tn "Start WSL (Numa Radio)" /xml deploy\windows\Start-WSL-NumaRadio.backup.xml /f`.
+To undo the idle-timeout change: delete `%USERPROFILE%\.wslconfig` (next full
+Windows reboot will revert to the 60-second default).
 
 Spec: `docs/superpowers/specs/2026-04-21-wsl-autostart-design.md`
 Plan: `docs/superpowers/plans/2026-04-21-wsl-autostart.md`
+
+**Shoutout replay-storm fix + audio-player auto-reconnect — 2026-04-21**
+First unattended-restart test exposed two more bugs:
+- Every previously-aired Lena shoutout re-played back-to-back when the queue
+  daemon came back up. Root cause: shoutout `QueueItem` rows never left
+  `queueStatus='staged'` (the `onTrackHandler` only promotes music items), so
+  `hydrator.ts` re-pushed all of them to Liquidsoap's `overlay_queue` on
+  every reconnect. **Fix:** shoutout rows are now created as `completed`
+  straight away (they're fire-and-forget to an in-memory overlay queue; no
+  `staged` phase to resume), and `hydrate()` explicitly skips `queueType='shoutout'`
+  as defence-in-depth. One-off Neon cleanup marked the 22 orphaned rows
+  `completed` with `reasonCode='cleanup_2026-04-21_replay_storm_fix'`.
+- The public `<audio>` element gave up on the first `error` event and showed
+  "Stream error — try again". **Fix:** `app/_components/PlayerProvider.tsx`
+  now tracks a `wantPlaybackRef` (user pressed Play) and on `error` it stays
+  in "loading" and retries with exponential backoff (2/4/8/16/30 s, capped).
+  Pause clears the intent. Backoff resets to 2 s on a successful `playing`
+  event, so the *next* outage is recovered from quickly. `NotAllowedError`
+  (autoplay-policy) still bails immediately — those require a user gesture.
+
+To verify after a code change: deploy Vercel, open numaradio.com, press Play,
+then on Orion `sudo systemctl restart numa-liquidsoap` and watch — the player
+should stay in "loading" and resume within a few seconds without any click.
 
 **Radio-feel overhaul — 2026-04-20 (final commit of the day)**
 Spec: `docs/superpowers/specs/2026-04-20-radio-feel-design.md`

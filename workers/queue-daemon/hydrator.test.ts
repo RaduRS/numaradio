@@ -50,7 +50,7 @@ test("hydrate does nothing when there are no staged items", async () => {
   assert.deepEqual(sent, []);
 });
 
-test("hydrate routes shoutouts to overlay_queue and music to priority", async () => {
+test("hydrate skips shoutouts (ephemeral overlay queue) and only pushes music", async () => {
   const sent: string[] = [];
   await hydrate({
     listStaged: async () => [
@@ -64,7 +64,6 @@ test("hydrate routes shoutouts to overlay_queue and music to priority", async ()
   });
   assert.deepEqual(sent, [
     "priority.push https://b2/t1.mp3",
-    "overlay_queue.push https://b2/t2.mp3",
     "priority.push https://b2/t3.mp3",
   ]);
 });

@@ -1,0 +1,6 @@
+[wsl2]
+# Keep the WSL VM running even when no wsl.exe session is attached.
+# Without this, the VM idle-shuts-down ~60s after the scheduled-task
+# boot kick exits, taking Icecast/Liquidsoap/cloudflared down with it.
+# Numa Radio needs to stay on air across unattended reboots.
+vmIdleTimeout=-1

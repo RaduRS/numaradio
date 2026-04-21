@@ -18,6 +18,10 @@ export interface HydrateDeps {
 export async function hydrate(deps: HydrateDeps): Promise<void> {
   const items = await deps.listStaged();
   for (const item of items) {
+    // Shoutouts live in Liquidsoap's in-memory overlay_queue and are ephemeral
+    // by design — re-pushing historic ones on reconnect caused the replay
+    // storm seen 2026-04-21.
+    if (item.queueType === "shoutout") continue;
     if (!item.trackId) {
       await deps.markFailed(item.id, "hydrate_missing_track");
       continue;
@@ -27,7 +31,6 @@ export async function hydrate(deps: HydrateDeps): Promise<void> {
       await deps.markFailed(item.id, "hydrate_missing_asset");
       continue;
     }
-    const queue = item.queueType === "shoutout" ? "overlay_queue" : "priority";
-    await deps.send(`${queue}.push ${url}`);
+    await deps.send(`priority.push ${url}`);
   }
 }

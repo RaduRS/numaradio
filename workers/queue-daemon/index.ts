@@ -86,6 +86,11 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   const sourceObjectType = body.requestId ? "request" : "track";
   const sourceObjectId = body.requestId ?? body.trackId;
 
+  // Shoutouts are fire-and-forget to the in-memory overlay_queue — they
+  // don't need a "staged" phase. Mark completed at creation so the hydrator
+  // never replays them on daemon reconnect.
+  const initialStatus = kind === "shoutout" ? "completed" : "staged";
+
   const item = await prisma.queueItem.create({
     data: {
       stationId: track.stationId,
@@ -94,7 +99,7 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
       sourceObjectId,
       trackId: body.trackId,
       priorityBand: "priority_request",
-      queueStatus: "staged",
+      queueStatus: initialStatus,
       positionIndex: position,
       insertedBy: "queue-daemon",
       reasonCode: body.reason,

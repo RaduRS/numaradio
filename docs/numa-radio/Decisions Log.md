@@ -4,6 +4,36 @@ Living record of decisions made in chat that aren't already captured elsewhere i
 
 ---
 
+## 2026-04-21 — WSL idle-shutdown, shoutout replay-storm, audio-player auto-reconnect
+
+First deliberate test-reboot of the AtStartup scheduled task surfaced three stacked bugs. All fixed.
+
+### 1. WSL was idle-shutting-down ~60s after the task fired
+- **Symptom:** after a Windows restart, the scheduled task ran (`LastTaskResult=0`), WSL booted, systemd started the Numa services — and then 19 s later WSL cleanly power-cycled. Stream stayed down until someone opened a WSL terminal manually.
+- **Root cause:** task action is `wsl.exe -d Ubuntu -u marku -- /bin/true`. It exits the instant `/bin/true` returns. WSL2's default `vmIdleTimeout=60000` then powers the VM down because no Windows-side `wsl.exe` session is attached. Systemd processes inside the VM do NOT count as "active usage" for this idle timer.
+- **Evidence:** `journalctl --list-boots` showed two back-to-back boots on 2026-04-21 — `09:27:04→09:27:23` (19 s, clean `systemd-poweroff`) and `09:29:50→current` (stayed up because the user's own WSL session attached). Same 18-s pattern at `07:43:25→07:43:43` after the prior unattended reboot.
+- **Fix:** install `%USERPROFILE%\.wslconfig` with `[wsl2] vmIdleTimeout=-1`. Template committed at `deploy/windows/wslconfig`, installer (`install-autostart.ps1`) now copies it into place. Applies on next full Windows reboot; no need to run `wsl --shutdown` (which would kill our own session anyway).
+
+### 2. 22 historic shoutouts replayed back-to-back when the queue daemon came back
+- **Symptom:** after the stack restarted, every Lena voice shoutout from yesterday's testing aired sequentially before rotation resumed.
+- **Root cause (two-layer):**
+  - `workers/queue-daemon/index.ts:120-172` — `onTrackHandler` only transitions **music** items from `staged` → `playing` → `completed`. Shoutout items (`queueType='shoutout'`) are never touched, so they stayed `staged` forever.
+  - `workers/queue-daemon/hydrator.ts` — on every socket reconnect the daemon re-pushes all `staged` rows. Shoutouts hit `overlay_queue.push`, Liquidsoap played them in order. Neon had 22 such orphans.
+- **Fix (belt + braces):**
+  - In `pushHandler`, shoutout `QueueItem` rows are now created with `queueStatus='completed'` directly — no `staged` phase, since the overlay queue is in-memory and ephemeral by design (if Liquidsoap restarts with one mid-queue, it's lost; that's acceptable for a shoutout).
+  - `hydrate()` additionally `continue`s past any `queueType='shoutout'` row it happens to see, so an accidental future `staged` shoutout can't resurrect the storm.
+  - One-off Neon `UPDATE` marked the 22 orphans `completed`, `reasonCode='cleanup_2026-04-21_replay_storm_fix'` (preserved for audit; not deleted because `Shoutout.linkedQueueItemId` FKs them).
+- **Why not delete the Track/audio too:** `Shoutout` rows reference `linkedQueueItemId` for the audit trail, and the B2 audio is cheap to keep. Deletion is a separate retention decision.
+
+### 3. Public audio player didn't auto-reconnect when the stream came back
+- **Symptom:** user pressed Play, stream went down (server restart), stream came back — but the `<audio>` element stayed dead. Reload + click Play was the only recovery.
+- **Root cause:** `PlayerProvider.tsx` handled the browser `error` event with `setStatus("error")` and nothing else — no retry, no memory of "user wants playback", no distinguishing a real error (CORS, 404) from a transient origin drop.
+- **Fix:** introduced `wantPlaybackRef` (flipped true on `play()`, false on `pause()`). On `error`, if `wantPlayback` is true we stay in "loading" and schedule a retry via `setTimeout` with exponential backoff (2/4/8/16/30 s, capped). Backoff resets to 2 s on a successful `playing` event. `NotAllowedError` on the first `audio.play()` still bails immediately — autoplay-policy rejections require a user gesture and looping on them would just spam the console.
+- **Design choice:** no separate health-check polling, no `navigator.onLine` listener. The `error` event is sufficient; keeping the fix self-contained to the player made it a ~40-line diff instead of a new system.
+- **Test plan (manual):** deploy, press Play on numaradio.com, `sudo systemctl restart numa-liquidsoap` on Orion, listen — the stream should come back within a few seconds without touching the page.
+
+---
+
 ## 2026-04-19 (night) — Now-playing + real listener count wired end-to-end
 
 ### Public site now shows truthful title, artist, artwork, elapsed/duration
