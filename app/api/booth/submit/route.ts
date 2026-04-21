@@ -5,7 +5,7 @@
 //       if allowed/rewritten, call api.numaradio.com/api/internal/shoutout
 //       to generate TTS and air on the stream.
 
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   checkShoutoutRateLimit,
@@ -135,6 +135,46 @@ export async function POST(req: Request): Promise<NextResponse> {
     });
   }
   if (moderation.decision === "held") {
+    const notifyUrl =
+      process.env.INTERNAL_HELD_NOTIFY_URL ??
+      "https://api.numaradio.com/api/internal/shoutouts/held-notify";
+    const secret = process.env.INTERNAL_API_SECRET;
+    if (secret) {
+      after(async () => {
+        try {
+          const res = await fetch(notifyUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-internal-secret": secret,
+            },
+            body: JSON.stringify({
+              id: shoutout.id,
+              rawText,
+              cleanText: undefined,
+              requesterName: requesterName ?? undefined,
+              moderationReason: moderation.reason ?? undefined,
+            }),
+          });
+          if (!res.ok) {
+            console.warn(
+              `booth-submit: held-notify returned ${res.status} for ${shoutout.id}`,
+            );
+          }
+        } catch (e) {
+          console.warn(
+            `booth-submit: held-notify fetch failed for ${shoutout.id}: ${
+              e instanceof Error ? e.message : "unknown"
+            }`,
+          );
+        }
+      });
+    } else {
+      console.warn(
+        `booth-submit: INTERNAL_API_SECRET missing; skipping held-notify for ${shoutout.id}`,
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       status: "held",
