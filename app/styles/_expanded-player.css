@@ -407,6 +407,16 @@
   color: var(--fg-dim);
 }
 
+/* Wraps the Request / Shout / On-Air panes so their internal blocks
+   (heading, sub-tab pills, form fields, send button, review rotator) get
+   consistent breathing room. Mirrors the .req-form-card gap on the page. */
+.ep-form-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 4px;
+}
+
 /* Mobile trims: drop the bitrate label and the volume slider — phones have
    OS-level volume control + lockscreen affordances, and the bitrate detail
    reads as engineer-flavored noise on a small screen. */

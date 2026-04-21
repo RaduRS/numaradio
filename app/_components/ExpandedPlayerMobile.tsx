@@ -127,7 +127,7 @@ export function ExpandedPlayerMobile() {
       <div className="ep-mobile-body">
         {tab === "listen" && <ListenPane />}
         {(tab === "request" || tab === "shout") && (
-          <div style={{ paddingTop: 4 }}>
+          <div className="ep-form-pane">
             <h3 style={REQUEST_TAB_HEADING}>
               {tab === "shout" ? <>Say it<br />on air.</> : <>To the<br />booth.</>}
             </h3>
@@ -135,7 +135,7 @@ export function ExpandedPlayerMobile() {
           </div>
         )}
         {tab === "onair" && (
-          <div style={{ paddingTop: 4 }}>
+          <div className="ep-form-pane">
             <h3 style={REQUEST_TAB_HEADING}>
               The booth,<br />live.
             </h3>
