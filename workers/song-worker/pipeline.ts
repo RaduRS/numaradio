@@ -202,7 +202,11 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
       title,
       artistDisplay: job.artistName,
       sourceType: "minimax_request",
-      airingPolicy: "library",
+      // Start as priority_request so the rotation refresher can't pick the
+      // track up before it has its first PlayHistory entry. track-started
+      // flips it to 'library' after the first on-air, by which point the
+      // 'last 20 played' filter pins it out of rotation until it ages out.
+      airingPolicy: "priority_request",
       safetyStatus: "approved",
       trackStatus: "ready",
       durationSeconds,

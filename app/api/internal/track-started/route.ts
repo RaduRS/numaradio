@@ -51,11 +51,17 @@ export async function POST(req: Request) {
   let trackId: string | null = body.trackId ?? null;
   if (!trackId && body.sourceUrl) trackId = extractTrackId(body.sourceUrl);
 
-  let track: { id: string; stationId: string; durationSeconds: number | null; title: string } | null = null;
+  let track: {
+    id: string;
+    stationId: string;
+    durationSeconds: number | null;
+    title: string;
+    airingPolicy: "library" | "request_only" | "priority_request" | "hold";
+  } | null = null;
   if (trackId) {
     track = await prisma.track.findUnique({
       where: { id: trackId },
-      select: { id: true, stationId: true, durationSeconds: true, title: true },
+      select: { id: true, stationId: true, durationSeconds: true, title: true, airingPolicy: true },
     });
   }
   if (!track && body.title) {
@@ -67,7 +73,7 @@ export async function POST(req: Request) {
           ? { artistDisplay: { equals: body.artist, mode: "insensitive" } }
           : {}),
       },
-      select: { id: true, stationId: true, durationSeconds: true, title: true },
+      select: { id: true, stationId: true, durationSeconds: true, title: true, airingPolicy: true },
       orderBy: { updatedAt: "desc" },
     });
   }
@@ -88,35 +94,46 @@ export async function POST(req: Request) {
   const durationMs = (track.durationSeconds ?? 180) * 1000;
   const expectedEndAt = new Date(startedAt.getTime() + durationMs);
 
-  await prisma.$transaction([
-    prisma.nowPlaying.upsert({
-      where: { stationId: station.id },
-      create: {
-        stationId: station.id,
-        currentTrackId: track.id,
-        startedAt,
-        expectedEndAt,
-        lastHeartbeatAt: startedAt,
-      },
-      update: {
-        currentTrackId: track.id,
-        startedAt,
-        expectedEndAt,
-        lastHeartbeatAt: startedAt,
-      },
-    }),
-    prisma.playHistory.create({
-      data: {
-        stationId: station.id,
-        trackId: track.id,
-        segmentType: "audio_track",
-        titleSnapshot: track.title,
-        startedAt,
-        durationSeconds: track.durationSeconds,
-        completedNormally: true,
-      },
-    }),
-  ]);
+  const nowPlayingOp = prisma.nowPlaying.upsert({
+    where: { stationId: station.id },
+    create: {
+      stationId: station.id,
+      currentTrackId: track.id,
+      startedAt,
+      expectedEndAt,
+      lastHeartbeatAt: startedAt,
+    },
+    update: {
+      currentTrackId: track.id,
+      startedAt,
+      expectedEndAt,
+      lastHeartbeatAt: startedAt,
+    },
+  });
+  const playHistoryOp = prisma.playHistory.create({
+    data: {
+      stationId: station.id,
+      trackId: track.id,
+      segmentType: "audio_track",
+      titleSnapshot: track.title,
+      startedAt,
+      durationSeconds: track.durationSeconds,
+      completedNormally: true,
+    },
+  });
+  // After a listener-generated song airs once via the priority queue, promote
+  // it into rotation. Doing the flip only at this point guarantees the track
+  // is already in the 'last 20 played' window when it first becomes a
+  // rotation candidate, so refresh-rotation can't re-pick it for a while.
+  if (track.airingPolicy === "priority_request") {
+    const promoteOp = prisma.track.update({
+      where: { id: track.id },
+      data: { airingPolicy: "library" },
+    });
+    await prisma.$transaction([nowPlayingOp, playHistoryOp, promoteOp]);
+  } else {
+    await prisma.$transaction([nowPlayingOp, playHistoryOp]);
+  }
 
   return Response.json({ ok: true, trackId: track.id, startedAt });
 }
