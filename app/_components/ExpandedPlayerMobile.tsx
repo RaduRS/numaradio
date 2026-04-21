@@ -6,6 +6,7 @@ import { useBroadcast } from "./useBroadcast";
 import { PauseIcon, PlayIcon, LoadingIcon } from "./Icons";
 import { ListenerCount } from "./ListenerCount";
 import { RequestForm } from "./RequestForm";
+import { OnAirFeed } from "./OnAirFeed";
 
 function initials(title: string | undefined): string {
   if (!title) return "··";
@@ -116,7 +117,22 @@ export function ExpandedPlayerMobile() {
             <RequestForm initialTab="shout" />
           </div>
         )}
-        {tab === "onair" && <div>On Air content — Task 9</div>}
+        {tab === "onair" && (
+          <div style={{ paddingTop: 4 }}>
+            <h3 style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontStretch: "115%",
+              fontSize: 22,
+              lineHeight: 1,
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}>
+              The booth,<br />live.
+            </h3>
+            <OnAirFeed />
+          </div>
+        )}
       </div>
       <TabBar active={tab} onChange={setTab} />
     </div>
