@@ -26,9 +26,6 @@ export function Phone2Mockup() {
           <svg viewBox="0 0 14 10" fill="currentColor" style={{ width: 13, height: 9 }}>
             <path d="M0 8h2v2H0zM3 6h2v4H3zM6 4h2v6H6zM9 2h2v8H9zM12 0h2v10h-2z" />
           </svg>
-          <svg viewBox="0 0 16 10" fill="none" stroke="currentColor" strokeWidth="1" style={{ width: 14, height: 9 }}>
-            <path d="M1 5a7 7 0 0114 0M3 6.5a5 5 0 0110 0M5 8a3 3 0 016 0" />
-          </svg>
           <svg viewBox="0 0 24 10" fill="none" stroke="currentColor" strokeWidth="1" style={{ width: 18, height: 9 }}>
             <rect x="1" y="1" width="19" height="8" rx="1.5" />
             <rect x="2.5" y="2.5" width="14" height="5" rx="0.5" fill="currentColor" />

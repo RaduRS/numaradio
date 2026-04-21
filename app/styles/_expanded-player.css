@@ -96,7 +96,10 @@
   flex-direction: column;
   gap: 18px;
   align-items: center;
-  justify-content: flex-start;
+  /* Center the column's content vertically so the bottom edge of the Lena
+     card lines up with the bottom of the right-column feed instead of
+     pinning to the top with empty space below. */
+  justify-content: center;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
@@ -166,6 +169,7 @@
 }
 
 .ep-booth-lena {
+  width: 70%;
   background: rgba(79, 209, 197, 0.06);
   border: 1px solid rgba(79, 209, 197, 0.18);
   border-radius: 12px;

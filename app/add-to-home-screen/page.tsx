@@ -249,7 +249,16 @@ function IosPhone({ step }: { step: number }) {
       <div className="phone-inner">
         <div className="phone-stat">
           <span>2:47</span>
-          <span>●●● ▲</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <svg viewBox="0 0 14 10" fill="currentColor" style={{ width: 13, height: 9 }}>
+              <path d="M0 8h2v2H0zM3 6h2v4H3zM6 4h2v6H6zM9 2h2v8H9zM12 0h2v10h-2z" />
+            </svg>
+            <svg viewBox="0 0 24 10" fill="none" stroke="currentColor" strokeWidth="1" style={{ width: 18, height: 9 }}>
+              <rect x="1" y="1" width="19" height="8" rx="1.5" />
+              <rect x="2.5" y="2.5" width="14" height="5" rx="0.5" fill="currentColor" />
+              <path d="M21 4v2h1V4z" fill="currentColor" />
+            </svg>
+          </span>
         </div>
 
         {step === 1 && (
@@ -395,7 +404,16 @@ function AndroidPhone({ step }: { step: number }) {
       <div className="phone-inner">
         <div className="phone-stat">
           <span>2:47</span>
-          <span>●●● ▲</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <svg viewBox="0 0 14 10" fill="currentColor" style={{ width: 13, height: 9 }}>
+              <path d="M0 8h2v2H0zM3 6h2v4H3zM6 4h2v6H6zM9 2h2v8H9zM12 0h2v10h-2z" />
+            </svg>
+            <svg viewBox="0 0 24 10" fill="none" stroke="currentColor" strokeWidth="1" style={{ width: 18, height: 9 }}>
+              <rect x="1" y="1" width="19" height="8" rx="1.5" />
+              <rect x="2.5" y="2.5" width="14" height="5" rx="0.5" fill="currentColor" />
+              <path d="M21 4v2h1V4z" fill="currentColor" />
+            </svg>
+          </span>
         </div>
 
         {step === 1 && (
