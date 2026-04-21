@@ -22,6 +22,7 @@ replacing the Phone 1 mockup in `Mobile.tsx`.
 | Desktop layout | **Booth** — two-column dashboard: artwork + controls left, Lena commentary + Just Played right |
 | Mobile layout | Phone 1 mockup made real: top bar, big artwork, controls, 4-tab bottom bar |
 | Mobile tabs | Listen (default) / Request / Shout / **On Air** |
+| `Mobile.tsx` section | Keep on desktop, hidden on mobile (already). Phone 1 JSX rewritten to visually match the real player. |
 | "On Air" tab content | Chronological broadcast log — tracks from `/api/station/broadcast` `justPlayed` interleaved with shoutouts from `/api/station/shoutouts/recent`, sorted by timestamp |
 | Responsive split | Desktop booth layout ≥ 900 px viewport width; mobile tab layout below |
 
@@ -67,20 +68,19 @@ so the animation can interpolate from that box. `collapse()` resets.
 - `app/_components/Mobile.tsx` — decision below
 - `app/_components/Requests.tsx` — extract `req-form-card` form body into a reusable `<RequestForm />` component so the Request and Shout mobile tabs can import it without duplication
 
-### Decision: `Mobile.tsx` section on landing page
+### `Mobile.tsx` section on landing page
 
-The "06 — In Your Pocket" section contains two phone mockups. Phone 1
-(Listen) becomes the real mobile player, so the mockup is redundant /
-misleading. Options:
+Keep the "06 — In Your Pocket" section on desktop as marketing copy.
+Phone 1 must be updated so its inline markup mirrors the real mobile
+expanded player (same top bar, artwork block, track info, play button,
+and 4-tab bottom bar with Listen active). Source-of-truth goes the
+other way: the real player is built first, then Phone 1's JSX is
+rewritten to match. If the real layout changes, the mockup changes
+with it — they stay visually identical.
 
-- **Keep & update** — update the Phone 1 mockup to show a screenshot of
-  the *real* mobile player so marketing copy stays accurate.
-- **Remove** — drop the whole "In Your Pocket" section. The real thing
-  tells the story better than a mockup of the real thing.
-
-**Recommendation: Remove.** The section exists because the real mobile
-player didn't; once it does, the landing page should just demonstrate by
-being the experience, not describe it.
+Already hidden on mobile (`mobile-showcase` CSS media query from commit
+a0440d2) since a mockup of the current experience is redundant when the
+user *is* in that experience. No change needed there.
 
 ## Desktop layout (≥ 900 px)
 
@@ -253,8 +253,7 @@ app/_components/
   PlayerCard.tsx                  MODIFIED — clickable root, stopPropagation on buttons
   MiniPlayer.tsx                  MODIFIED — same
   Requests.tsx                    MODIFIED — consumes <RequestForm />
-  Mobile.tsx                      REMOVED (pending user approval)
-app/page.tsx                      MODIFIED — drop <Mobile /> import if removed
+  Mobile.tsx                      MODIFIED — Phone 1 JSX rewritten to mirror the real mobile player
 app/styles/
   _expanded-player.css            NEW
   _design-sections.css            (unchanged; existing styles reused where possible)
