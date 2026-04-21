@@ -421,7 +421,9 @@
    OS-level volume control + lockscreen affordances, and the bitrate detail
    reads as engineer-flavored noise on a small screen. */
 @media (max-width: 899px) {
-  .ep-controls .ep-status .lbl { display: none; }
+  /* Drop the entire status block — the play/pause icon already conveys
+     state, and a "Live" pill on the topbar advertises the stream. */
+  .ep-controls .ep-status { display: none; }
   .ep-controls .vol { display: none; }
 }
 

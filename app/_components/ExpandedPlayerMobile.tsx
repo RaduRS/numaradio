@@ -60,21 +60,6 @@ function ListenPane() {
         <div className="ep-listen-title">{live?.title ?? "—"}</div>
         <div className="ep-listen-artist">{live?.artistDisplay ?? "—"}</div>
       </div>
-      <div className="ep-listen-lena">
-        <div style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--accent)",
-          letterSpacing: "0.2em",
-          textTransform: "uppercase",
-          marginBottom: 6,
-        }}>Lena · on the mic</div>
-        <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-          &ldquo;Alright, night owls — that&apos;s Russell sliding into frame.
-          Someone in Lisbon asked for slow and a little heartbroken. We&apos;ll
-          pick the tempo back up after this one, promise.&rdquo;
-        </div>
-      </div>
       <div className="ep-controls">
         <button
           className="ep-listen-play"
@@ -96,6 +81,21 @@ function ListenPane() {
           </div>
         </div>
         <VolumeControl />
+      </div>
+      <div className="ep-listen-lena">
+        <div style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          color: "var(--accent)",
+          letterSpacing: "0.2em",
+          textTransform: "uppercase",
+          marginBottom: 6,
+        }}>Lena · on the mic</div>
+        <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+          &ldquo;Alright, night owls — that&apos;s Russell sliding into frame.
+          Someone in Lisbon asked for slow and a little heartbroken. We&apos;ll
+          pick the tempo back up after this one, promise.&rdquo;
+        </div>
       </div>
     </div>
   );
