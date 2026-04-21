@@ -13,6 +13,7 @@
     "refresh-rotation": "tsx scripts/refresh-rotation.ts",
     "queue:push": "tsx scripts/queue-push.ts",
     "queue:daemon": "tsx workers/queue-daemon/index.ts",
+    "song:worker": "tsx workers/song-worker/index.ts",
     "test": "node --test --experimental-strip-types '{lib,scripts,workers}/**/*.test.ts'"
   },
   "dependencies": {
