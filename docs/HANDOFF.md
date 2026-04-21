@@ -174,6 +174,30 @@ to the MiniMax endpoint. See
   and `numa-rotation-refresher.timer` without a password. Scope is a strict
   Cmnd_Alias — no wildcards, both `foo` and `foo.service` spellings listed.
 
+**WSL auto-start on Windows boot — 2026-04-21**
+Orion runs Numa Radio inside WSL2. The Windows scheduled task
+`Start WSL (Numa Radio)` now has three triggers (AtStartup / AtLogOn /
+SessionUnlock) and runs as S4U, so the radio stack comes back on air after
+unattended reboots without anyone logging in. Installer lives at
+`deploy/windows/install-autostart.ps1` (run elevated after a Windows reinstall).
+Backup of the pre-change task at `deploy/windows/Start-WSL-NumaRadio.backup.xml`.
+
+Context: on 2026-04-21 at 02:19:56 BST the host BSOD'd (bugcheck `0x0000000A`)
+and auto-rebooted at 02:31, but the stream stayed down until 07:47 because the
+task's only trigger was "at user logon." S4U + AtStartup closes that gap.
+
+**After any full Windows reboot, verify from a phone or another device:**
+`curl -sI https://api.numaradio.com/stream` should return `200` within ~90s of
+POST, *without* logging into Orion. If it doesn't, check:
+`powershell.exe Get-ScheduledTaskInfo -TaskName 'Start WSL (Numa Radio)'`
+→ `LastTaskResult` (0 = success), and the
+`Microsoft-Windows-TaskScheduler/Operational` event log.
+
+Rollback: `schtasks /create /tn "Start WSL (Numa Radio)" /xml deploy\windows\Start-WSL-NumaRadio.backup.xml /f`.
+
+Spec: `docs/superpowers/specs/2026-04-21-wsl-autostart-design.md`
+Plan: `docs/superpowers/plans/2026-04-21-wsl-autostart.md`
+
 **Radio-feel overhaul — 2026-04-20 (final commit of the day)**
 Spec: `docs/superpowers/specs/2026-04-20-radio-feel-design.md`
 Plan: `docs/superpowers/plans/2026-04-20-radio-feel.md`
