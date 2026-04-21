@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayer } from "./PlayerProvider";
 import { ExpandedPlayerDesktop } from "./ExpandedPlayerDesktop";
 import { ExpandedPlayerMobile } from "./ExpandedPlayerMobile";
 
 export function ExpandedPlayer() {
-  const { isExpanded, collapse } = usePlayer();
+  const { isExpanded, collapse, expandSourceRect } = usePlayer();
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Esc closes — desktop only really, but cheap everywhere.
   useEffect(() => {
     if (!isExpanded) return;
     const onKey = (e: KeyboardEvent) => {
@@ -18,7 +19,6 @@ export function ExpandedPlayer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [isExpanded, collapse]);
 
-  // Lock body scroll while open so the underlying page doesn't jump.
   useEffect(() => {
     if (!isExpanded) return;
     const prev = document.body.style.overflow;
@@ -28,16 +28,43 @@ export function ExpandedPlayer() {
     };
   }, [isExpanded]);
 
+  // FLIP: capture source rect on open, set initial transform on the shell,
+  // then add `.open` next frame so CSS animates to identity.
+  useLayoutEffect(() => {
+    if (!isExpanded) {
+      setMounted(false);
+      return;
+    }
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    if (expandSourceRect) {
+      const targetRect = shell.getBoundingClientRect();
+      const dx = expandSourceRect.left - targetRect.left;
+      const dy = expandSourceRect.top - targetRect.top;
+      const sx = expandSourceRect.width / targetRect.width;
+      const sy = expandSourceRect.height / targetRect.height;
+      shell.style.setProperty(
+        "--ep-initial-transform",
+        `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
+      );
+    } else {
+      shell.style.setProperty("--ep-initial-transform", "scale(0.9)");
+    }
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, [isExpanded, expandSourceRect]);
+
   if (!isExpanded) return null;
 
   return (
     <div
-      className="ep-root open"
+      className={`ep-root ${mounted ? "open" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label="Expanded player"
     >
-      <div className="ep-shell">
+      <div className="ep-shell" ref={shellRef}>
         <div className="ep-topbar">
           <button
             type="button"
