@@ -36,6 +36,12 @@ export function MiniPlayer() {
       onClick={(e) => expand(e.currentTarget)}
       role="button"
       tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          expand(e.currentTarget);
+        }
+      }}
     >
       <button
         className="mp-btn-play"

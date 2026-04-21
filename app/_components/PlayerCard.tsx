@@ -134,6 +134,7 @@ export function PlayerCard() {
             <VoteButtons trackId={np.trackId} />
           </span>
           <div className="now-shares">
+            {/* TODO: wire real copy/share onClick; keep stopPropagation so tapping doesn't expand the player. */}
             <button
               className="share-pill"
               aria-label="Copy link"
@@ -142,6 +143,7 @@ export function PlayerCard() {
               <CopyIcon className="" />
               Copy link
             </button>
+            {/* TODO: wire real copy/share onClick; keep stopPropagation so tapping doesn't expand the player. */}
             <button
               className="share-pill"
               aria-label="Share"
