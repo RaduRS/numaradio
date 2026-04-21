@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ShoutoutRow } from "@/lib/shoutouts";
+import { HeldShoutoutsCard } from "@/components/held-shoutouts-card";
 
 interface ListResponse {
   held: ShoutoutRow[];
@@ -47,7 +48,6 @@ export default function ShoutoutsPage() {
     "/api/shoutouts/list",
     8_000,
   );
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [composeText, setComposeText] = useState("");
   const [composing, setComposing] = useState(false);
 
@@ -80,31 +80,6 @@ export default function ShoutoutsPage() {
       toast.error(e instanceof Error ? e.message : "network error");
     } finally {
       setComposing(false);
-    }
-  }
-
-  async function act(id: string, action: "approve" | "reject") {
-    setBusyId(id);
-    try {
-      const res = await fetch(`/api/shoutouts/${id}/${action}`, {
-        method: "POST",
-      });
-      const body = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-      };
-      if (!res.ok || !body.ok) {
-        toast.error(body.error ?? `failed to ${action}`);
-      } else if (action === "approve") {
-        toast.success("Approved — Lena is on it.");
-      } else {
-        toast.success("Rejected.");
-      }
-      refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "network error");
-    } finally {
-      setBusyId(null);
     }
   }
 
@@ -174,75 +149,10 @@ export default function ShoutoutsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-3">
-            Held for review
-            <Badge className="border-[var(--warn)] text-[var(--warn)]">
-              {held.length}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {held.length === 0 ? (
-            <p className="text-sm text-fg-mute">
-              Nothing waiting. MiniMax is handling everything that&apos;s come
-              in.
-            </p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-[var(--line)]">
-              {held.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-start gap-4 py-4 first:pt-0 last:pb-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="font-mono text-xs uppercase tracking-[0.15em]">
-                        {s.requesterName ?? "anonymous"}
-                      </span>
-                      <span className="font-mono text-[10px] text-fg-mute">
-                        {fmtRelative(s.createdAt)}
-                      </span>
-                    </div>
-                    <p className="text-sm">
-                      &ldquo;{s.cleanText ?? s.rawText}&rdquo;
-                    </p>
-                    {s.cleanText && s.cleanText !== s.rawText && (
-                      <p className="mt-1 text-xs text-fg-mute">
-                        original: {s.rawText}
-                      </p>
-                    )}
-                    {s.moderationReason && (
-                      <p className="mt-1 text-xs text-fg-mute">
-                        reason: {s.moderationReason}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="default"
-                      disabled={busyId === s.id}
-                      onClick={() => act(s.id, "approve")}
-                    >
-                      {busyId === s.id ? "…" : "Approve"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busyId === s.id}
-                      onClick={() => act(s.id, "reject")}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <HeldShoutoutsCard
+        held={held}
+        onAction={refresh}
+      />
 
       <Card>
         <CardHeader>
