@@ -2,11 +2,32 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { ListenLiveButton } from "../_components/ListenLiveButton";
 
 type Platform = "ios" | "android" | "desktop";
+
+// Static placeholder used by every phone mockup on this page. One real track
+// is enough — the marketing copy isn't trying to track what's currently
+// airing, just to show what the app looks like once installed.
+const MOCK_TITLE = "Ocean Eyes";
+const MOCK_ARTIST = "Russell Ross";
+const MOCK_ARTWORK =
+  "https://f003.backblazeb2.com/file/numaradio/stations/numaradio/tracks/cmo8jf20n0007wemtlhrsp6rt/artwork/primary.jpg";
+
+function NumaTile({ size }: { size: number }) {
+  return (
+    <Image
+      src="/logo-mark.png"
+      alt="Numa Radio"
+      width={size}
+      height={size}
+      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+    />
+  );
+}
 
 const WHY = [
   {
@@ -173,8 +194,13 @@ function AppPreview() {
         </div>
         <div className="app-live">On Air</div>
       </div>
-      <div className="app-art">
-        SF
+      <div
+        className="app-art"
+        style={{
+          background: `url(${MOCK_ARTWORK}) center/cover`,
+          color: "transparent",
+        }}
+      >
         <div className="art-meta">
           <div className="track-num">Track · 04</div>
           <div className="eq" style={{ height: 10 }}>
@@ -183,8 +209,8 @@ function AppPreview() {
         </div>
       </div>
       <div className="app-track">
-        <div className="tt">Slow Fade, Brighter</div>
-        <div className="ta">Russell Ross · Nightshore EP</div>
+        <div className="tt">{MOCK_TITLE}</div>
+        <div className="ta">{MOCK_ARTIST}</div>
       </div>
       <div className="app-progress">
         <div className="fill" />
@@ -349,7 +375,9 @@ function IosPhone({ step }: { step: number }) {
             </div>
           ))}
           <div className="hs-icon numa">
-            <div className="tile">N</div>
+            <div className="tile" style={{ overflow: "hidden", padding: 0 }}>
+              <NumaTile size={48} />
+            </div>
             <div className="tile-label">Numa Radio</div>
           </div>
         </div>
@@ -407,18 +435,10 @@ function AndroidPhone({ step }: { step: number }) {
                   width: 36,
                   height: 36,
                   borderRadius: 8,
-                  background:
-                    "radial-gradient(circle at 30% 30%, var(--accent), #1A3A3A 65%),#0B0C0E",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: "var(--font-display)",
-                  fontWeight: 800,
-                  color: "#0A0D0E",
-                  fontSize: 14,
+                  overflow: "hidden",
                 }}
               >
-                N
+                <NumaTile size={36} />
               </div>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 500 }}>
@@ -469,7 +489,9 @@ function AndroidPhone({ step }: { step: number }) {
             </div>
           ))}
           <div className="hs-icon numa">
-            <div className="tile">N</div>
+            <div className="tile" style={{ overflow: "hidden", padding: 0 }}>
+              <NumaTile size={48} />
+            </div>
             <div className="tile-label">Numa Radio</div>
           </div>
         </div>
@@ -533,19 +555,9 @@ function DesktopPreview() {
               style={{
                 aspectRatio: "1",
                 borderRadius: 12,
-                background:
-                  "radial-gradient(circle at 30% 20%, #2A4E4B, transparent 60%),radial-gradient(circle at 70% 80%, #4FD1C5, transparent 55%),linear-gradient(135deg, #1A1E23, #0F1114)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: "var(--font-display)",
-                fontWeight: 800,
-                fontSize: 48,
-                letterSpacing: "-0.02em",
+                background: `url(${MOCK_ARTWORK}) center/cover`,
               }}
-            >
-              SF
-            </div>
+            />
             <div
               style={{
                 display: "flex",
@@ -587,10 +599,10 @@ function DesktopPreview() {
                   letterSpacing: "-0.01em",
                 }}
               >
-                Slow Fade, Brighter
+                {MOCK_TITLE}
               </div>
               <div style={{ fontSize: 11, color: "var(--fg-dim)" }}>
-                Russell Ross · Nightshore EP
+                {MOCK_ARTIST}
               </div>
               <div
                 style={{

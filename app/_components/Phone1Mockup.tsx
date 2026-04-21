@@ -1,8 +1,7 @@
-"use client";
-
 // Visual-only mock of the mobile expanded-player Listen tab, embedded in the
-// "06 — In Your Pocket" marketing section. Pulls real now-playing data so the
-// mock always shows whatever Lena is actually spinning right now.
+// "06 — In Your Pocket" marketing section. Static data — picking one real
+// track + artwork (Russell Ross — "Ocean Eyes") rather than auto-tracking the
+// live broadcast, since the marketing copy doesn't need to change every poll.
 
 import {
   PlayIcon,
@@ -13,14 +12,6 @@ import {
   ThumbsDownIcon,
   ShareIcon,
 } from "./Icons";
-import { useNowPlaying } from "./useNowPlaying";
-
-function initials(title: string | undefined): string {
-  if (!title) return "··";
-  const words = title.split(/\s+/).filter(Boolean);
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
 
 const TABS = [
   { label: "Listen", Icon: PlayIcon, active: true },
@@ -29,11 +20,15 @@ const TABS = [
   { label: "On Air", Icon: RadioTowerIcon },
 ];
 
+const TRACK_TITLE = "Ocean Eyes";
+const TRACK_ARTIST = "Russell Ross";
+const TRACK_ARTWORK =
+  "https://f003.backblazeb2.com/file/numaradio/stations/numaradio/tracks/cmo8jf20n0007wemtlhrsp6rt/artwork/primary.jpg";
+
 export function Phone1Mockup() {
-  const np = useNowPlaying();
-  const title = np.title ?? "—";
-  const artist = np.artistDisplay ?? "—";
-  const cover = np.artworkUrl;
+  const title = TRACK_TITLE;
+  const artist = TRACK_ARTIST;
+  const cover = TRACK_ARTWORK;
 
   return (
     <div className="phone">
@@ -107,22 +102,11 @@ export function Phone1Mockup() {
         <div style={{
           aspectRatio: "1",
           borderRadius: 14,
-          background: cover
-            ? `url(${cover}) center/cover`
-            : "radial-gradient(circle at 30% 20%, #2A4E4B, transparent 60%), radial-gradient(circle at 70% 80%, var(--accent), transparent 55%), linear-gradient(135deg, #1A1E23, #0F1114)",
+          background: `url(${cover}) center/cover`,
           position: "relative",
           overflow: "hidden",
           boxShadow: "0 12px 28px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04)",
         }}>
-          {!cover && (
-            <div style={{
-              position: "absolute", inset: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "var(--font-display)", fontWeight: 800,
-              fontSize: 48, color: "var(--fg)",
-              letterSpacing: "-0.03em", fontStretch: "125%",
-            }}>{initials(np.title)}</div>
-          )}
           {/* Floating Share pill, bottom-left */}
           <div style={{
             position: "absolute", left: 6, bottom: 6,
