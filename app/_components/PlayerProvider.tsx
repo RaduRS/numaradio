@@ -32,6 +32,11 @@ type PlayerState = {
   isMuted: boolean;
   setVolume: (v: number) => void;
   toggleMute: () => void;
+  // --- expanded-player additions ---
+  isExpanded: boolean;
+  expand: (sourceEl?: Element | null) => void;
+  collapse: () => void;
+  expandSourceRect: DOMRect | null;
 };
 
 const PlayerContext = createContext<PlayerState | null>(null);
@@ -47,6 +52,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<PlayerStatus>("idle");
   const [volume, setVolumeState] = useState<number>(DEFAULT_VOLUME);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandSourceRect, setExpandSourceRect] = useState<DOMRect | null>(null);
   // User intent: "I want the stream playing". Stays true across error/retry
   // cycles so the player keeps trying to reconnect; only flipped off by an
   // explicit pause() call.
@@ -108,6 +115,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       return next;
     });
+  }, []);
+
+  const expand = useCallback((sourceEl?: Element | null) => {
+    setExpandSourceRect(sourceEl ? sourceEl.getBoundingClientRect() : null);
+    setIsExpanded(true);
+  }, []);
+
+  const collapse = useCallback(() => {
+    setIsExpanded(false);
+    // Keep the source rect — the overlay uses it to animate back to the
+    // source position during the exit transition. Clear it a beat later.
+    window.setTimeout(() => setExpandSourceRect(null), 400);
   }, []);
 
   const clearRetry = useCallback(() => {
@@ -280,6 +299,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     isMuted,
     setVolume,
     toggleMute,
+    isExpanded,
+    expand,
+    collapse,
+    expandSourceRect,
   };
 
   return (
