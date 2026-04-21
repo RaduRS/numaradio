@@ -1,49 +1,44 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-21 (evening — moderator profanity prefilter shipped;
-Docker-in-WSL migration script prepared but not yet run — needs the
-operator to disable Docker Desktop WSL integration and run one script.)
+Last updated: 2026-04-21 (evening — Docker-in-WSL migration complete;
+NanoClaw now survives unattended reboots)
 
-## ⚠ PENDING: Docker-in-WSL cutover (2 steps, ~10 min)
+## Docker Engine in WSL — LIVE (2026-04-21 evening)
 
-NanoClaw currently runs on Docker Desktop, which needs a logged-in
-Windows session. After an unattended reboot NanoClaw crash-loops until
-someone signs in. The fix: move to native Docker Engine inside WSL, so
-`dockerd` starts with the distro (same pattern as Icecast / Liquidsoap /
-cloudflared). **Script is ready at `deploy/install-docker-ce.sh`.**
+NanoClaw's container runtime is now **native Docker CE running as a
+systemd unit inside the Ubuntu WSL distro** instead of Docker Desktop.
+`dockerd` starts with the distro, same pattern as Icecast / Liquidsoap /
+cloudflared. No Windows session needed — an unattended reboot brings
+everything back up, including NanoClaw and the Telegram
+shoutout-approval bot.
 
-To complete (when you're back):
+Details live at rest:
+- `docker.service` is `enabled` (starts on every WSL boot) and `active`.
+- `Operating System: Ubuntu 24.04.4 LTS`, `Server Version: 29.4.1`,
+  `Docker Root Dir: /var/lib/docker` (images on the WSL filesystem).
+- `marku` is in the `docker` group — no sudo needed for `docker`
+  commands in a fresh shell.
+- Docker Desktop is quit (no longer autostarts on Windows login) and
+  its WSL integration for Ubuntu is disabled. Safe to uninstall it
+  entirely if you want to reclaim Windows-side RAM.
 
-1. **On Windows:** open Docker Desktop → Settings → Resources → WSL
-   Integration → UNCHECK your Ubuntu distro → Apply & restart. This
-   removes Docker Desktop's `/mnt/wsl/docker-desktop` proxy so the new
-   `dockerd` can own `/var/run/docker.sock`. (Don't uninstall Docker
-   Desktop yet — we can do that later as cleanup.)
+Day-to-day commands:
+- `docker ps`, `docker logs -f <name>`, `docker events`, `docker stats`
+- `lazydocker` — full-screen TUI installed alongside the migration.
 
-2. **In WSL:**
-   ```bash
-   cd ~/saas/numaradio
-   ./deploy/install-docker-ce.sh
-   ```
-   You'll be prompted for your sudo password once at the top. The
-   script is idempotent; safe to re-run. It installs docker-ce from
-   Docker's official apt repo, enables `docker.service`, adds you to
-   the `docker` group, installs `lazydocker` (TUI), and restarts
-   NanoClaw onto the new socket.
+**Acceptance test** (to run whenever convenient): reboot Windows
+without logging in; from a phone, submit a shoutout containing "fuck"
+on numaradio.com. A Telegram DM from `@nanoOrion_bot` should arrive
+within ~90s, confirming the full stack — WSL auto-start + dockerd +
+NanoClaw + Telegram + held-notify — all survive an unattended reboot.
 
-**Verification after the script completes:**
-- `docker info | head` should NOT contain "Docker Desktop".
-- `systemctl --user status nanoclaw` should be `active (running)`.
-- Send a test message to `@nanoOrion_bot` → agent replies in ~10s.
-- Ultimate acceptance: reboot Windows without logging in, then from
-  your phone submit a shoutout containing "fuck" on numaradio.com → a
-  Telegram DM from `@nanoOrion_bot` arrives within ~90s.
-
-Spec: `docs/superpowers/specs/2026-04-21-docker-in-wsl-design.md`
-
-Rollback if anything goes wrong: `sudo systemctl disable --now docker`,
+Rollback path (still works): `sudo systemctl disable --now docker`,
 re-check WSL integration in Docker Desktop, `systemctl --user restart
-nanoclaw`. Back to the old state.
+nanoclaw`.
+
+Script that did the migration (idempotent, safe to re-run):
+`deploy/install-docker-ce.sh`. Spec:
+`docs/superpowers/specs/2026-04-21-docker-in-wsl-design.md`.
 
 ---
 
