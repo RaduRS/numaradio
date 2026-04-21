@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePlayer } from "./PlayerProvider";
+import { ExpandedPlayerDesktop } from "./ExpandedPlayerDesktop";
 
 export function ExpandedPlayer() {
   const { isExpanded, collapse } = usePlayer();
@@ -50,8 +51,7 @@ export function ExpandedPlayer() {
           <div className="ep-topbar-center">● On Air — Lena</div>
           <div style={{ width: 36 }} />
         </div>
-        {/* body placeholder — Task 3+ fills this */}
-        <div style={{ flex: 1 }} />
+        <ExpandedPlayerDesktop />
       </div>
     </div>
   );
