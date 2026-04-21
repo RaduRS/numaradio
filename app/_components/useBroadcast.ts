@@ -1,4 +1,8 @@
 "use client";
+// TODO(consolidate): Broadcast.tsx has a private useBroadcastFeed with the
+// same API + tighter boundary polling. Unify when the landing page is
+// refactored — both hooks fire concurrently while the overlay is open on `/`,
+// causing a duplicate `numa:shoutout-ended` dispatch (idempotent, wasteful).
 import { useEffect, useRef, useState } from "react";
 
 const POLL_MS = 6_000;
