@@ -1,0 +1,148 @@
+import type { Pool } from "pg";
+
+export type ApproveCode =
+  | "not_found"
+  | "already_aired"
+  | "not_held"
+  | "generate_failed";
+export type RejectCode = "not_found" | "already_aired" | "not_held";
+
+export interface GenerateShoutoutResult {
+  trackId: string;
+  sourceUrl: string;
+  queueItemId: string;
+  durationHintSeconds?: number;
+}
+
+export interface GenerateShoutoutInput {
+  text: string;
+  shoutoutRowId: string;
+  requesterName?: string;
+  pool: Pool;
+}
+
+export type GenerateShoutoutFn = (
+  input: GenerateShoutoutInput,
+) => Promise<GenerateShoutoutResult>;
+
+export interface ApproveInput {
+  id: string;
+  operator: string;
+  pool: Pool;
+  generate: GenerateShoutoutFn;
+}
+
+export interface RejectInput {
+  id: string;
+  operator: string;
+  pool: Pool;
+  reasonHint?: string;
+}
+
+export type ApproveResult =
+  | { ok: true; trackId: string; queueItemId: string }
+  | { ok: false; code: ApproveCode; error?: string };
+
+export type RejectResult =
+  | { ok: true }
+  | { ok: false; code: RejectCode };
+
+async function classifyMissInto(
+  pool: Pool,
+  id: string,
+): Promise<"not_found" | "already_aired" | "not_held"> {
+  const { rows } = await pool.query<{
+    deliveryStatus: string;
+    moderationStatus: string;
+  }>(
+    `SELECT "deliveryStatus", "moderationStatus" FROM "Shoutout" WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  if (rows.length === 0) return "not_found";
+  if (rows[0].deliveryStatus === "aired") return "already_aired";
+  return "not_held";
+}
+
+export async function approveShoutout(input: ApproveInput): Promise<ApproveResult> {
+  const { id, operator, pool, generate } = input;
+  const reserved = await pool.query<{
+    id: string;
+    rawText: string;
+    cleanText: string | null;
+    requesterName: string | null;
+  }>(
+    `UPDATE "Shoutout"
+        SET "moderationStatus" = 'allowed',
+            "moderationReason" = $2,
+            "deliveryStatus"   = 'pending',
+            "updatedAt"        = NOW()
+      WHERE id = $1
+        AND "moderationStatus" = 'held'
+        AND "deliveryStatus"   != 'aired'
+      RETURNING id, "rawText", "cleanText", "requesterName"`,
+    [id, `approved_by:${operator}`],
+  );
+
+  if (reserved.rowCount === 0) {
+    const code = await classifyMissInto(pool, id);
+    return { ok: false, code };
+  }
+
+  const row = reserved.rows[0];
+  const text = (row.cleanText ?? row.rawText).trim();
+
+  try {
+    const gen = await generate({
+      text,
+      shoutoutRowId: id,
+      requesterName: row.requesterName ?? undefined,
+      pool,
+    });
+    await pool.query(
+      `UPDATE "Shoutout"
+          SET "deliveryStatus"    = 'aired',
+              "linkedQueueItemId" = $2,
+              "broadcastText"     = $3,
+              "updatedAt"         = NOW()
+        WHERE id = $1`,
+      [id, gen.queueItemId, text.slice(0, 500)],
+    );
+    return { ok: true, trackId: gen.trackId, queueItemId: gen.queueItemId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "generate_failed";
+    await pool.query(
+      `UPDATE "Shoutout"
+          SET "deliveryStatus"   = 'failed',
+              "moderationReason" = $2,
+              "updatedAt"        = NOW()
+        WHERE id = $1`,
+      [id, msg.slice(0, 200)],
+    );
+    return { ok: false, code: "generate_failed", error: msg };
+  }
+}
+
+export async function rejectShoutout(input: RejectInput): Promise<RejectResult> {
+  const { id, operator, pool, reasonHint } = input;
+  const clipped = reasonHint ? reasonHint.slice(0, 200) : undefined;
+  const reason = clipped
+    ? `rejected_by:${operator} reason=${clipped}`
+    : `rejected_by:${operator}`;
+
+  const res = await pool.query(
+    `UPDATE "Shoutout"
+        SET "moderationStatus" = 'blocked',
+            "deliveryStatus"   = 'blocked',
+            "moderationReason" = $2,
+            "updatedAt"        = NOW()
+      WHERE id = $1
+        AND "moderationStatus" = 'held'`,
+    [id, reason],
+  );
+
+  if (res.rowCount === 0) {
+    const code = await classifyMissInto(pool, id);
+    return { ok: false, code };
+  }
+  return { ok: true };
+}
