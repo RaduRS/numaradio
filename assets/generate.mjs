@@ -241,20 +241,16 @@ masters.lockupHorizontal = (w, h) =>
   );
 
 // Stacked lockup — profile pics where both mark and wordmark fit a square.
-// The eyebrow ("AI RADIO · 24/7") anchors to the wordmark baseline returned
-// by stackedLockup so it floats one consistent gap below the wordmark even
-// if the inner ratios are tuned.
-masters.lockupStacked = (size) => {
-  const stack = stackedLockup(size / 2, size / 2, size * 0.38, size * 0.085);
-  const eyebrowY = stack.wordBaselineY + size * 0.085 * 0.85;
-  return svg(
+// No eyebrow tagline — at avatar size the wordmark is the brand and any
+// caption becomes mush. Real broadcaster channel art (BBC, NPR, Spotify)
+// works the same way.
+masters.lockupStacked = (size) =>
+  svg(
     size,
     size,
     `${bgFill(size, size)}
-     ${stack.svg}
-     ${eyebrow(size / 2, eyebrowY, size * 0.032, "AI RADIO · 24/7", { anchor: "middle" })}`
+     ${stackedLockup(size / 2, size / 2, size * 0.38, size * 0.085).svg}`
   );
-};
 
 // YouTube banner (2560x1440) with safe area 1546x423 centred
 masters.youtubeBanner = () => {
@@ -274,13 +270,16 @@ masters.youtubeBanner = () => {
      <!-- safe area content -->
      <g transform="translate(${sx},${sy})">
        ${horizontalLockup(safeW / 2, safeH / 2 - 30, 180, 120)}
-       ${eyebrow(safeW / 2, safeH / 2 + 80, 22, "AI RADIO  ·  ALWAYS ON  ·  LISTEN AT NUMARADIO.COM", { anchor: "middle" })}
+       ${eyebrow(safeW / 2, safeH / 2 + 80, 22, "THE STATION THAT NEVER SLEEPS  ·  LISTEN AT NUMARADIO.COM", { anchor: "middle" })}
      </g>
-     <!-- top-left brand pin + live chip (visible on desktop/TV only) -->
+     <!-- top-left brand pin + REQUESTS ON AIR caption + live chip
+          (visible on desktop/TV outside the safe area) -->
      <g transform="translate(120,120)">
        ${logoMark(30, 30, 60, { halo: false })}
-       <text x="80" y="40" fill="${C.fg}" font-family="ArchivoBlack"
+       <text x="80" y="34" fill="${C.fg}" font-family="ArchivoBlack"
              font-size="28" letter-spacing="0.04em">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
+       <text x="80" y="60" fill="${C.fgDim}" font-family="JBMono"
+             font-size="13" letter-spacing="0.22em">REQUESTS ON AIR</text>
      </g>
      ${liveChip(w - 260, 120, 1.4)}
      <!-- bottom-right corner accent -->
