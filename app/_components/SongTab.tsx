@@ -198,18 +198,18 @@ export function SongTab() {
   }
 
   if (pending) {
-    const captions: Record<string, string> = {
-      queued: "queued",
-      processing: "composing",
-      finalizing: "painting the cover",
+    const headings: Record<string, string> = {
+      queued: "Queued…",
+      processing: "Composing…",
+      finalizing: "Painting the cover…",
     };
-    const caption = status?.status ? captions[status.status] ?? status.status : "queued";
+    const heading =
+      (status?.status && headings[status.status]) ?? "Queued…";
     return (
       <div className="req-input-group">
         <div style={{ fontFamily: "var(--font-display)", fontSize: 20 }}>
-          Generating…
+          {heading}
         </div>
-        <div style={{ color: "var(--fg-mute)", fontSize: 13 }}>{caption}</div>
         {status?.queuePosition && status.queuePosition > 0 ? (
           <div style={{ color: "var(--fg-mute)", fontSize: 13 }}>
             {status.queuePosition} ahead of you · est. {fmtWait(status.estWaitSeconds)}

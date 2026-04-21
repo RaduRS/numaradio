@@ -74,15 +74,19 @@ export async function startMusicGeneration(
   };
   const node = data.data ?? data;
   const taskId = node.task_id ?? data.task_id;
-  if (!taskId) {
-    throw new Error("minimax music start: no task_id in response");
+  const immediateAudio = node.audio ?? data.audio;
+  // music-2.6 responds in two shapes: async with {task_id,...} for the
+  // poll loop, or sync with {audio,...} when generation finishes inside
+  // the initial request window. Reject only if neither is present.
+  if (!taskId && !immediateAudio) {
+    throw new Error("minimax music start: neither task_id nor audio in response");
   }
   const durationMs = normalizeDurationMs(
     node.extra_info?.duration ?? data.extra_info?.duration,
   );
   return {
-    taskId,
-    immediateAudioUrl: node.audio ?? data.audio,
+    taskId: taskId ?? "",
+    immediateAudioUrl: immediateAudio,
     durationMs: durationMs || undefined,
   };
 }
