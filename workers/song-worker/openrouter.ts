@@ -51,7 +51,7 @@ export async function generateArtwork(prompt: string): Promise<Buffer> {
     },
     body: JSON.stringify({
       model: IMAGE_MODEL,
-      modalities: ["image", "text"],
+      modalities: ["image"],
       messages: [
         {
           role: "user",
