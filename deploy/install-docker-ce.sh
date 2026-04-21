@@ -39,10 +39,28 @@ if ! grep -qE "^\s*systemd\s*=\s*true" /etc/wsl.conf 2>/dev/null; then
   die "/etc/wsl.conf does not have [boot] systemd=true. Add it, then run 'wsl --shutdown' from Windows and reopen the distro."
 fi
 
-if [[ -d /mnt/wsl/docker-desktop ]]; then
-  warn "Docker Desktop's WSL integration is STILL ACTIVE (/mnt/wsl/docker-desktop exists)."
-  warn "Open Docker Desktop → Settings → Resources → WSL Integration and uncheck this distro, then rerun."
-  die  "Aborting to avoid socket/CLI conflict with Docker Desktop."
+# The actual conflict points when Docker Desktop's WSL integration is on:
+#   - /usr/bin/docker is a symlink INTO /mnt/wsl/docker-desktop/cli-tools
+#   - /var/run/docker.sock is a proxy to Docker Desktop's engine
+# When integration is off, both are absent — the bare /mnt/wsl/docker-desktop
+# directory may linger (it's shared from Docker Desktop's internal helper
+# distro), but it does not shadow our tools.
+
+if [[ -L /usr/bin/docker ]]; then
+  link_target="$(readlink /usr/bin/docker || true)"
+  if [[ "$link_target" == *docker-desktop* ]]; then
+    warn "/usr/bin/docker is a symlink into Docker Desktop: $link_target"
+    warn "Open Docker Desktop → Settings → Resources → WSL Integration and uncheck this distro, Apply & restart, then rerun."
+    die  "Aborting to avoid CLI conflict with Docker Desktop."
+  fi
+fi
+
+if [[ -S /var/run/docker.sock ]]; then
+  if command -v docker >/dev/null 2>&1 && \
+     docker info 2>&1 | grep -qE "Operating System:.*Docker Desktop"; then
+    warn "/var/run/docker.sock is currently served by Docker Desktop."
+    die  "Aborting — disable WSL integration in Docker Desktop and rerun."
+  fi
 fi
 
 log "Preconditions OK. Acquiring sudo (you'll be prompted once)…"
