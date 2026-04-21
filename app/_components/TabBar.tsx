@@ -1,22 +1,14 @@
 "use client";
 
-import type { ComponentType, SVGProps } from "react";
+import type { ComponentType } from "react";
 import {
   MegaphoneIcon,
   SparklesIcon,
   PlayIcon,
+  RadioTowerIcon,
 } from "./Icons";
 
 export type TabId = "listen" | "request" | "shout" | "onair";
-
-function RadioTowerIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" {...props}>
-      <circle cx="10" cy="10" r="1.5" />
-      <path d="M7.5 7.5a3.5 3.5 0 015 0M5.5 5.5a6.5 6.5 0 019 0M10 12l-2 6h4z" />
-    </svg>
-  );
-}
 
 type TabIcon = ComponentType<{ className?: string }>;
 

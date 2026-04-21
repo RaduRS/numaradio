@@ -11,6 +11,7 @@ import {
   Music2,
   Pause,
   Play,
+  RadioTower,
   Rss,
   Send,
   Share2,
@@ -91,6 +92,10 @@ export function MastodonIcon({ className = "", size }: IconProps) {
 
 export function RssIcon({ className = "", size }: IconProps) {
   return <Rss className={className} size={size} strokeWidth={1.6} />;
+}
+
+export function RadioTowerIcon({ className = "", size }: IconProps) {
+  return <RadioTower className={className} size={size} strokeWidth={1.6} />;
 }
 
 export function ThumbsUpIcon({ className = "", size }: IconProps) {
