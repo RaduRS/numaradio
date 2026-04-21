@@ -5,6 +5,7 @@ import { usePlayer } from "./PlayerProvider";
 import { useBroadcast } from "./useBroadcast";
 import { PauseIcon, PlayIcon, LoadingIcon } from "./Icons";
 import { ListenerCount } from "./ListenerCount";
+import { RequestForm } from "./RequestForm";
 
 function initials(title: string | undefined): string {
   if (!title) return "··";
@@ -83,8 +84,38 @@ export function ExpandedPlayerMobile() {
     <div className="ep-mobile">
       <div className="ep-mobile-body">
         {tab === "listen" && <ListenPane />}
-        {tab === "request" && <div>Request content — Task 7</div>}
-        {tab === "shout" && <div>Shout content — Task 7</div>}
+        {tab === "request" && (
+          <div style={{ paddingTop: 4 }}>
+            <h3 style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontStretch: "115%",
+              fontSize: 22,
+              lineHeight: 1,
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}>
+              To the<br />booth.
+            </h3>
+            <RequestForm initialTab="song" />
+          </div>
+        )}
+        {tab === "shout" && (
+          <div style={{ paddingTop: 4 }}>
+            <h3 style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontStretch: "115%",
+              fontSize: 22,
+              lineHeight: 1,
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}>
+              Say it<br />on air.
+            </h3>
+            <RequestForm initialTab="shout" />
+          </div>
+        )}
         {tab === "onair" && <div>On Air content — Task 9</div>}
       </div>
       <TabBar active={tab} onChange={setTab} />
