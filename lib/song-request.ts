@@ -86,6 +86,7 @@ export async function fetchSongRequestPublic(id: string) {
           id: true,
           title: true,
           artistDisplay: true,
+          durationSeconds: true,
           assets: {
             where: { assetType: { in: ["audio_stream", "artwork_primary"] } },
             select: { assetType: true, publicUrl: true },

@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
+import { parseBuffer } from "music-metadata";
 import { profanityPrefilter } from "../../lib/moderate.ts";
 import {
   startMusicGeneration,
@@ -171,6 +172,20 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
   if (!audioRes.ok) throw new Error(`minimax audio download ${audioRes.status}`);
   const audioBytes = Buffer.from(await audioRes.arrayBuffer());
 
+  // MiniMax's sync-mode response skips extra_info.duration, so fall back to
+  // probing the downloaded MP3 (same approach as scripts/ingest-seed.ts).
+  let durationSeconds = durationMs > 0 ? Math.round(durationMs / 1000) : null;
+  if (durationSeconds === null) {
+    try {
+      const probed = await parseBuffer(audioBytes, { mimeType: "audio/mpeg" });
+      if (probed.format.duration && probed.format.duration > 0) {
+        durationSeconds = Math.round(probed.format.duration);
+      }
+    } catch (err) {
+      console.warn(`[song-worker] duration probe failed for ${job.id}: ${String(err)}`);
+    }
+  }
+
   const trackId = randomUUID();
   const audioKey = `stations/${STATION_SLUG}/tracks/${trackId}/audio/stream.mp3`;
   const artworkKey = `stations/${STATION_SLUG}/tracks/${trackId}/artwork/primary.png`;
@@ -190,7 +205,7 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
       airingPolicy: "library",
       safetyStatus: "approved",
       trackStatus: "ready",
-      durationSeconds: durationMs > 0 ? Math.round(durationMs / 1000) : null,
+      durationSeconds,
       assets: {
         create: [
           {
@@ -200,7 +215,7 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
             publicUrl: audioUrl,
             mimeType: "audio/mpeg",
             byteSize: audioBytes.length,
-            durationSeconds: durationMs > 0 ? Math.round(durationMs / 1000) : null,
+            durationSeconds,
           },
           {
             assetType: "artwork_primary",

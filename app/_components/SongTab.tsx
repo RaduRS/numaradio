@@ -32,6 +32,7 @@ interface StatusResponse {
   audioUrl?: string;
   artworkUrl?: string;
   trackId?: string | null;
+  durationSeconds?: number | null;
   isInstrumental?: boolean;
   lyricsFallback?: boolean;
   queuePosition?: number;
@@ -46,6 +47,13 @@ const ARTIST_MAX = 40;
 function fmtWait(secs: number | undefined): string {
   if (!secs || secs <= 0) return "< 1 min";
   return `${Math.ceil(secs / 60)} min`;
+}
+
+function fmtDuration(secs: number | null | undefined): string | null {
+  if (!secs || secs <= 0) return null;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export function SongTab() {
@@ -153,6 +161,7 @@ export function SongTab() {
           </div>
           <div style={{ color: "var(--fg-mute)", fontSize: 13, marginTop: 2 }}>
             by {status.finalArtistName}
+            {fmtDuration(status.durationSeconds) ? ` · ${fmtDuration(status.durationSeconds)}` : ""}
           </div>
           {status.artistNameSubstituted ? (
             <div style={{ color: "var(--fg-mute)", fontSize: 12, marginTop: 6 }}>

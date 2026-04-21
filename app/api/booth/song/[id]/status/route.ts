@@ -44,6 +44,7 @@ export async function GET(
       isInstrumental: row.isInstrumental,
       lyricsFallback: row.lyricsFallback,
       trackId: row.trackId,
+      durationSeconds: row.track?.durationSeconds ?? null,
       queuePosition,
       estWaitSeconds,
     },
