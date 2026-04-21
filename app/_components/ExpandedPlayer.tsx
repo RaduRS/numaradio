@@ -28,6 +28,30 @@ export function ExpandedPlayer() {
     };
   }, [isExpanded]);
 
+  // Swipe down to close on touch devices. Threshold 80 px.
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dy = t.clientY - start.y;
+    const dx = Math.abs(t.clientX - start.x);
+    if (dy > 80 && dx < 60) collapse();
+  }
+
+  // Focus the chevron on open so keyboard users can Esc / Enter to dismiss.
+  const chevRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!mounted) return;
+    chevRef.current?.focus();
+  }, [mounted]);
+
   // FLIP: capture source rect on open, set initial transform on the shell,
   // then add `.open` next frame so CSS animates to identity.
   useLayoutEffect(() => {
@@ -63,10 +87,13 @@ export function ExpandedPlayer() {
       role="dialog"
       aria-modal="true"
       aria-label="Expanded player"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       <div className="ep-shell" ref={shellRef}>
         <div className="ep-topbar">
           <button
+            ref={chevRef}
             type="button"
             className="ep-chev"
             onClick={collapse}
