@@ -4,7 +4,7 @@ import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { EmailCta } from "./EmailCta";
 
-const SUBMIT_EMAIL = "submit@numaradio.com";
+const SUBMIT_EMAIL = "hello@numaradio.com";
 
 export const metadata: Metadata = {
   title: "Submit Music — Numa Radio",
