@@ -42,20 +42,46 @@ const jbMonoB64 = fs
   .readFileSync(path.join(FONTS_DIR, "JetBrainsMono-Regular.ttf"))
   .toString("base64");
 
+// macOS only: also drop the TTFs into ~/Library/Fonts so sharp/libvips's
+// fontconfig lookup can find them by family name. Browsers see the embedded
+// base64 src in the SVG; libvips ignores @font-face data URIs and matches
+// against installed system fonts instead — the PNGs render in fallback weight
+// (a thin sans) without this. Idempotent: only copies if the destination is
+// missing or older than the source.
+if (process.platform === "darwin") {
+  const sysFontsDir = path.join(process.env.HOME ?? "", "Library", "Fonts");
+  fs.mkdirSync(sysFontsDir, { recursive: true });
+  for (const f of ["Archivo-Black.ttf", "Archivo-Medium.ttf", "JetBrainsMono-Regular.ttf"]) {
+    const src = path.join(FONTS_DIR, f);
+    const dst = path.join(sysFontsDir, f);
+    const srcStat = fs.statSync(src);
+    let dstStat;
+    try { dstStat = fs.statSync(dst); } catch { /* missing */ }
+    if (!dstStat || dstStat.mtimeMs < srcStat.mtimeMs) {
+      fs.copyFileSync(src, dst);
+      console.log(`✓ installed ${f} → ~/Library/Fonts/`);
+    }
+  }
+}
+
+// Use the TTFs' actual family names (as recorded in their `name` tables) so
+// both the browser and librsvg/fontconfig pick them up. The browser uses the
+// embedded base64 src; sharp/libvips falls back to a system font with the
+// same family name (install the TTFs to ~/Library/Fonts/ on macOS).
 const fontFaceDefs = `
   <style type="text/css"><![CDATA[
     @font-face {
-      font-family: "ArchivoBlack";
+      font-family: "Archivo Black";
       src: url(data:font/ttf;base64,${archivoBlackB64}) format("truetype");
       font-weight: 900;
     }
     @font-face {
-      font-family: "ArchivoMed";
+      font-family: "Archivo Medium";
       src: url(data:font/ttf;base64,${archivoMediumB64}) format("truetype");
       font-weight: 500;
     }
     @font-face {
-      font-family: "JBMono";
+      font-family: "JetBrains Mono";
       src: url(data:font/ttf;base64,${jbMonoB64}) format("truetype");
       font-weight: 400;
     }
@@ -131,7 +157,7 @@ const wordmark = (
   { color = C.fg, tracking = "0.04em", anchor = "start" } = {},
 ) => `
   <text x="${x}" y="${y}" fill="${color}"
-        font-family="ArchivoBlack" font-size="${size}"
+        font-family="Archivo Black" font-size="${size}"
         letter-spacing="${tracking}" text-anchor="${anchor}"
         dominant-baseline="alphabetic">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
 `;
@@ -139,7 +165,7 @@ const wordmark = (
 /** Mono eyebrow text. */
 const eyebrow = (x, y, size, text, { color = C.fgDim, anchor = "start" } = {}) => `
   <text x="${x}" y="${y}" fill="${color}"
-        font-family="JBMono" font-size="${size}"
+        font-family="JetBrains Mono" font-size="${size}"
         letter-spacing="0.22em" text-anchor="${anchor}"
         dominant-baseline="alphabetic">${text}</text>
 `;
@@ -154,7 +180,7 @@ const liveChip = (x, y, scale = 1) => {
             stroke="${C.red}" stroke-opacity="0.55" stroke-width="${1 * scale}"/>
       <circle cx="${16 * scale}" cy="${h / 2}" r="${5 * scale}" fill="${C.red}" filter="url(#glowSm)"/>
       <text x="${30 * scale}" y="${h / 2 + 4.5 * scale}" fill="${C.fg}"
-            font-family="JBMono" font-size="${12 * scale}"
+            font-family="JetBrains Mono" font-size="${12 * scale}"
             letter-spacing="0.22em">LIVE</text>
     </g>
   `;
@@ -309,21 +335,21 @@ masters.youtubeBanner = () => {
 
      <!-- RIGHT column: editorial hero stack, left-aligned at rightStartX -->
      <text x="${rightStartX}" y="${eyebrowBaselineY}" fill="${C.fgDim}"
-           font-family="JBMono" font-size="${eyebrowSize}" letter-spacing="0.28em"
+           font-family="JetBrains Mono" font-size="${eyebrowSize}" letter-spacing="0.28em"
            dominant-baseline="alphabetic">EST. 2026  ·  REQUESTS ON AIR</text>
 
      <text x="${rightStartX}" y="${headBaseline(0)}" fill="${C.fg}"
-           font-family="ArchivoBlack" font-size="${headSize}"
+           font-family="Archivo Black" font-size="${headSize}"
            letter-spacing="-0.005em">THE STATION</text>
      <text x="${rightStartX}" y="${headBaseline(1)}" fill="${C.fg}"
-           font-family="ArchivoBlack" font-size="${headSize}"
+           font-family="Archivo Black" font-size="${headSize}"
            letter-spacing="-0.005em">THAT <tspan fill="${C.accent}">NEVER</tspan></text>
      <text x="${rightStartX}" y="${headBaseline(2)}" fill="${C.fg}"
-           font-family="ArchivoBlack" font-size="${headSize}"
+           font-family="Archivo Black" font-size="${headSize}"
            letter-spacing="-0.005em">SLEEPS.</text>
 
      <text x="${rightStartX}" y="${urlBaselineY}" fill="${C.fg}"
-           font-family="JBMono" font-size="${urlSize}" letter-spacing="0.22em"
+           font-family="JetBrains Mono" font-size="${urlSize}" letter-spacing="0.22em"
            dominant-baseline="alphabetic">NUMARADIO.COM</text>
 
      <!-- LIVE chip top-right (TV/desktop area only) -->
@@ -358,10 +384,10 @@ masters.xHeader = () => {
     `${bgFill(w, h)}
      <!-- giant wordmark to the left, mark to the right -->
      <text x="80" y="${h / 2 - 10}" fill="${C.fg}"
-           font-family="ArchivoBlack" font-size="168"
+           font-family="Archivo Black" font-size="168"
            letter-spacing="-0.01em">NUMA</text>
      <text x="80" y="${h / 2 + 140}" fill="${C.accent}"
-           font-family="ArchivoBlack" font-size="168"
+           font-family="Archivo Black" font-size="168"
            letter-spacing="-0.01em">RADIO</text>
      ${logoMark(w - 220, h / 2, 260, { halo: true })}
      ${eyebrow(w - 220, h - 80, 16, "AI RADIO · ALWAYS ON", { anchor: "middle" })}
@@ -379,7 +405,7 @@ masters.igPostTemplate = () => {
      <!-- top brand row -->
      <g transform="translate(80,80)">
        ${logoMark(28, 28, 56, { halo: false })}
-       <text x="76" y="40" fill="${C.fg}" font-family="ArchivoBlack"
+       <text x="76" y="40" fill="${C.fg}" font-family="Archivo Black"
              font-size="28" letter-spacing="0.04em">NUMA RADIO</text>
      </g>
      ${liveChip(s - 180, 70)}
@@ -387,9 +413,9 @@ masters.igPostTemplate = () => {
      ${eyebrow(s / 2, s / 2 - 160, 22, "NOW PLAYING", { anchor: "middle" })}
      <rect x="${s / 2 - 320}" y="${s / 2 - 120}" width="640" height="4" fill="${C.accent}" opacity="0.6"/>
      <text x="${s / 2}" y="${s / 2 - 20}" fill="${C.fg}" text-anchor="middle"
-           font-family="ArchivoBlack" font-size="84" letter-spacing="-0.01em">TRACK TITLE</text>
+           font-family="Archivo Black" font-size="84" letter-spacing="-0.01em">TRACK TITLE</text>
      <text x="${s / 2}" y="${s / 2 + 60}" fill="${C.fgDim}" text-anchor="middle"
-           font-family="ArchivoMed" font-size="42">Artist Name</text>
+           font-family="Archivo Medium" font-size="42">Artist Name</text>
      <rect x="${s / 2 - 320}" y="${s / 2 + 116}" width="640" height="4" fill="${C.accent}" opacity="0.6"/>
      <!-- footer EQ + url -->
      <g transform="translate(${s / 2 - 100},${s - 200})">${eqBars(0, 0, 14, 80)}</g>
@@ -414,9 +440,9 @@ masters.igStoryTemplate = () => {
      ${eyebrow(w / 2, h / 2 + 40, 26, "NOW PLAYING", { anchor: "middle" })}
      <rect x="${w / 2 - 340}" y="${h / 2 + 90}" width="680" height="4" fill="${C.accent}" opacity="0.6"/>
      <text x="${w / 2}" y="${h / 2 + 210}" fill="${C.fg}" text-anchor="middle"
-           font-family="ArchivoBlack" font-size="92" letter-spacing="-0.01em">TRACK TITLE</text>
+           font-family="Archivo Black" font-size="92" letter-spacing="-0.01em">TRACK TITLE</text>
      <text x="${w / 2}" y="${h / 2 + 290}" fill="${C.fgDim}" text-anchor="middle"
-           font-family="ArchivoMed" font-size="46">Artist Name</text>
+           font-family="Archivo Medium" font-size="46">Artist Name</text>
      <rect x="${w / 2 - 340}" y="${h / 2 + 340}" width="680" height="4" fill="${C.accent}" opacity="0.6"/>
      <!-- bottom CTA -->
      <g transform="translate(${w / 2 - 120},${h - 500})">${eqBars(0, 0, 18, 120)}</g>
@@ -470,7 +496,7 @@ masters.youtubeThumbnail = () => {
      <g transform="translate(${padX},${padX + 8})">
        ${logoMark(22, 22, 44, { halo: false })}
        <text x="60" y="30" fill="${C.fg}"
-             font-family="ArchivoBlack" font-size="26" letter-spacing="0.04em"
+             font-family="Archivo Black" font-size="26" letter-spacing="0.04em"
              dominant-baseline="alphabetic">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
      </g>
      <!-- vertical hairline anchoring the brand column -->
@@ -479,13 +505,13 @@ masters.youtubeThumbnail = () => {
 
      <!-- RIGHT title column -->
      <text x="${w - padX}" y="${titleCapTopY - 24}" fill="${C.fgDim}" text-anchor="end"
-           font-family="JBMono" font-size="20" letter-spacing="0.28em"
+           font-family="JetBrains Mono" font-size="20" letter-spacing="0.28em"
            dominant-baseline="alphabetic">EP. 001 · TITLE GOES HERE</text>
 
      <text x="${w - padX}" y="${titleBaseline(0)}" fill="${C.fg}" text-anchor="end"
-           font-family="ArchivoBlack" font-size="${titleSize}" letter-spacing="-0.02em">VIDEO</text>
+           font-family="Archivo Black" font-size="${titleSize}" letter-spacing="-0.02em">VIDEO</text>
      <text x="${w - padX}" y="${titleBaseline(1)}" fill="${C.fg}" text-anchor="end"
-           font-family="ArchivoBlack" font-size="${titleSize}" letter-spacing="-0.02em">TITLE</text>
+           font-family="Archivo Black" font-size="${titleSize}" letter-spacing="-0.02em">TITLE</text>
 
      <!-- accent underline anchored to the right edge under the title block -->
      <rect x="${w - padX - 320}" y="${titleBaseline(1) + 24}" width="320" height="4" fill="${C.accent}"/>
@@ -519,11 +545,11 @@ masters.offlineCard = () => {
              fill="rgba(232,217,176,0.10)" stroke="${C.warm}" stroke-opacity="0.55" stroke-width="1"/>
        <circle cx="22" cy="${pillH / 2}" r="5" fill="${C.warm}"/>
        <text x="40" y="${pillH / 2 + 5}" fill="${C.fg}"
-             font-family="JBMono" font-size="14" letter-spacing="0.25em">OFF AIR</text>
+             font-family="JetBrains Mono" font-size="14" letter-spacing="0.25em">OFF AIR</text>
      </g>
 
      <text x="${cx}" y="${pillY + pillH + 56}" fill="${C.fgDim}" text-anchor="middle"
-           font-family="JBMono" font-size="20" letter-spacing="0.28em"
+           font-family="JetBrains Mono" font-size="20" letter-spacing="0.28em"
            dominant-baseline="alphabetic">BE RIGHT BACK  ·  NUMARADIO.COM</text>`
   );
 };
@@ -549,7 +575,7 @@ masters.liveOverlay = () => {
              fill="rgba(11,12,14,0.78)" stroke="${C.line}" stroke-width="1"/>
        ${logoMark(pillH / 2, pillH / 2, pillH * 0.72, { halo: false })}
        <text x="${pillH + 16}" y="${pillH / 2 + 7}" fill="${C.fg}"
-             font-family="ArchivoBlack" font-size="22" letter-spacing="0.04em"
+             font-family="Archivo Black" font-size="22" letter-spacing="0.04em"
              dominant-baseline="alphabetic">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
      </g>
 
@@ -562,10 +588,10 @@ masters.liveOverlay = () => {
              fill="rgba(11,12,14,0.82)" stroke="${C.line}" stroke-width="1"/>
        ${eqBars(28, 30, 10, 60, [0.6, 1.0, 0.5, 0.85, 0.7])}
        <text x="124" y="50" fill="${C.fgDim}"
-             font-family="JBMono" font-size="13" letter-spacing="0.22em"
+             font-family="JetBrains Mono" font-size="13" letter-spacing="0.22em"
              dominant-baseline="alphabetic">NOW PLAYING</text>
        <text x="124" y="92" fill="${C.fg}"
-             font-family="ArchivoBlack" font-size="28" letter-spacing="0.01em"
+             font-family="Archivo Black" font-size="28" letter-spacing="0.01em"
              dominant-baseline="alphabetic">TRACK <tspan fill="${C.fgDim}">·</tspan> ARTIST</text>
      </g>`
   );
@@ -581,9 +607,9 @@ masters.twitchPanel = (title) => {
     `<rect width="${w}" height="${h}" fill="${C.bg1}"/>
      <rect x="0" y="0" width="4" height="${h}" fill="${C.accent}"/>
      <text x="40" y="90" fill="${C.fg}"
-           font-family="ArchivoBlack" font-size="48" letter-spacing="0.04em">${title.toUpperCase()}</text>
+           font-family="Archivo Black" font-size="48" letter-spacing="0.04em">${title.toUpperCase()}</text>
      <text x="40" y="140" fill="${C.fgDim}"
-           font-family="JBMono" font-size="20" letter-spacing="0.18em">NUMA RADIO</text>
+           font-family="JetBrains Mono" font-size="20" letter-spacing="0.18em">NUMA RADIO</text>
      <rect x="0" y="${h - 1}" width="${w}" height="1" fill="${C.line}"/>`
   );
 };
