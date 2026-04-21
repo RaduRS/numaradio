@@ -150,12 +150,13 @@ model Station {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
-  tracks      Track[]
-  requests    Request[]
-  shoutouts   Shoutout[]
-  queueItems  QueueItem[]
-  segments    BroadcastSegment[]
-  playHistory PlayHistory[]
+  tracks       Track[]
+  requests     Request[]
+  shoutouts    Shoutout[]
+  queueItems   QueueItem[]
+  segments     BroadcastSegment[]
+  playHistory  PlayHistory[]
+  songRequests SongRequest[]
 }
 
 model Track {
@@ -184,12 +185,13 @@ model Track {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
-  station     Station       @relation(fields: [stationId], references: [id])
-  request     Request?      @relation(fields: [requestId], references: [id])
-  assets      TrackAsset[]
-  queueItems  QueueItem[]
-  playHistory PlayHistory[]
-  votes       TrackVote[]
+  station      Station       @relation(fields: [stationId], references: [id])
+  request      Request?      @relation(fields: [requestId], references: [id])
+  assets       TrackAsset[]
+  queueItems   QueueItem[]
+  playHistory  PlayHistory[]
+  votes        TrackVote[]
+  songRequests SongRequest[]
 
   @@index([stationId, trackStatus, airingPolicy])
 }
@@ -454,4 +456,36 @@ model TrackVote {
 
   @@id([trackId, sessionId])
   @@index([trackId, value])
+}
+
+// Listener-facing song generation requests. One row per request from the
+// listener booth or other sources. Lifecycle: created → moderation (allowed/blocked) →
+// generation → completed/failed. MiniMax task ID stored for async polling.
+model SongRequest {
+  id                 String    @id @default(cuid())
+  stationId          String
+  ipHash             String
+  prompt             String    @db.Text
+  artistName         String
+  originalArtistName String?
+  isInstrumental     Boolean   @default(false)
+  lyricsFallback     Boolean   @default(false)
+  moderationStatus   String
+  moderationReason   String?
+  status             String    @default("queued")
+  errorMessage       String?
+  miniMaxTaskId      String?
+  titleGenerated     String?
+  artworkPrompt      String?
+  lyricsGenerated    String?   @db.Text
+  trackId            String?
+  createdAt          DateTime  @default(now())
+  startedAt          DateTime?
+  completedAt        DateTime?
+
+  station Station @relation(fields: [stationId], references: [id])
+  track   Track?  @relation(fields: [trackId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([ipHash, createdAt])
 }
