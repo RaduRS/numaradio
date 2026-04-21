@@ -1,8 +1,55 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-21 (afternoon — WSL idle-shutdown round 2: the earlier
-`.wslconfig` fix wasn't enough, task action now keeps `wsl.exe` persistently
-attached via `/bin/sleep infinity`)
+Last updated: 2026-04-21 (evening — moderator profanity prefilter shipped;
+Docker-in-WSL migration script prepared but not yet run — needs the
+operator to disable Docker Desktop WSL integration and run one script.)
+
+## ⚠ PENDING: Docker-in-WSL cutover (2 steps, ~10 min)
+
+NanoClaw currently runs on Docker Desktop, which needs a logged-in
+Windows session. After an unattended reboot NanoClaw crash-loops until
+someone signs in. The fix: move to native Docker Engine inside WSL, so
+`dockerd` starts with the distro (same pattern as Icecast / Liquidsoap /
+cloudflared). **Script is ready at `deploy/install-docker-ce.sh`.**
+
+To complete (when you're back):
+
+1. **On Windows:** open Docker Desktop → Settings → Resources → WSL
+   Integration → UNCHECK your Ubuntu distro → Apply & restart. This
+   removes Docker Desktop's `/mnt/wsl/docker-desktop` proxy so the new
+   `dockerd` can own `/var/run/docker.sock`. (Don't uninstall Docker
+   Desktop yet — we can do that later as cleanup.)
+
+2. **In WSL:**
+   ```bash
+   cd ~/saas/numaradio
+   ./deploy/install-docker-ce.sh
+   ```
+   You'll be prompted for your sudo password once at the top. The
+   script is idempotent; safe to re-run. It installs docker-ce from
+   Docker's official apt repo, enables `docker.service`, adds you to
+   the `docker` group, installs `lazydocker` (TUI), and restarts
+   NanoClaw onto the new socket.
+
+**Verification after the script completes:**
+- `docker info | head` should NOT contain "Docker Desktop".
+- `systemctl --user status nanoclaw` should be `active (running)`.
+- Send a test message to `@nanoOrion_bot` → agent replies in ~10s.
+- Ultimate acceptance: reboot Windows without logging in, then from
+  your phone submit a shoutout containing "fuck" on numaradio.com → a
+  Telegram DM from `@nanoOrion_bot` arrives within ~90s.
+
+Spec: `docs/superpowers/specs/2026-04-21-docker-in-wsl-design.md`
+
+Rollback if anything goes wrong: `sudo systemctl disable --now docker`,
+re-check WSL integration in Docker Desktop, `systemctl --user restart
+nanoclaw`. Back to the old state.
+
+---
+
+Prior update (afternoon — WSL idle-shutdown round 2: the earlier
+`.wslconfig` fix wasn't enough, task action now keeps `wsl.exe`
+persistently attached via `/bin/sleep infinity`)
 
 ## Where we are
 
