@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { RequestForm } from "./RequestForm";
 import { ShoutoutWall } from "./ShoutoutWall";
 
@@ -54,12 +55,12 @@ export function Requests() {
               }}
             >
               Got finished music?{" "}
-              <a
+              <Link
                 href="/submit"
                 style={{ color: "var(--accent)", textDecoration: "none" }}
               >
                 Submit it here →
-              </a>
+              </Link>
             </div>
           </div>
 

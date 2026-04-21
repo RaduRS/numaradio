@@ -108,19 +108,20 @@ const logoMark = (cx, cy, size, { halo = true } = {}) => {
     ${halo ? `<circle cx="${cx}" cy="${cy}" r="${haloR}" fill="${C.accent}" opacity="0.10"/>` : ""}
     <circle cx="${cx}" cy="${cy}" r="${r - strokeW / 2}" fill="none"
             stroke="${C.accent}" stroke-width="${strokeW}"/>
-    <circle cx="${cx + r * 0.08}" cy="${cy - r * 0.08}" r="${dotR}" fill="${C.accent}" filter="url(#glowSm)"/>
+    <circle cx="${cx}" cy="${cy}" r="${dotR}" fill="${C.accent}" filter="url(#glowSm)"/>
   `;
 };
 
-/** "Numa·Radio" wordmark — matches the navbar (.logo) style: mixed case,
-   middle interpunct in mint accent. (x,y) is the start anchor of the text
-   baseline. The middle dot uses tspan so it inherits text metrics but takes
-   the accent fill. */
-const wordmark = (x, y, size, { color = C.fg, tracking = "0.02em" } = {}) => `
+/** "NUMA·RADIO" wordmark — matches the navbar's rendered output: the .logo
+   class applies text-transform: uppercase to "Numa·Radio", so on screen the
+   user sees CAPS with a mint-accent middle dot. We emit caps directly here
+   since SVG text-transform support is patchy. (x,y) is the start anchor of
+   the text baseline. */
+const wordmark = (x, y, size, { color = C.fg, tracking = "0.04em" } = {}) => `
   <text x="${x}" y="${y}" fill="${color}"
         font-family="ArchivoBlack" font-size="${size}"
         letter-spacing="${tracking}" text-anchor="start"
-        dominant-baseline="alphabetic">Numa<tspan fill="${C.accent}">·</tspan>Radio</text>
+        dominant-baseline="alphabetic">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
 `;
 
 /** Mono eyebrow text. */
@@ -175,12 +176,12 @@ const horizontalLockup = (cx, cy, markSize, wordSize, { color = C.fg } = {}) => 
 };
 
 /** Stacked lockup: mark on top, wordmark below. The horizontal offset
-   estimates the rendered "Numa·Radio" mixed-case width so the wordmark sits
+   estimates the rendered "NUMA·RADIO" all-caps width so the wordmark sits
    centered under the mark. */
 const stackedLockup = (cx, cy, markSize, wordSize, { color = C.fg } = {}) => {
   const markCy = cy - wordSize * 0.6;
   const wordY = cy + markSize / 2 + wordSize * 0.3;
-  const wordmarkHalfWidth = wordSize * 2.55;
+  const wordmarkHalfWidth = wordSize * 3.0;
   return `
     ${logoMark(cx, markCy, markSize, { halo: true })}
     ${wordmark(cx - wordmarkHalfWidth, wordY, wordSize, { color })}
@@ -251,7 +252,7 @@ masters.youtubeBanner = () => {
      <g transform="translate(120,120)">
        ${logoMark(30, 30, 60, { halo: false })}
        <text x="80" y="40" fill="${C.fg}" font-family="ArchivoBlack"
-             font-size="28" letter-spacing="0.02em">Numa<tspan fill="${C.accent}">·</tspan>Radio</text>
+             font-size="28" letter-spacing="0.04em">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
      </g>
      ${liveChip(w - 260, 120, 1.4)}
      <!-- bottom-right corner accent -->
@@ -383,7 +384,7 @@ masters.youtubeThumbnail = () => {
        ${logoMark(40, 40, 80, { halo: false })}
      </g>
      <text x="60" y="${h - 70}" fill="${C.fg}"
-           font-family="ArchivoBlack" font-size="56" letter-spacing="0.01em">Numa<tspan fill="${C.accent}">·</tspan>Radio</text>
+           font-family="ArchivoBlack" font-size="56" letter-spacing="0.04em">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
      <!-- right side: title slot -->
      ${eyebrow(w - 60, 100, 22, "EP. 001 · TITLE GOES HERE", { anchor: "end" })}
      <text x="${w - 60}" y="${h / 2}" fill="${C.fg}" text-anchor="end"
@@ -427,7 +428,7 @@ masters.liveOverlay = () => {
              stroke="${C.line}" stroke-width="1"/>
        ${logoMark(48, 36, 48, { halo: false })}
        <text x="96" y="46" fill="${C.fg}"
-             font-family="ArchivoBlack" font-size="22" letter-spacing="0.02em">Numa<tspan fill="${C.accent}">·</tspan>Radio</text>
+             font-family="ArchivoBlack" font-size="22" letter-spacing="0.04em">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
      </g>
      <!-- top-right live chip -->
      ${liveChip(w - 160, 60, 1.2)}
