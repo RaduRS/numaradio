@@ -3,7 +3,7 @@
 // Outputs: SVG masters in assets/src/, rasterised PNGs in assets/<platform>/.
 // Tokens mirror app/styles/_design-base.css so socials feel native to the site.
 
-import sharp from "sharp";
+import { Resvg } from "@resvg/resvg-js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,27 +42,15 @@ const jbMonoB64 = fs
   .readFileSync(path.join(FONTS_DIR, "JetBrainsMono-Regular.ttf"))
   .toString("base64");
 
-// macOS only: also drop the TTFs into ~/Library/Fonts so sharp/libvips's
-// fontconfig lookup can find them by family name. Browsers see the embedded
-// base64 src in the SVG; libvips ignores @font-face data URIs and matches
-// against installed system fonts instead — the PNGs render in fallback weight
-// (a thin sans) without this. Idempotent: only copies if the destination is
-// missing or older than the source.
-if (process.platform === "darwin") {
-  const sysFontsDir = path.join(process.env.HOME ?? "", "Library", "Fonts");
-  fs.mkdirSync(sysFontsDir, { recursive: true });
-  for (const f of ["Archivo-Black.ttf", "Archivo-Medium.ttf", "JetBrainsMono-Regular.ttf"]) {
-    const src = path.join(FONTS_DIR, f);
-    const dst = path.join(sysFontsDir, f);
-    const srcStat = fs.statSync(src);
-    let dstStat;
-    try { dstStat = fs.statSync(dst); } catch { /* missing */ }
-    if (!dstStat || dstStat.mtimeMs < srcStat.mtimeMs) {
-      fs.copyFileSync(src, dst);
-      console.log(`✓ installed ${f} → ~/Library/Fonts/`);
-    }
-  }
-}
+// Explicit font file list passed to resvg's renderer. resvg matches
+// font-family names in the SVG against these files (not against system
+// fontconfig), so the bundled TTFs are guaranteed to be used regardless of
+// what's installed on the host machine.
+const FONT_FILES = [
+  path.join(FONTS_DIR, "Archivo-Black.ttf"),
+  path.join(FONTS_DIR, "Archivo-Medium.ttf"),
+  path.join(FONTS_DIR, "JetBrainsMono-Regular.ttf"),
+];
 
 // Use the TTFs' actual family names (as recorded in their `name` tables) so
 // both the browser and librsvg/fontconfig pick them up. The browser uses the
@@ -737,7 +725,16 @@ async function run() {
     for (const { png, w, h } of pngs) {
       const pngAbs = OUT(png);
       fs.mkdirSync(path.dirname(pngAbs), { recursive: true });
-      await sharp(Buffer.from(svgStr)).resize(w, h, { fit: "fill" }).png().toFile(pngAbs);
+      const resvg = new Resvg(svgStr, {
+        fitTo: { mode: "width", value: w },
+        font: {
+          fontFiles: FONT_FILES,
+          loadSystemFonts: false,
+          defaultFontFamily: "Archivo Black",
+        },
+      });
+      const pngBuf = resvg.render().asPng();
+      fs.writeFileSync(pngAbs, pngBuf);
       results.push({ png, w, h, bytes: fs.statSync(pngAbs).size });
     }
   }
