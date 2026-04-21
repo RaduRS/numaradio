@@ -50,6 +50,9 @@ export function ExpandedPlayerDesktop() {
           style={cover ? { backgroundImage: `url(${cover})` } : undefined}
         >
           {!cover && initials(live?.title)}
+          <div className="ep-art-share">
+            <ShareControls />
+          </div>
           <div className="ep-art-vote">
             <VoteButtons trackId={live?.trackId} />
           </div>
@@ -57,9 +60,6 @@ export function ExpandedPlayerDesktop() {
         <div className="ep-booth-track">
           <div className="ep-booth-title">{title}</div>
           <div className="ep-booth-artist">{artist}</div>
-        </div>
-        <div className="ep-actions">
-          <ShareControls />
         </div>
         <div className="ep-controls">
           <button

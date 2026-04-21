@@ -312,17 +312,29 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
 }
 
-/* Floating vote pills, anchored to the artwork's bottom-right so the action
-   feels tied to the track itself rather than to a generic toolbar row. */
-.ep-art-vote {
+/* Floating action pills anchored to the artwork's bottom corners so each
+   action feels tied to the track itself rather than a generic toolbar row.
+   Vote on the right, share mirrored on the left. */
+.ep-art-vote,
+.ep-art-share {
   position: absolute;
-  right: 10px;
   bottom: 10px;
   background: rgba(10, 13, 14, 0.7);
   backdrop-filter: blur(10px);
   border-radius: 999px;
   padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ep-art-vote { right: 10px; }
+.ep-art-share { left: 10px; }
+/* The Share pill inherited the .ep-actions accent border earlier; reset that
+   here since the floating context already provides enough contrast. */
+.ep-art-share .share-pill {
+  border: none;
+  background: transparent;
+}
+.ep-art-share .share-pill:hover {
+  background: rgba(79, 209, 197, 0.1);
 }
 .ep-listen-track {
   text-align: center;

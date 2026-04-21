@@ -49,6 +49,9 @@ function ListenPane() {
         }
       >
         {!cover && initials(live?.title)}
+        <div className="ep-art-share">
+          <ShareControls />
+        </div>
         <div className="ep-art-vote">
           <VoteButtons trackId={live?.trackId} />
         </div>
@@ -71,9 +74,6 @@ function ListenPane() {
           Someone in Lisbon asked for slow and a little heartbroken. We&apos;ll
           pick the tempo back up after this one, promise.&rdquo;
         </div>
-      </div>
-      <div className="ep-actions">
-        <ShareControls />
       </div>
       <div className="ep-controls">
         <button
