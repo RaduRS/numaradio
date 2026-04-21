@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { MegaphoneIcon, SparklesIcon, SendIcon, LoadingIcon } from "./Icons";
+import { SongTab } from "./SongTab";
 
 type Tab = "song" | "shout";
 type StatusTone = "none" | "success" | "pending" | "error";
@@ -48,17 +49,6 @@ export function RequestForm({
     e.preventDefault();
     setStatusMessage("");
     setStatusTone("none");
-
-    if (tab === "song") {
-      setSending(true);
-      setSendLabel("Sending…");
-      setTimeout(() => {
-        setSendLabel("✓ In the queue");
-        setSending(false);
-      }, 1_200);
-      setTimeout(() => setSendLabel("Send another"), 2_400);
-      return;
-    }
 
     const form = new FormData(e.currentTarget);
     const who = String(form.get("who") ?? "").trim();
@@ -144,14 +134,10 @@ export function RequestForm({
           <span className="rt-label">Shoutout</span>
         </button>
       </div>
-      <form onSubmit={submit} key={formKey}>
-        {tab === "song" ? (
-          <div className="req-input-group">
-            <input className="req-input" placeholder="A vibe, a mood, a moment — Numa makes it into a song" />
-            <input className="req-input" placeholder="Your name or city" />
-            <textarea className="req-input req-textarea" placeholder="Anything for Lena? (optional)" />
-          </div>
-        ) : (
+      {tab === "song" ? (
+        <SongTab />
+      ) : (
+        <form onSubmit={submit} key={formKey}>
           <div className="req-input-group">
             <input name="who" className="req-input" placeholder="Who it's for…" maxLength={60} />
             <input name="requesterName" className="req-input" placeholder="Your name or city" maxLength={60} />
@@ -163,29 +149,29 @@ export function RequestForm({
               required
             />
           </div>
-        )}
-        <button type="submit" className="btn btn-primary req-send" disabled={sending} aria-busy={sending}>
-          <span>{sendLabel}</span>
-          {sending ? <LoadingIcon className="btn-icon" /> : <SendIcon className="btn-icon" />}
-        </button>
-        {statusTone !== "none" && (
-          <div
-            role="status"
-            style={{
-              marginTop: 12,
-              fontSize: 13,
-              color:
-                statusTone === "success"
-                  ? "var(--accent)"
-                  : statusTone === "error"
-                    ? "#e85a4f"
-                    : "var(--fg-mute)",
-            }}
-          >
-            {statusMessage}
-          </div>
-        )}
-      </form>
+          <button type="submit" className="btn btn-primary req-send" disabled={sending} aria-busy={sending}>
+            <span>{sendLabel}</span>
+            {sending ? <LoadingIcon className="btn-icon" /> : <SendIcon className="btn-icon" />}
+          </button>
+          {statusTone !== "none" && (
+            <div
+              role="status"
+              style={{
+                marginTop: 12,
+                fontSize: 13,
+                color:
+                  statusTone === "success"
+                    ? "var(--accent)"
+                    : statusTone === "error"
+                      ? "#e85a4f"
+                      : "var(--fg-mute)",
+              }}
+            >
+              {statusMessage}
+            </div>
+          )}
+        </form>
+      )}
       <div className="req-review">
         <div className="rev-rotator">
           {REVIEW_LINES.map((line, i) => (
