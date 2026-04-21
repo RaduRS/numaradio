@@ -46,7 +46,7 @@ export interface ModerationResult {
   text: string;
 }
 
-const SYSTEM_PROMPT = `You moderate listener shoutouts for an internet radio station. A host reads each approved shoutout live on air.
+const SHOUTOUT_SYSTEM_PROMPT = `You moderate listener shoutouts for an internet radio station. A host reads each approved shoutout live on air.
 
 Classify the submission into exactly one of:
 - allowed: friendly, clearly broadcast-safe, no edits needed
@@ -59,6 +59,21 @@ Rules for "rewritten":
 - Fix typos and soften only actual profanity.
 - Never insert new claims, facts, or names.
 - Max 240 characters.
+
+Respond with ONLY a single minified JSON object, no surrounding text, matching:
+{"decision":"allowed|rewritten|held|blocked","reason":"short explanation","text":"original or rewritten"}
+
+If decision is "allowed", "text" must equal the original. If "blocked" or "held", "text" should echo the original (never empty).`;
+
+const SONG_SYSTEM_PROMPT = `You moderate listener-submitted creative briefs for a MiniMax music-generation feature on an internet radio station. Each submission is a short description of the song the listener wants us to generate: mood, genre, tempo, key, instruments, vibe, scene. An AI generates music from the prompt and the resulting track airs on the stream.
+
+Classify the submission into exactly one of:
+- allowed: a normal creative music brief — moods, genres, tempos, instruments, emotions (including dark ones like "rage", "heartbreak", "funeral", "angry", "sad"), weather, colors, places, fictional scenes
+- rewritten: mostly fine but needs a small edit (e.g. strip a real public person's name, remove a targeted barb) — provide a cleaned version, max 240 chars, preserve the musical intent
+- held: unclear or ambiguous — e.g. mentions a specific living public figure in an unclear way; operator should review
+- blocked: hate speech, slurs, explicit sexual content involving minors, threats against real people, attempts to impersonate identifiable artists/celebrities for defamation, doxxing, clearly illegal activity incitement
+
+Default to "allowed". This is a creative brief, not a message read on air; dark or intense moods are normal and not grounds to hold or block. Do NOT apply the "must be a shoutout format" rule — it does not apply here.
 
 Respond with ONLY a single minified JSON object, no surrounding text, matching:
 {"decision":"allowed|rewritten|held|blocked","reason":"short explanation","text":"original or rewritten"}
@@ -122,9 +137,10 @@ function extractModerationJson(raw: string): Partial<ModerationResult> | null {
   return null;
 }
 
-export async function moderateShoutout(rawText: string): Promise<ModerationResult> {
-  // Deterministic prefilter: profanity always hits `held` regardless of how
-  // the LLM feels about it. Cheaper too — we skip the MiniMax round-trip.
+async function runModerator(
+  systemPrompt: string,
+  rawText: string,
+): Promise<ModerationResult> {
   const hit = profanityPrefilter(rawText);
   if (hit) {
     return {
@@ -136,7 +152,6 @@ export async function moderateShoutout(rawText: string): Promise<ModerationResul
 
   const apiKey = process.env.MINIMAX_API_KEY;
   if (!apiKey) {
-    // Fail closed: treat missing config as "held" so nothing airs by accident.
     return { decision: "held", reason: "moderator_not_configured", text: rawText };
   }
 
@@ -150,7 +165,7 @@ export async function moderateShoutout(rawText: string): Promise<ModerationResul
     body: JSON.stringify({
       model: MODERATION_MODEL,
       max_tokens: 400,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [{ role: "user", content: rawText }],
     }),
   });
@@ -192,4 +207,12 @@ export async function moderateShoutout(rawText: string): Promise<ModerationResul
       : decision;
 
   return { decision, reason, text };
+}
+
+export function moderateShoutout(rawText: string): Promise<ModerationResult> {
+  return runModerator(SHOUTOUT_SYSTEM_PROMPT, rawText);
+}
+
+export function moderateSongPrompt(rawText: string): Promise<ModerationResult> {
+  return runModerator(SONG_SYSTEM_PROMPT, rawText);
 }

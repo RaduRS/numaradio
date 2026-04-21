@@ -10,7 +10,7 @@ import {
   hashIp,
   SONG_LIMITS,
 } from "@/lib/rate-limit";
-import { moderateShoutout, profanityPrefilter } from "@/lib/moderate";
+import { moderateSongPrompt, profanityPrefilter } from "@/lib/moderate";
 import {
   createSongRequest,
   queuePositionFor,
@@ -97,7 +97,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const moderation = await moderateShoutout(prompt);
+  const moderation = await moderateSongPrompt(prompt);
   if (moderation.decision === "blocked" || moderation.decision === "held") {
     return NextResponse.json(
       {
