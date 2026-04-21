@@ -53,3 +53,6 @@ next-env.d.ts
 /dashboard/node_modules/
 /dashboard/next-env.d.ts
 .playwright-mcp/
+
+# Brainstorming / design mockups (superpowers visual companion)
+/.superpowers/

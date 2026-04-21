@@ -9,7 +9,7 @@ import { useNowPlaying } from "./useNowPlaying";
 const SCROLL_TRIGGER = 520; // roughly past the hero
 
 export function MiniPlayer() {
-  const { isPlaying, isLoading, toggle } = usePlayer();
+  const { isPlaying, isLoading, toggle, expand } = usePlayer();
   const np = useNowPlaying();
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
@@ -30,10 +30,25 @@ export function MiniPlayer() {
   const show = isHome ? scrolled : true;
 
   return (
-    <div className={`mini-player ${show ? "show" : ""}`} id="mini-player">
+    <div
+      className={`mini-player ${show ? "show" : ""}`}
+      id="mini-player"
+      onClick={(e) => expand(e.currentTarget)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          expand(e.currentTarget);
+        }
+      }}
+    >
       <button
         className="mp-btn-play"
-        onClick={toggle}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle();
+        }}
         aria-pressed={isPlaying}
         aria-busy={isLoading}
       >
@@ -77,7 +92,13 @@ export function MiniPlayer() {
       <div className="mp-eq eq">
         <span /><span /><span /><span /><span />
       </div>
-      <a className="mp-req-btn" href="#requests">Request</a>
+      <a
+        className="mp-req-btn"
+        href="#requests"
+        onClick={(e) => e.stopPropagation()}
+      >
+        Request
+      </a>
     </div>
   );
 }

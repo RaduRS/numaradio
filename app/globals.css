@@ -2,6 +2,7 @@
 @import "./styles/_design-base.css";
 @import "./styles/_design-sections.css";
 @import "./styles/_design-overrides.css";
+@import "./styles/_expanded-player.css";
 
 /*
  * Numa Radio design tokens are defined in app/styles/_design-base.css.
