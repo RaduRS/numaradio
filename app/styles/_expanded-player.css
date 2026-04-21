@@ -1,0 +1,70 @@
+/* Expanded Player — overlay that morphs from PlayerCard/MiniPlayer into a
+   near-fullscreen station monitor (desktop) or app-like tab layout (mobile). */
+
+.ep-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 13, 14, 0.92);
+  backdrop-filter: blur(14px);
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.ep-root.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ep-shell {
+  position: absolute;
+  inset: 2vh 2vw;
+  background: linear-gradient(180deg, #12151A, #0A0D0E);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ep-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ep-chev {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease;
+}
+.ep-chev:hover { background: rgba(255, 255, 255, 0.12); }
+
+.ep-topbar-center {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+
+@media (max-width: 899px) {
+  .ep-shell {
+    inset: 0;
+    border-radius: 0;
+    border: none;
+  }
+}

@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { PlayerProvider } from "./_components/PlayerProvider";
 import { MiniPlayer } from "./_components/MiniPlayer";
+import { ExpandedPlayer } from "./_components/ExpandedPlayer";
 import { PresenceHeartbeat } from "./_components/PresenceHeartbeat";
 
 const archivo = Archivo({
@@ -86,6 +87,7 @@ export default function RootLayout({
         <PlayerProvider>
           {children}
           <MiniPlayer />
+          <ExpandedPlayer />
         </PlayerProvider>
         <PresenceHeartbeat />
         <Script

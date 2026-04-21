@@ -79,7 +79,7 @@ function initials(title: string | undefined): string {
 }
 
 export function PlayerCard() {
-  const { status, isPlaying, isLoading, toggle } = usePlayer();
+  const { status, isPlaying, isLoading, toggle, expand } = usePlayer();
   const np = useNowPlaying();
 
   const title = np.title ?? "—";
@@ -88,7 +88,18 @@ export function PlayerCard() {
   const coverInitials = initials(np.title);
 
   return (
-    <div className="player-card">
+    <div
+      className="player-card"
+      onClick={(e) => expand(e.currentTarget)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          expand(e.currentTarget);
+        }
+      }}
+    >
       <div className="player-head">
         <div className="onair">On Air — Lena</div>
         <div className="player-time"><LiveClock /></div>
@@ -119,13 +130,23 @@ export function PlayerCard() {
         <div className="track">{title}</div>
         <div className="artist">{artist.toUpperCase()}</div>
         <div className="now-actions">
-          <VoteButtons trackId={np.trackId} />
+          <span onClick={(e) => e.stopPropagation()}>
+            <VoteButtons trackId={np.trackId} />
+          </span>
           <div className="now-shares">
-            <button className="share-pill" aria-label="Copy link">
+            <button
+              className="share-pill"
+              aria-label="Copy link"
+              onClick={(e) => e.stopPropagation()}
+            >
               <CopyIcon className="" />
               Copy link
             </button>
-            <button className="share-pill" aria-label="Share">
+            <button
+              className="share-pill"
+              aria-label="Share"
+              onClick={(e) => e.stopPropagation()}
+            >
               <ShareIcon className="" />
               Share
             </button>
@@ -138,7 +159,10 @@ export function PlayerCard() {
       <div className="player-controls">
         <button
           className="btn-play"
-          onClick={toggle}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggle();
+          }}
           aria-pressed={isPlaying}
           aria-busy={isLoading}
         >
@@ -162,7 +186,9 @@ export function PlayerCard() {
             </span>
           </div>
         </div>
-        <VolumeControl />
+        <span onClick={(e) => e.stopPropagation()}>
+          <VolumeControl />
+        </span>
       </div>
 
       <div className="lena-card">
