@@ -91,7 +91,7 @@ export function Mobile() {
                   </svg>
                 </span>
               </div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "14px 10px 10px", gap: 14 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "14px 10px 10px", gap: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div className="logo" style={{ fontSize: 11 }}>
                     <span className="logo-mark" />
@@ -162,26 +162,34 @@ export function Mobile() {
                   }}>SF</div>
                 </div>
 
-                <div>
+                {/* Track title + artist — centered, mirrors .ep-listen-track */}
+                <div style={{ textAlign: "center" }}>
                   <div style={{
                     fontFamily: "var(--font-display)",
-                    fontWeight: 700,
+                    fontWeight: 800,
                     fontStretch: "115%",
-                    fontSize: 15,
+                    fontSize: 14,
                     lineHeight: 1,
+                    letterSpacing: "-0.02em",
                     textTransform: "uppercase",
-                    letterSpacing: "-0.01em",
                     marginBottom: 3,
                   }}>Slow Fade, Brighter</div>
-                  <div style={{ fontSize: 9, color: "var(--fg-dim)" }}>
+                  <div style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 7,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    color: "var(--fg-dim)",
+                  }}>
                     Russell Ross — Nightshore EP
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px", position: "relative" }}>
-                  <button style={{
-                    width: 52,
-                    height: 52,
+                {/* Play button — mirrors .ep-listen-play */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{
+                    width: 40,
+                    height: 40,
                     borderRadius: "50%",
                     background: "var(--accent)",
                     color: "#0A0D0E",
@@ -190,14 +198,33 @@ export function Mobile() {
                     justifyContent: "center",
                     boxShadow: "0 0 0 1px var(--accent), 0 8px 28px var(--accent-glow)",
                   }}>
-                    <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 17, height: 17 }}>
-                      <rect x="6" y="4" width="3" height="12" rx="0.5" />
-                      <rect x="11" y="4" width="3" height="12" rx="0.5" />
+                    <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 14, height: 14 }}>
+                      <path d="M5 3v14l12-7z" />
                     </svg>
-                  </button>
+                  </div>
                 </div>
 
-                {/* Bottom tab bar */}
+                {/* Lena card — mirrors .ep-listen-lena */}
+                <div style={{
+                  background: "rgba(79,209,197,0.06)",
+                  border: "1px solid rgba(79,209,197,0.18)",
+                  borderRadius: 8,
+                  padding: 8,
+                }}>
+                  <div style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 6.5,
+                    color: "var(--accent)",
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    marginBottom: 3,
+                  }}>Lena · on the mic</div>
+                  <div style={{ fontSize: 8, lineHeight: 1.45, color: "var(--fg)" }}>
+                    &ldquo;Slow and a little heartbroken, coming right up — look out the window.&rdquo;
+                  </div>
+                </div>
+
+                {/* Bottom tab bar — mirrors .ep-tabbar, tabs match TabBar.tsx */}
                 <div style={{
                   marginTop: "auto",
                   marginLeft: -10,
@@ -215,7 +242,7 @@ export function Mobile() {
                     { label: "Listen", active: true },
                     { label: "Request" },
                     { label: "Shout" },
-                    { label: "Queue" },
+                    { label: "On Air" },
                   ].map((t) => (
                     <div
                       key={t.label}
