@@ -1,16 +1,12 @@
 "use client";
 
-import { CopyIcon, ShareIcon } from "./Icons";
+import { ShareIcon } from "./Icons";
 
-// TODO: wire real copy/share onClick. Visual only for now — the parent must
+// TODO: wire real share onClick. Visual only for now — the parent must
 // stopPropagation when this lives inside a clickable surface (PlayerCard).
 export function ShareControls() {
   return (
     <div className="now-shares">
-      <button className="share-pill" aria-label="Copy link" type="button">
-        <CopyIcon className="" />
-        Copy link
-      </button>
       <button className="share-pill" aria-label="Share" type="button">
         <ShareIcon className="" />
         Share
