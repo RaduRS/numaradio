@@ -175,17 +175,26 @@ const horizontalLockup = (cx, cy, markSize, wordSize, { color = C.fg } = {}) => 
   `;
 };
 
-/** Stacked lockup: mark on top, wordmark below. The horizontal offset
-   estimates the rendered "NUMA·RADIO" all-caps width so the wordmark sits
-   centered under the mark. */
-const stackedLockup = (cx, cy, markSize, wordSize, { color = C.fg } = {}) => {
-  const markCy = cy - wordSize * 0.6;
-  const wordY = cy + markSize / 2 + wordSize * 0.3;
-  const wordmarkHalfWidth = wordSize * 3.0;
-  return `
-    ${logoMark(cx, markCy, markSize, { halo: true })}
-    ${wordmark(cx - wordmarkHalfWidth, wordY, wordSize, { color })}
-  `;
+/** Stacked lockup: mark on top, wordmark below, the whole group centered on
+   (cx, cy). Returns the wordmark baseline as `wordBaselineY` so callers can
+   anchor follow-up elements (e.g. an eyebrow) below it without guessing. */
+const CAP_HEIGHT_RATIO = 0.72; // Archivo Black ascender→baseline ≈ 0.72em
+const stackedLockup = (cx, cy, markSize, wordSize, { color = C.fg, gap } = {}) => {
+  const stackGap = gap ?? wordSize * 0.55;
+  const capHeight = wordSize * CAP_HEIGHT_RATIO;
+  const totalHeight = markSize + stackGap + capHeight;
+  const top = cy - totalHeight / 2;
+  const markCy = top + markSize / 2;
+  const wordBaselineY = top + markSize + stackGap + capHeight;
+  // "NUMA·RADIO" at Archivo Black ≈ 6.4em wide with 0.04em tracking.
+  const wordmarkHalfWidth = wordSize * 3.2;
+  return {
+    wordBaselineY,
+    svg: `
+      ${logoMark(cx, markCy, markSize, { halo: true })}
+      ${wordmark(cx - wordmarkHalfWidth, wordBaselineY, wordSize, { color })}
+    `,
+  };
 };
 
 // ---------- platform compositions ----------
@@ -218,15 +227,21 @@ masters.lockupHorizontal = (w, h) =>
      ${horizontalLockup(w / 2, h / 2, Math.min(w, h) * 0.26, Math.min(w, h) * 0.12)}`
   );
 
-// Stacked lockup — profile pics where both mark and wordmark fit a square
-masters.lockupStacked = (size) =>
-  svg(
+// Stacked lockup — profile pics where both mark and wordmark fit a square.
+// The eyebrow ("AI RADIO · 24/7") anchors to the wordmark baseline returned
+// by stackedLockup so it floats one consistent gap below the wordmark even
+// if the inner ratios are tuned.
+masters.lockupStacked = (size) => {
+  const stack = stackedLockup(size / 2, size / 2, size * 0.38, size * 0.085);
+  const eyebrowY = stack.wordBaselineY + size * 0.085 * 0.85;
+  return svg(
     size,
     size,
     `${bgFill(size, size)}
-     ${stackedLockup(size / 2, size / 2, size * 0.38, size * 0.085)}
-     ${eyebrow(size / 2, size * 0.78, size * 0.032, "AI RADIO · 24/7", { anchor: "middle" })}`
+     ${stack.svg}
+     ${eyebrow(size / 2, eyebrowY, size * 0.032, "AI RADIO · 24/7", { anchor: "middle" })}`
   );
+};
 
 // YouTube banner (2560x1440) with safe area 1546x423 centred
 masters.youtubeBanner = () => {
@@ -336,7 +351,7 @@ masters.igStoryTemplate = () => {
     `${bgFill(w, h)}
      <!-- top brand stack -->
      <g transform="translate(${w / 2},300)">
-       ${stackedLockup(0, 0, 240, 80)}
+       ${stackedLockup(0, 0, 240, 80).svg}
      </g>
      ${liveChip(w / 2 - 46, 600)}
      <!-- mid slot -->
@@ -363,7 +378,7 @@ masters.tiktokCover = () => {
     h,
     `${bgFill(w, h)}
      <g transform="translate(${w / 2},${h / 2 - 140})">
-       ${stackedLockup(0, 0, 320, 100)}
+       ${stackedLockup(0, 0, 320, 100).svg}
      </g>
      ${liveChip(w / 2 - 64, h / 2 + 220, 1.3)}
      ${eyebrow(w / 2, h - 240, 28, "AI RADIO · ALWAYS ON", { anchor: "middle" })}
@@ -406,7 +421,7 @@ masters.offlineCard = () => {
     h,
     `${bgFill(w, h)}
      <g transform="translate(${w / 2},${h / 2 - 100})">
-       ${stackedLockup(0, 0, 260, 84)}
+       ${stackedLockup(0, 0, 260, 84).svg}
      </g>
      ${eyebrow(w / 2, h / 2 + 150, 26, "OFF AIR", { anchor: "middle", color: C.fg })}
      ${eyebrow(w / 2, h / 2 + 210, 20, "BE RIGHT BACK · NUMARADIO.COM", { anchor: "middle" })}
