@@ -252,7 +252,14 @@ masters.lockupStacked = (size) =>
      ${stackedLockup(size / 2, size / 2, size * 0.38, size * 0.085).svg}`
   );
 
-// YouTube banner (2560x1440) with safe area 1546x423 centred
+// YouTube banner (2560x1440) — editorial two-column layout inside the
+// 1546x423 safe area (visible on mobile + everywhere). Left column carries
+// the brand stack (mark above wordmark). Right column carries the hero
+// statement, mirroring the homepage rhythm: small mono eyebrow, big display
+// headline with NEVER in mint, URL caption beneath. A single hairline
+// separator divides the columns. Outside the safe area only the LIVE chip
+// shows (top-right) — no duplicated EQ bars, no top-left brand pin (it would
+// just repeat the safe-area lockup).
 masters.youtubeBanner = () => {
   const w = 2560,
     h = 1440;
@@ -260,30 +267,51 @@ masters.youtubeBanner = () => {
     safeH = 423;
   const sx = (w - safeW) / 2,
     sy = (h - safeH) / 2;
+
+  // Column geometry inside the safe area
+  const colMidX = sx + safeW / 2; // separator x (canvas coords)
+  const leftMidX = sx + safeW * 0.27; // brand stack center
+  const rightStartX = sx + safeW * 0.55; // right column left edge
+  const safeMidY = sy + safeH / 2;
+
+  // Headline rhythm — three lines, NEVER tinted accent. Display 84px.
+  const headSize = 84;
+  const headLineH = 88;
+  const headTopBaselineY = safeMidY - headLineH + 10;
+
   return svg(
     w,
     h,
     `${bgFill(w, h)}
-     <!-- decorative outer EQ band -->
-     ${eqBars(sx - 220, sy + 120, 18, 180, [0.4, 0.8, 1.0, 0.65, 0.9, 0.5])}
-     ${eqBars(sx + safeW + 20, sy + 120, 18, 180, [0.5, 0.9, 0.65, 1.0, 0.8, 0.4])}
-     <!-- safe area content -->
-     <g transform="translate(${sx},${sy})">
-       ${horizontalLockup(safeW / 2, safeH / 2 - 30, 180, 120)}
-       ${eyebrow(safeW / 2, safeH / 2 + 80, 22, "THE STATION THAT NEVER SLEEPS  ·  LISTEN AT NUMARADIO.COM", { anchor: "middle" })}
-     </g>
-     <!-- top-left brand pin + REQUESTS ON AIR caption + live chip
-          (visible on desktop/TV outside the safe area) -->
-     <g transform="translate(120,120)">
-       ${logoMark(30, 30, 60, { halo: false })}
-       <text x="80" y="34" fill="${C.fg}" font-family="ArchivoBlack"
-             font-size="28" letter-spacing="0.04em">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
-       <text x="80" y="60" fill="${C.fgDim}" font-family="JBMono"
-             font-size="13" letter-spacing="0.22em">REQUESTS ON AIR</text>
-     </g>
-     ${liveChip(w - 260, 120, 1.4)}
-     <!-- bottom-right corner accent -->
-     <rect x="${w - 400}" y="${h - 80}" width="260" height="2" fill="url(#accentFade)"/>`
+
+     <!-- LEFT column: brand stack centered in its half -->
+     ${stackedLockup(leftMidX, safeMidY, 230, 64, { gap: 36 }).svg}
+
+     <!-- vertical hairline separator between the two columns -->
+     <line x1="${colMidX}" y1="${sy + 60}" x2="${colMidX}" y2="${sy + safeH - 60}"
+           stroke="${C.lineStrong}" stroke-width="1" />
+
+     <!-- RIGHT column: editorial hero stack, left-aligned at rightStartX -->
+     <text x="${rightStartX}" y="${headTopBaselineY - 42}" fill="${C.fgDim}"
+           font-family="JBMono" font-size="20" letter-spacing="0.28em"
+           dominant-baseline="alphabetic">EST. 2026  ·  REQUESTS ON AIR</text>
+
+     <text x="${rightStartX}" y="${headTopBaselineY}" fill="${C.fg}"
+           font-family="ArchivoBlack" font-size="${headSize}"
+           letter-spacing="-0.005em">THE STATION</text>
+     <text x="${rightStartX}" y="${headTopBaselineY + headLineH}" fill="${C.fg}"
+           font-family="ArchivoBlack" font-size="${headSize}"
+           letter-spacing="-0.005em">THAT <tspan fill="${C.accent}">NEVER</tspan></text>
+     <text x="${rightStartX}" y="${headTopBaselineY + headLineH * 2}" fill="${C.fg}"
+           font-family="ArchivoBlack" font-size="${headSize}"
+           letter-spacing="-0.005em">SLEEPS.</text>
+
+     <text x="${rightStartX}" y="${headTopBaselineY + headLineH * 2 + 56}" fill="${C.fg}"
+           font-family="JBMono" font-size="22" letter-spacing="0.22em"
+           dominant-baseline="alphabetic">NUMARADIO.COM</text>
+
+     <!-- LIVE chip top-right (TV/desktop area only) -->
+     ${liveChip(w - 260, 120, 1.4)}`
   );
 };
 
