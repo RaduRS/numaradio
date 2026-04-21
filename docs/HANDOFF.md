@@ -1,8 +1,8 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-21 (WSL idle-shutdown fix, shoutout replay-storm fix,
-audio-player auto-reconnect — all three landed after the first unattended
-restart test surfaced them)
+Last updated: 2026-04-21 (afternoon — WSL idle-shutdown round 2: the earlier
+`.wslconfig` fix wasn't enough, task action now keeps `wsl.exe` persistently
+attached via `/bin/sleep infinity`)
 
 ## Where we are
 
@@ -174,14 +174,18 @@ to the MiniMax endpoint. See
   and `numa-rotation-refresher.timer` without a password. Scope is a strict
   Cmnd_Alias — no wildcards, both `foo` and `foo.service` spellings listed.
 
-**WSL auto-start on Windows boot — 2026-04-21**
+**WSL auto-start on Windows boot — 2026-04-21 (revised)**
 Orion runs Numa Radio inside WSL2. The Windows scheduled task
 `Start WSL (Numa Radio)` has three triggers (AtStartup / AtLogOn /
-SessionUnlock), runs as S4U, and is paired with a `%USERPROFILE%\.wslconfig`
-that sets `vmIdleTimeout=-1` so the VM doesn't idle-shutdown ~60 s after the
-task's one-shot `wsl.exe … /bin/true` kick exits. Together: the radio stack
-comes back on air after unattended reboots without anyone logging in AND
-stays up.
+SessionUnlock), runs as S4U, and its action now **keeps `wsl.exe`
+persistently attached** to the Ubuntu distro via `/bin/sleep infinity`.
+That single attached session is what prevents WSL from idle-shutting-down
+after the radio stack comes up — no logged-in user needed. The task's
+`ExecutionTimeLimit` is `PT0S` (no limit) so the persistent attachment isn't
+killed at 5 min. `.wslconfig` `vmIdleTimeout=-1` is retained as a secondary
+safety net but is no longer the primary mechanism — the initial fix relied
+on it alone and didn't survive the second unattended test-reboot. See
+Decisions Log 2026-04-21 (afternoon) for the full postmortem.
 
 Installer lives at `deploy/windows/install-autostart.ps1` (run elevated after
 a Windows reinstall). It registers the scheduled task AND copies
@@ -191,11 +195,11 @@ a Windows reinstall). It registers the scheduled task AND copies
 Context: on 2026-04-21 at 02:19:56 BST the host BSOD'd (bugcheck `0x0000000A`)
 and auto-rebooted at 02:31, but the stream stayed down until 07:47 because the
 task's only trigger was "at user logon." S4U + AtStartup closes that gap. The
-`vmIdleTimeout` step was added later the same day after a clean test-reboot
-showed WSL booting, services starting, and then WSL powering off again after
-~19 s — the `wsl.exe … /bin/true` action exits immediately, leaving no
-attached Windows-side session to keep the VM alive. `vmIdleTimeout=-1` fixes
-that. See Decisions Log 2026-04-21.
+first attempt at the idle-timeout problem wrote `.wslconfig` with
+`vmIdleTimeout=-1`; that didn't survive the second unattended test-reboot,
+so the task action now uses `/bin/sleep infinity` to keep `wsl.exe`
+persistently attached instead of relying on the idle-timeout knob. See
+Decisions Log 2026-04-21 and 2026-04-21 (afternoon).
 
 **After any full Windows reboot, verify from a phone or another device:**
 `curl -sI https://api.numaradio.com/stream` should return `200` within ~90s of
@@ -207,6 +211,15 @@ POST, *without* logging into Orion. If it doesn't, check:
 Rollback: `schtasks /create /tn "Start WSL (Numa Radio)" /xml deploy\windows\Start-WSL-NumaRadio.backup.xml /f`.
 To undo the idle-timeout change: delete `%USERPROFILE%\.wslconfig` (next full
 Windows reboot will revert to the 60-second default).
+
+**Verifying the attached-session fix on Orion:**
+```
+powershell.exe Get-ScheduledTask -TaskName 'Start WSL (Numa Radio)' | \
+  Select-Object TaskName, State           # State should be "Running"
+ps -ef | grep 'sleep infinity' | grep -v grep   # /bin/sleep infinity must be present
+```
+If either is missing after a reboot, the fallback path is `vmIdleTimeout=-1`
+in `.wslconfig` — still a valid defence.
 
 Spec: `docs/superpowers/specs/2026-04-21-wsl-autostart-design.md`
 Plan: `docs/superpowers/plans/2026-04-21-wsl-autostart.md`

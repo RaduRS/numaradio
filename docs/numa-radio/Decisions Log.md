@@ -4,6 +4,27 @@ Living record of decisions made in chat that aren't already captured elsewhere i
 
 ---
 
+## 2026-04-21 (afternoon) — WSL idle-shutdown, round 2 (`vmIdleTimeout=-1` wasn't enough)
+
+Second unattended test-reboot: the earlier `.wslconfig` fix didn't save the stream. It died ~39 min after boot and didn't come back until the user logged in.
+
+- **Symptom:** stream came alive after a PC restart without logging in (great), then went dead again "very soon after" and never recovered until someone logged in.
+- **Evidence (`journalctl --list-boots`):**
+  - `09:27:04 → 09:27:23` (19 s) — classic pre-fix death. `.wslconfig` didn't exist yet (file was created at **09:44:33** per NTFS `CreationTime`).
+  - `09:29:50 → 10:09:43` (39 min) — user-attached session kept the VM alive; died ~60 s after the user detached (default `vmIdleTimeout` applied because that boot preceded the `.wslconfig` write too).
+  - `10:10:39 → current` — came back only because the user logged in and the logon trigger re-fired the task.
+- **Root cause:** the earlier fix relied on `vmIdleTimeout=-1` holding across all WSL versions. That's a single fragile knob — `-1` isn't documented by Microsoft as a valid value, behaviour is inconsistent across WSL releases, and the task action (`wsl.exe ... /bin/true`) exited immediately so there was never a Windows-side session to fall back on. We also never actually tested an unattended boot with the config in place — every "survived" boot had the user's own terminal attached.
+- **Fix:** change the scheduled task action to attach persistently to the VM:
+  - `Arguments = -d Ubuntu -u marku -- /bin/sleep infinity` (zero CPU, stays attached forever)
+  - `ExecutionTimeLimit = PT0S` (no limit — `PT5M` would have killed our persistent attachment after 5 min, reintroducing the same idle-shutdown problem)
+  - `MultipleInstances = IgnoreNew` is retained, so the logon/unlock triggers are no-ops while the boot trigger's instance is already running.
+  - `RestartCount = 3 / RestartInterval = PT1M` retained as the recovery path if `wsl.exe` ever dies (e.g., someone runs `wsl --shutdown`).
+- **`.wslconfig` retained as secondary safety net.** `vmIdleTimeout=-1` still costs nothing to keep, and if the task attachment ever drops it gives us a second line of defence.
+- **Applied live via elevated PowerShell** (`Set-ScheduledTask` on an S4U task requires admin). Verified by firing the task manually and seeing `/bin/sleep infinity` (PID inside WSL) owned by the task's `wsl.exe`, task state = Running.
+- **Lesson for future OS-level fixes:** verify the unattended code-path directly — don't infer from "it stayed up while I was on it."
+
+---
+
 ## 2026-04-21 — WSL idle-shutdown, shoutout replay-storm, audio-player auto-reconnect
 
 First deliberate test-reboot of the AtStartup scheduled task surfaced three stacked bugs. All fixed.

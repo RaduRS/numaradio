@@ -12,10 +12,11 @@ $ErrorActionPreference = 'Stop'
 $taskName = 'Start WSL (Numa Radio)'
 $userId   = 'ORION\marku'
 
-# --- Install .wslconfig so the VM doesn't idle-shutdown after the task's -
-# one-shot wsl.exe call exits. Without this, the VM dies ~60s after the
-# scheduled task fires and the radio stack goes offline before anyone
-# notices. See Decisions Log 2026-04-21 (player-auto-reconnect + WSL idle).
+# --- Install .wslconfig as a secondary safety net (vmIdleTimeout=-1). The
+# primary mechanism is now a persistent wsl.exe attachment via the task
+# action below (/bin/sleep infinity), which keeps the VM alive without
+# relying on WSL honouring a negative idle-timeout value. See Decisions
+# Log 2026-04-21 entries for both the original fix and this iteration.
 $repoRoot  = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $wslSrc    = Join-Path $PSScriptRoot 'wslconfig'
 $wslDst    = Join-Path $env:USERPROFILE '.wslconfig'
@@ -59,7 +60,7 @@ $s.StopIfGoingOnBatteries     = $false
 $s.MultipleInstances          = 2        # IgnoreNew
 $s.RestartCount               = 3
 $s.RestartInterval            = 'PT1M'
-$s.ExecutionTimeLimit         = 'PT5M'
+$s.ExecutionTimeLimit         = 'PT0S'   # no limit — wsl.exe stays attached forever
 $s.Hidden                     = $false
 $s.Priority                   = 7
 
@@ -78,10 +79,14 @@ $t3.StateChange = 8              # SESSION_UNLOCK
 $t3.UserId      = $userId
 $t3.Enabled     = $true
 
-# Action: kick the Ubuntu distro
+# Action: attach to Ubuntu and stay attached forever.
+# `/bin/sleep infinity` keeps wsl.exe running with zero CPU, which keeps a
+# Windows-side session attached to the VM. That's what prevents the WSL idle
+# shutdown — the previous /bin/true exited immediately, leaving no attached
+# session, so the VM died as soon as the vmIdleTimeout window elapsed.
 $a = $task.Actions.Create(0)     # TASK_ACTION_EXEC
 $a.Path      = 'wsl.exe'
-$a.Arguments = '-d Ubuntu -u marku -- /bin/true'
+$a.Arguments = '-d Ubuntu -u marku -- /bin/sleep infinity'
 
 # Register (flags: 6 = CREATE_OR_UPDATE, logonType S4U)
 $root.RegisterTaskDefinition(
