@@ -115,12 +115,24 @@ const logoMark = (cx, cy, size, { halo = true } = {}) => {
 /** "NUMA·RADIO" wordmark — matches the navbar's rendered output: the .logo
    class applies text-transform: uppercase to "Numa·Radio", so on screen the
    user sees CAPS with a mint-accent middle dot. We emit caps directly here
-   since SVG text-transform support is patchy. (x,y) is the start anchor of
-   the text baseline. */
-const wordmark = (x, y, size, { color = C.fg, tracking = "0.04em" } = {}) => `
+   since SVG text-transform support is patchy.
+
+   `anchor` controls how (x,y) is interpreted:
+   - "start"  — (x,y) is the baseline at the LEFT edge of the text
+   - "middle" — (x,y) is the baseline at the HORIZONTAL CENTER of the text
+   - "end"    — (x,y) is the baseline at the RIGHT edge of the text
+
+   Use "middle" whenever you want the text centered on a column — that way
+   SVG handles the math instead of us estimating glyph widths. */
+const wordmark = (
+  x,
+  y,
+  size,
+  { color = C.fg, tracking = "0.04em", anchor = "start" } = {},
+) => `
   <text x="${x}" y="${y}" fill="${color}"
         font-family="ArchivoBlack" font-size="${size}"
-        letter-spacing="${tracking}" text-anchor="start"
+        letter-spacing="${tracking}" text-anchor="${anchor}"
         dominant-baseline="alphabetic">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
 `;
 
@@ -177,22 +189,23 @@ const horizontalLockup = (cx, cy, markSize, wordSize, { color = C.fg } = {}) => 
 
 /** Stacked lockup: mark on top, wordmark below, the whole group centered on
    (cx, cy). Returns the wordmark baseline as `wordBaselineY` so callers can
-   anchor follow-up elements (e.g. an eyebrow) below it without guessing. */
+   anchor follow-up elements (e.g. an eyebrow) below it without guessing.
+
+   The wordmark uses text-anchor="middle" anchored at cx, so SVG centers it
+   exactly — no glyph-width estimation. */
 const CAP_HEIGHT_RATIO = 0.72; // Archivo Black ascender→baseline ≈ 0.72em
 const stackedLockup = (cx, cy, markSize, wordSize, { color = C.fg, gap } = {}) => {
-  const stackGap = gap ?? wordSize * 0.55;
+  const stackGap = gap ?? wordSize * 0.9;
   const capHeight = wordSize * CAP_HEIGHT_RATIO;
   const totalHeight = markSize + stackGap + capHeight;
   const top = cy - totalHeight / 2;
   const markCy = top + markSize / 2;
   const wordBaselineY = top + markSize + stackGap + capHeight;
-  // "NUMA·RADIO" at Archivo Black ≈ 6.4em wide with 0.04em tracking.
-  const wordmarkHalfWidth = wordSize * 3.2;
   return {
     wordBaselineY,
     svg: `
       ${logoMark(cx, markCy, markSize, { halo: true })}
-      ${wordmark(cx - wordmarkHalfWidth, wordBaselineY, wordSize, { color })}
+      ${wordmark(cx, wordBaselineY, wordSize, { color, anchor: "middle" })}
     `,
   };
 };
