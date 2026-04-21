@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePlayer } from "./PlayerProvider";
 import { ExpandedPlayerDesktop } from "./ExpandedPlayerDesktop";
+import { ExpandedPlayerMobile } from "./ExpandedPlayerMobile";
 
 export function ExpandedPlayer() {
   const { isExpanded, collapse } = usePlayer();
@@ -52,6 +53,7 @@ export function ExpandedPlayer() {
           <div style={{ width: 36 }} />
         </div>
         <ExpandedPlayerDesktop />
+        <ExpandedPlayerMobile />
       </div>
     </div>
   );
