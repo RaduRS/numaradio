@@ -184,45 +184,85 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current;
     if (!audio) return;
 
+    // Any event that means "stream isn't coming in" falls through to here.
+    // In real outages browsers diverge: Chrome often fires `error`, Safari
+    // may just fire `pause` or `stalled`, some fire `ended` when the origin
+    // closes the HTTP connection mid-MP3. We treat them all the same — if
+    // the user still wants playback, keep retrying with backoff.
+    const handleInterruption = (reason: string) => {
+      if (!wantPlaybackRef.current) return;
+      // Kill the dead source so the next retry opens a fresh connection
+      // instead of the browser "resuming" from stale state.
+      if (audio.src) {
+        try {
+          audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
+        } catch {
+          /* ignore — best-effort cleanup */
+        }
+      }
+      setStatus("loading");
+      scheduleRetry();
+      // eslint-disable-next-line no-console -- useful breadcrumb for users reporting outage recovery
+      console.debug("[player] interrupted:", reason, "— scheduling reconnect");
+    };
+
     const onPlaying = () => {
       setStatus("playing");
-      // Successful playback — reset the backoff so the *next* outage starts
-      // retrying fast again instead of from wherever we left off.
+      // Successful playback — reset the backoff and cancel any pending
+      // retry so the *next* outage starts retrying fast again.
       retryAttemptRef.current = 0;
+      clearRetry();
     };
     const onWaiting = () => {
       // `waiting` fires for both initial buffer-up and rebuffers; only show
-      // loading if we aren't already playing successfully.
+      // loading if we aren't already playing successfully. The watchdog
+      // effect below escalates to a full reconnect if we're stuck.
       setStatus((prev) => (prev === "playing" ? "playing" : "loading"));
     };
     const onPause = () => {
-      // Only treat as idle if the source is actually unloaded — otherwise
-      // it's a transient browser pause we shouldn't reflect in the UI.
-      if (!audio.src) setStatus("idle");
-    };
-    const onError = () => {
-      // Stream dropped (server restart, tunnel flap, Icecast 404). If the
-      // user had pressed Play, stay in "loading" and auto-retry with backoff
-      // so the stream comes back on its own when the origin is healthy again.
-      if (wantPlaybackRef.current) {
-        setStatus("loading");
-        scheduleRetry();
-      } else {
-        setStatus("error");
+      if (!audio.src) {
+        setStatus("idle");
+        return;
       }
+      // src still set but audio paused — not user-initiated (our pause()
+      // clears src first). Browser auto-paused us, almost always because
+      // the upstream connection dropped. Retry.
+      handleInterruption("pause-with-src");
     };
+    const onError = () => handleInterruption("error");
+    const onStalled = () => handleInterruption("stalled");
+    const onEnded = () => handleInterruption("ended");
 
     audio.addEventListener("playing", onPlaying);
     audio.addEventListener("waiting", onWaiting);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("error", onError);
+    audio.addEventListener("stalled", onStalled);
+    audio.addEventListener("ended", onEnded);
     return () => {
       audio.removeEventListener("playing", onPlaying);
       audio.removeEventListener("waiting", onWaiting);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("error", onError);
+      audio.removeEventListener("stalled", onStalled);
+      audio.removeEventListener("ended", onEnded);
     };
-  }, [scheduleRetry]);
+  }, [scheduleRetry, clearRetry]);
+
+  // Watchdog: while stuck in "loading", force a fresh reconnect every 12s.
+  // Safety net for browsers that go silent without firing any recovery
+  // event (Safari especially) — saw this in live testing where the UI
+  // showed zero audio with no error event for minutes. Event-driven
+  // scheduleRetry is the primary recovery; this is the backstop.
+  useEffect(() => {
+    if (status !== "loading") return;
+    const interval = setInterval(() => {
+      if (wantPlaybackRef.current) playRef.current();
+    }, 12_000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   // Clean up any pending retry timer on unmount.
   useEffect(() => {
