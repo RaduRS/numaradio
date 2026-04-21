@@ -215,14 +215,21 @@ output is un-parseable.
 - `startMusicGeneration({ prompt }): Promise<{ taskId }>`
 - `pollMusicGeneration(taskId): Promise<{ status, audioUrl?,
   durationSeconds?, failureReason? }>`
-- Always sends `is_instrumental: false`, `lyrics_optimizer: true`,
-  `output_format: "url"`. Model is `music-02` (MiniMax's production
-  music model name per reference implementation — see
-  `~/examples/make-noise/app/api/music/route.ts`). If the API returns
-  a different production model name we pin it via env
-  `MINIMAX_MUSIC_MODEL`.
+- Always sends `is_instrumental: true`, `output_format: "url"`.
+  - **MVP is instrumental-only.** The listener provides a 4-240 char
+    prompt; they aren't writing lyrics. MiniMax's `lyrics_optimizer`
+    can auto-write lyrics from a prompt, but that routes listener-
+    submitted text through an LLM that outputs vocal content we'd
+    then have to moderate after the fact. Instrumentals side-step
+    that entirely and keep the MVP pipeline simple. Lyric-enabled
+    songs with output moderation are a Phase B follow-up.
+- Model name: **`music-2.6`** (per the reference UI at
+  `~/examples/make-noise/app/page.tsx:189`). Overridable via env
+  `MINIMAX_MUSIC_MODEL` in case MiniMax's production name changes.
 - Handles the duration normalization quirks the reference code shows
-  (can be returned in ns / µs / ms / samples).
+  (can be returned in ns / µs / ms / samples) — see
+  `~/examples/make-noise/app/api/music/route.ts:48-68` for the
+  normalisation we port over.
 
 **`workers/song-worker/openrouter.ts`** — wraps OpenRouter image
 generation.
@@ -245,8 +252,8 @@ Form fields:
   subcopy: "shown as the credit — will fall back to Numa Radio if
   the name can't be aired".
 - **Describe the song** — textarea, 4-240 chars, required. Label
-  subcopy: "style, mood, vibe, subject — whatever you like. We'll
-  write the lyrics for you".
+  subcopy: "style, mood, vibe, subject — think genre tags and a
+  sentence of feel. Songs are instrumental for now."
 - **Submit** button.
 - Below the button, live counter: "~3 min · N requests in front of
   you" (polls `queue-stats` every 10 s while the form is idle).
@@ -285,8 +292,8 @@ Already set by the operator:
   Orion's `/etc/numa/env` for the worker)
 
 New (optional, defaults in code):
-- `MINIMAX_MUSIC_MODEL` (default `music-02`)
-- `MINIMAX_MODERATION_MODEL` (already in code default `MiniMax-M2.7`)
+- `MINIMAX_MUSIC_MODEL` (default `music-2.6`)
+- `MINIMAX_MODERATION_MODEL` (already in code, default `MiniMax-M2.7`)
 - `OPENROUTER_IMAGE_MODEL` (default `black-forest-labs/flux.2-pro`)
 
 The worker runs on Orion, so `OPEN_ROUTER_API` must be added to
@@ -385,10 +392,11 @@ migrated `SongRequest` table (empty table costs nothing).
 - Per-user gallery, "recent creations by me".
 - Listener upvote/downvote on generated songs.
 - Variations / regenerate button.
-- Structured form fields (genre dropdown, tempo slider, instrumental
-  toggle, explicit lyrics input).
-- Output moderation (scanning MiniMax-generated lyrics before
-  airing).
+- Structured form fields (genre dropdown, tempo slider, mood
+  preset chips that concatenate into the prompt à la the make-noise
+  reference UI at `~/examples/make-noise/app/page.tsx:279`).
+- Vocal songs (lyrics either listener-written or LLM-derived) with
+  output moderation. MVP is instrumental-only.
 - Dashboard operator curation UI (which generated songs rotate vs.
   stay library-only, deleting tracks, analytics).
 - Payment / monetization.
