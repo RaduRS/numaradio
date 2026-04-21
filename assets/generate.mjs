@@ -274,10 +274,26 @@ masters.youtubeBanner = () => {
   const rightStartX = sx + safeW * 0.55; // right column left edge
   const safeMidY = sy + safeH / 2;
 
-  // Headline rhythm — three lines, NEVER tinted accent. Display 84px.
+  // Headline rhythm — three lines, NEVER tinted accent. Compute everything
+  // from the headline cap top instead of the baseline, so gaps above (eyebrow)
+  // and below (URL) are visually correct rather than off by one cap height.
   const headSize = 84;
   const headLineH = 88;
-  const headTopBaselineY = safeMidY - headLineH + 10;
+  const headCapHeight = headSize * CAP_HEIGHT_RATIO;
+  // Center the three-line headline block on safeMidY.
+  const headlineBlockHeight = headCapHeight + headLineH * 2;
+  const headCapTopY = safeMidY - headlineBlockHeight / 2;
+  const headBaseline = (i) => headCapTopY + headCapHeight + headLineH * i;
+
+  // Eyebrow sits with a real gap above the headline cap top.
+  const eyebrowSize = 20;
+  const eyebrowGap = 36;
+  const eyebrowBaselineY = headCapTopY - eyebrowGap;
+
+  // URL sits with a real gap below the last headline baseline.
+  const urlSize = 22;
+  const urlGap = 38;
+  const urlBaselineY = headBaseline(2) + urlGap + urlSize * CAP_HEIGHT_RATIO;
 
   return svg(
     w,
@@ -292,22 +308,22 @@ masters.youtubeBanner = () => {
            stroke="${C.lineStrong}" stroke-width="1" />
 
      <!-- RIGHT column: editorial hero stack, left-aligned at rightStartX -->
-     <text x="${rightStartX}" y="${headTopBaselineY - 42}" fill="${C.fgDim}"
-           font-family="JBMono" font-size="20" letter-spacing="0.28em"
+     <text x="${rightStartX}" y="${eyebrowBaselineY}" fill="${C.fgDim}"
+           font-family="JBMono" font-size="${eyebrowSize}" letter-spacing="0.28em"
            dominant-baseline="alphabetic">EST. 2026  ·  REQUESTS ON AIR</text>
 
-     <text x="${rightStartX}" y="${headTopBaselineY}" fill="${C.fg}"
+     <text x="${rightStartX}" y="${headBaseline(0)}" fill="${C.fg}"
            font-family="ArchivoBlack" font-size="${headSize}"
            letter-spacing="-0.005em">THE STATION</text>
-     <text x="${rightStartX}" y="${headTopBaselineY + headLineH}" fill="${C.fg}"
+     <text x="${rightStartX}" y="${headBaseline(1)}" fill="${C.fg}"
            font-family="ArchivoBlack" font-size="${headSize}"
            letter-spacing="-0.005em">THAT <tspan fill="${C.accent}">NEVER</tspan></text>
-     <text x="${rightStartX}" y="${headTopBaselineY + headLineH * 2}" fill="${C.fg}"
+     <text x="${rightStartX}" y="${headBaseline(2)}" fill="${C.fg}"
            font-family="ArchivoBlack" font-size="${headSize}"
            letter-spacing="-0.005em">SLEEPS.</text>
 
-     <text x="${rightStartX}" y="${headTopBaselineY + headLineH * 2 + 56}" fill="${C.fg}"
-           font-family="JBMono" font-size="22" letter-spacing="0.22em"
+     <text x="${rightStartX}" y="${urlBaselineY}" fill="${C.fg}"
+           font-family="JBMono" font-size="${urlSize}" letter-spacing="0.22em"
            dominant-baseline="alphabetic">NUMARADIO.COM</text>
 
      <!-- LIVE chip top-right (TV/desktop area only) -->
@@ -426,81 +442,131 @@ masters.tiktokCover = () => {
   );
 };
 
-// YouTube video thumbnail template 1280x720 — base plate with swap-in title area
+// YouTube video thumbnail template 1280x720 — editorial split.
+// Left column: compact horizontal brand lockup pinned top-left, a vertical
+// hairline separator continues down to anchor the brand column visually.
+// Right column: episode eyebrow top-right, two-line "VIDEO / TITLE"
+// placeholder right-aligned, accent underline, LIVE chip bottom-right. The
+// previous layout split the brand across opposite corners (mark top-left,
+// wordmark bottom-left), which read as two separate marks rather than one.
 masters.youtubeThumbnail = () => {
   const w = 1280,
     h = 720;
+  const padX = 64;
+  const colSplitX = w * 0.32;
+  const titleSize = 116;
+  const titleLineH = 124;
+  const titleCapHeight = titleSize * CAP_HEIGHT_RATIO;
+  const titleBlockHeight = titleCapHeight + titleLineH;
+  const titleCapTopY = h / 2 - titleBlockHeight / 2;
+  const titleBaseline = (i) => titleCapTopY + titleCapHeight + titleLineH * i;
+
   return svg(
     w,
     h,
     `${bgFill(w, h)}
-     <!-- left side: brand column -->
-     <g transform="translate(60,60)">
-       ${logoMark(40, 40, 80, { halo: false })}
+
+     <!-- LEFT brand column: compact horizontal lockup top-left -->
+     <g transform="translate(${padX},${padX + 8})">
+       ${logoMark(22, 22, 44, { halo: false })}
+       <text x="60" y="30" fill="${C.fg}"
+             font-family="ArchivoBlack" font-size="26" letter-spacing="0.04em"
+             dominant-baseline="alphabetic">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
      </g>
-     <text x="60" y="${h - 70}" fill="${C.fg}"
-           font-family="ArchivoBlack" font-size="56" letter-spacing="0.04em">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
-     <!-- right side: title slot -->
-     ${eyebrow(w - 60, 100, 22, "EP. 001 · TITLE GOES HERE", { anchor: "end" })}
-     <text x="${w - 60}" y="${h / 2}" fill="${C.fg}" text-anchor="end"
-           font-family="ArchivoBlack" font-size="120" letter-spacing="-0.02em">VIDEO</text>
-     <text x="${w - 60}" y="${h / 2 + 140}" fill="${C.fg}" text-anchor="end"
-           font-family="ArchivoBlack" font-size="120" letter-spacing="-0.02em">TITLE</text>
-     <rect x="${w - 60}" y="${h / 2 + 170}" width="400" height="4" fill="${C.accent}"
-           transform="translate(-400,0)"/>
-     ${liveChip(w - 240, h - 80, 1.2)}`
+     <!-- vertical hairline anchoring the brand column -->
+     <line x1="${colSplitX}" y1="${padX + 30}" x2="${colSplitX}" y2="${h - padX - 30}"
+           stroke="${C.lineStrong}" stroke-width="1"/>
+
+     <!-- RIGHT title column -->
+     <text x="${w - padX}" y="${titleCapTopY - 24}" fill="${C.fgDim}" text-anchor="end"
+           font-family="JBMono" font-size="20" letter-spacing="0.28em"
+           dominant-baseline="alphabetic">EP. 001 · TITLE GOES HERE</text>
+
+     <text x="${w - padX}" y="${titleBaseline(0)}" fill="${C.fg}" text-anchor="end"
+           font-family="ArchivoBlack" font-size="${titleSize}" letter-spacing="-0.02em">VIDEO</text>
+     <text x="${w - padX}" y="${titleBaseline(1)}" fill="${C.fg}" text-anchor="end"
+           font-family="ArchivoBlack" font-size="${titleSize}" letter-spacing="-0.02em">TITLE</text>
+
+     <!-- accent underline anchored to the right edge under the title block -->
+     <rect x="${w - padX - 320}" y="${titleBaseline(1) + 24}" width="320" height="4" fill="${C.accent}"/>
+
+     ${liveChip(w - 200, h - padX - 8, 1.1)}`
   );
 };
 
-// Offline card — shared across YouTube / Twitch "be right back" screens
+// Offline card — shared across YouTube / Twitch "be right back" screens.
+// Editorial: brand stack centered as the calm focal point, an "OFF AIR"
+// status pill (amber-toned to read as paused, not error), a mono URL caption
+// underneath. No EQ bars — we're off air, no signal to visualize.
 masters.offlineCard = () => {
   const w = 1920,
     h = 1080;
+  const cx = w / 2,
+    cy = h / 2;
+  const stack = stackedLockup(cx, cy - 60, 240, 76, { gap: 38 });
+  const pillW = 180,
+    pillH = 44,
+    pillY = stack.wordBaselineY + 70;
   return svg(
     w,
     h,
     `${bgFill(w, h)}
-     <g transform="translate(${w / 2},${h / 2 - 100})">
-       ${stackedLockup(0, 0, 260, 84).svg}
+     ${stack.svg}
+
+     <!-- OFF AIR status pill, amber-toned (not red — we're paused, not broken) -->
+     <g transform="translate(${cx - pillW / 2},${pillY})">
+       <rect width="${pillW}" height="${pillH}" rx="${pillH / 2}"
+             fill="rgba(232,217,176,0.10)" stroke="${C.warm}" stroke-opacity="0.55" stroke-width="1"/>
+       <circle cx="22" cy="${pillH / 2}" r="5" fill="${C.warm}"/>
+       <text x="40" y="${pillH / 2 + 5}" fill="${C.fg}"
+             font-family="JBMono" font-size="14" letter-spacing="0.25em">OFF AIR</text>
      </g>
-     ${eyebrow(w / 2, h / 2 + 150, 26, "OFF AIR", { anchor: "middle", color: C.fg })}
-     ${eyebrow(w / 2, h / 2 + 210, 20, "BE RIGHT BACK · NUMARADIO.COM", { anchor: "middle" })}
-     ${eqBars(w / 2 - 120, h - 200, 24, 120, [0.3, 0.5, 0.4, 0.6, 0.45])}`
+
+     <text x="${cx}" y="${pillY + pillH + 56}" fill="${C.fgDim}" text-anchor="middle"
+           font-family="JBMono" font-size="20" letter-spacing="0.28em"
+           dominant-baseline="alphabetic">BE RIGHT BACK  ·  NUMARADIO.COM</text>`
   );
 };
 
-// Live-stream OBS overlay 1920x1080 (transparent bg, brand + LIVE + lower-third box)
+// Live-stream OBS overlay 1920x1080 — transparent bg over video. Three
+// pieces only: brand pill top-left, LIVE chip top-right, lower-third
+// "now playing" card bottom-left. The bottom-right URL was dropped — the
+// brand pill already implies the URL and the corner clutter pulled the eye
+// off the actual video content the overlay is supposed to sit on top of.
 masters.liveOverlay = () => {
   const w = 1920,
     h = 1080;
+  const pillW = 360,
+    pillH = 68;
   return svg(
     w,
     h,
     `<!-- transparent bg intentional -->
-     <!-- top-left brand -->
+
+     <!-- top-left brand pill -->
      <g transform="translate(48,48)">
-       <rect x="0" y="0" width="380" height="72" rx="36" fill="rgba(11,12,14,0.72)"
-             stroke="${C.line}" stroke-width="1"/>
-       ${logoMark(48, 36, 48, { halo: false })}
-       <text x="96" y="46" fill="${C.fg}"
-             font-family="ArchivoBlack" font-size="22" letter-spacing="0.04em">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
+       <rect x="0" y="0" width="${pillW}" height="${pillH}" rx="${pillH / 2}"
+             fill="rgba(11,12,14,0.78)" stroke="${C.line}" stroke-width="1"/>
+       ${logoMark(pillH / 2, pillH / 2, pillH * 0.72, { halo: false })}
+       <text x="${pillH + 16}" y="${pillH / 2 + 7}" fill="${C.fg}"
+             font-family="ArchivoBlack" font-size="22" letter-spacing="0.04em"
+             dominant-baseline="alphabetic">NUMA<tspan fill="${C.accent}">·</tspan>RADIO</text>
      </g>
+
      <!-- top-right live chip -->
      ${liveChip(w - 160, 60, 1.2)}
-     <!-- bottom lower-third -->
-     <g transform="translate(48,${h - 160})">
-       <rect x="0" y="0" width="720" height="112" rx="16"
-             fill="rgba(11,12,14,0.78)" stroke="${C.line}" stroke-width="1"/>
-       ${eqBars(28, 28, 10, 56, [0.6, 1.0, 0.5, 0.85, 0.7])}
-       <text x="120" y="50" fill="${C.fgDim}"
-             font-family="JBMono" font-size="13" letter-spacing="0.22em">NOW PLAYING</text>
-       <text x="120" y="88" fill="${C.fg}"
-             font-family="ArchivoBlack" font-size="26" letter-spacing="0.01em">TRACK · ARTIST</text>
-     </g>
-     <!-- bottom-right url -->
-     <g transform="translate(${w - 320},${h - 80})">
-       <text x="0" y="0" fill="${C.fg}" font-family="JBMono"
-             font-size="22" letter-spacing="0.22em">NUMARADIO.COM</text>
+
+     <!-- bottom-left lower-third "now playing" card -->
+     <g transform="translate(48,${h - 168})">
+       <rect x="0" y="0" width="760" height="120" rx="16"
+             fill="rgba(11,12,14,0.82)" stroke="${C.line}" stroke-width="1"/>
+       ${eqBars(28, 30, 10, 60, [0.6, 1.0, 0.5, 0.85, 0.7])}
+       <text x="124" y="50" fill="${C.fgDim}"
+             font-family="JBMono" font-size="13" letter-spacing="0.22em"
+             dominant-baseline="alphabetic">NOW PLAYING</text>
+       <text x="124" y="92" fill="${C.fg}"
+             font-family="ArchivoBlack" font-size="28" letter-spacing="0.01em"
+             dominant-baseline="alphabetic">TRACK <tspan fill="${C.fgDim}">·</tspan> ARTIST</text>
      </g>`
   );
 };
