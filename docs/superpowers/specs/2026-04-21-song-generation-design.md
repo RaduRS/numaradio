@@ -103,6 +103,8 @@ model SongRequest {
   prompt             String    @db.Text
   artistName         String
   originalArtistName String?
+  isInstrumental     Boolean   @default(false)
+  lyricsFallback     Boolean   @default(false)  // true when vocal request was silently downgraded
   moderationStatus   String
   moderationReason   String?
   status             String    @default("queued")
@@ -110,6 +112,7 @@ model SongRequest {
   miniMaxTaskId      String?
   titleGenerated     String?
   artworkPrompt      String?
+  lyricsGenerated    String?   @db.Text         // null when instrumental
   trackId            String?
   createdAt          DateTime  @default(now())
   startedAt          DateTime?
@@ -133,7 +136,9 @@ shape as booth shoutouts and seed-ingest tracks.
 ### 2. Public API (Vercel, `app/api/booth/*`)
 
 **`POST /api/booth/song`**
-- Body: `{ prompt: string (4-240 chars), artistName: string (2-40 chars) }`.
+- Body: `{ prompt: string (4-240 chars), artistName: string (2-40
+  chars), isInstrumental: boolean }`. `isInstrumental` defaults to
+  `false` if omitted (matches the form's default: vocal).
 - IP-hash rate-limit (1/hr, 3/day) counted from `SongRequest` where
   `ipHash=… AND createdAt > now() - interval`. Reject with 429 +
   `retryAfterSeconds`.
@@ -172,16 +177,16 @@ New top-level module at `workers/song-worker/`:
 
 ```
 workers/song-worker/
-  index.ts          # entry: init DB, start loop, start crash-recovery sweeper
-  claim.ts          # SELECT ... FOR UPDATE SKIP LOCKED; UPDATE to processing
-  pipeline.ts       # the 6-step generation pipeline (LLM → music+art → B2 → DB → queue)
-  minimax.ts        # /v1/music_generation client (POST start, poll status)
-  openrouter.ts     # flux.2-pro image client (single POST, await)
-  title-from-prompt.ts  # LLM helper: prompt → {title, artworkPrompt}
-  sweeper.ts        # reset processing > 10 min back to queued
+  index.ts            # entry: init DB, start loop, start crash-recovery sweeper
+  claim.ts            # SELECT ... FOR UPDATE SKIP LOCKED; UPDATE to processing
+  pipeline.ts         # the 6-step generation pipeline (LLM → music+art → B2 → DB → queue)
+  minimax.ts          # /v1/music_generation client (POST start, poll status)
+  openrouter.ts       # flux.2-pro image client (single POST, await)
+  prompt-expand.ts    # LLM helper: prompt → {title, artworkPrompt, lyrics?}
+  sweeper.ts          # reset processing > 10 min back to queued
   pipeline.test.ts
   claim.test.ts
-  title-from-prompt.test.ts
+  prompt-expand.test.ts
 ```
 
 Runs as a standalone Node process: `tsx workers/song-worker/index.ts`.
@@ -197,35 +202,51 @@ status='processing' AND startedAt < now() - interval '10 minutes'`.
 
 ### 4. LLM helpers
 
-**`workers/song-worker/title-from-prompt.ts`** — single MiniMax M2.7
+**`workers/song-worker/prompt-expand.ts`** — single MiniMax M2.7
 call with a small classifier-style prompt that returns strict JSON:
 
 ```json
 {
   "title": "Rainy Morning Coffee",
-  "artworkPrompt": "Moody ink-wash painting of steaming coffee cup on rainy windowsill, muted palette, tasteful album cover composition"
+  "artworkPrompt": "Moody ink-wash painting of steaming coffee cup on rainy windowsill, muted palette, tasteful album cover composition",
+  "lyrics": "[verse] Steam rises slow / rain hits the pane / the world outside / just whispers my name\n\n[chorus] Quiet days, quiet ways..."
 }
 ```
 
-Title ≤ 50 chars, artworkPrompt ≤ 280 chars. Falls back to
-`{ title: prompt.slice(0, 50), artworkPrompt: prompt }` if the LLM
-output is un-parseable.
+- `title` ≤ 50 chars.
+- `artworkPrompt` ≤ 280 chars.
+- `lyrics` ≤ 400 chars. **Only included when the listener unchecked
+  "instrumental only"** — the worker asks the LLM for lyrics
+  conditionally (prompt includes or omits the lyrics instruction).
+- Falls back to `{ title: prompt.slice(0, 50), artworkPrompt:
+  prompt, lyrics: undefined }` if the LLM output is un-parseable.
+  A parse failure on a vocal request silently downgrades to
+  instrumental for that job (better than crashing).
+
+After the LLM step, and only in the vocal path, the worker runs the
+returned `lyrics` through the existing `profanityPrefilter()`. If a
+match is found, the worker **silently flips to instrumental** for
+this job (`is_instrumental=true`, no lyrics) and logs the event.
+The listener still gets a song; they just get the instrumental
+version. Defence in depth against LLM-generated content that slips
+past input moderation.
 
 **`workers/song-worker/minimax.ts`** — wraps MiniMax music API.
-- `startMusicGeneration({ prompt }): Promise<{ taskId }>`
+- `startMusicGeneration({ prompt, lyrics?, isInstrumental }):
+  Promise<{ taskId }>`
 - `pollMusicGeneration(taskId): Promise<{ status, audioUrl?,
   durationSeconds?, failureReason? }>`
-- Always sends `is_instrumental: true`, `output_format: "url"`.
-  - **MVP is instrumental-only.** The listener provides a 4-240 char
-    prompt; they aren't writing lyrics. MiniMax's `lyrics_optimizer`
-    can auto-write lyrics from a prompt, but that routes listener-
-    submitted text through an LLM that outputs vocal content we'd
-    then have to moderate after the fact. Instrumentals side-step
-    that entirely and keep the MVP pipeline simple. Lyric-enabled
-    songs with output moderation are a Phase B follow-up.
+- Sends `output_format: "url"`, `lyrics_optimizer: true`.
+  - When `isInstrumental=true`: sends `is_instrumental: true`, omits
+    `lyrics`.
+  - When `isInstrumental=false`: sends `is_instrumental: false` +
+    `lyrics` (provided by the worker's LLM step). Note that
+    MiniMax's `lyrics_optimizer` only *polishes* lyrics you
+    provide — it does not write them from scratch. The reference
+    UI at `~/examples/make-noise/app/page.tsx:288` confirms this.
 - Model name: **`music-2.6`** (per the reference UI at
   `~/examples/make-noise/app/page.tsx:189`). Overridable via env
-  `MINIMAX_MUSIC_MODEL` in case MiniMax's production name changes.
+  `MINIMAX_MUSIC_MODEL`.
 - Handles the duration normalization quirks the reference code shows
   (can be returned in ns / µs / ms / samples) — see
   `~/examples/make-noise/app/api/music/route.ts:48-68` for the
@@ -251,9 +272,15 @@ Form fields:
 - **Your artist name** — text input, 2-40 chars, required. Label
   subcopy: "shown as the credit — will fall back to Numa Radio if
   the name can't be aired".
-- **Describe the song** — textarea, 4-240 chars, required. Label
-  subcopy: "style, mood, vibe, subject — think genre tags and a
-  sentence of feel. Songs are instrumental for now."
+- **Describe the song** — textarea, 4-240 chars, required.
+  Placeholder: `e.g. chill lo-fi, 90 BPM, A minor key, rainy
+  afternoon, melancholic`. Label subcopy: "include mood, genre,
+  tempo / BPM and key if you care — MiniMax reads all of it".
+- **Instrumental only** — checkbox, default **off** (i.e. vocal by
+  default). When checked, MiniMax is called with `is_instrumental:
+  true` and no lyrics; when unchecked, the worker's LLM step
+  auto-writes short lyrics from the prompt and feeds them to
+  MiniMax.
 - **Submit** button.
 - Below the button, live counter: "~3 min · N requests in front of
   you" (polls `queue-stats` every 10 s while the form is idle).
@@ -346,8 +373,13 @@ Unit (`node --test` harness, matches existing pattern):
 - `workers/song-worker/pipeline.test.ts` — happy path and each
   failure branch against mocked MiniMax / OpenRouter / B2 / queue
   clients.
-- `workers/song-worker/title-from-prompt.test.ts` — parses the LLM
-  JSON reply, falls back gracefully on malformed output.
+- `workers/song-worker/prompt-expand.test.ts` — parses the LLM
+  JSON reply, falls back gracefully on malformed output, and
+  correctly includes or omits the `lyrics` instruction in the
+  system prompt based on `isInstrumental`.
+- Pipeline test for the vocal-lyrics-fallback path: LLM returns
+  lyrics containing a flagged word → pipeline silently flips the
+  job to instrumental, sets `lyricsFallback=true`, carries on.
 
 Integration (manual, on the live stack once deployed):
 1. Submit a prompt from numaradio.com as an anonymous browser. Watch
@@ -392,11 +424,17 @@ migrated `SongRequest` table (empty table costs nothing).
 - Per-user gallery, "recent creations by me".
 - Listener upvote/downvote on generated songs.
 - Variations / regenerate button.
-- Structured form fields (genre dropdown, tempo slider, mood
-  preset chips that concatenate into the prompt à la the make-noise
-  reference UI at `~/examples/make-noise/app/page.tsx:279`).
-- Vocal songs (lyrics either listener-written or LLM-derived) with
-  output moderation. MVP is instrumental-only.
+- Structured form fields (genre dropdown, tempo slider, BPM slider,
+  key picker, mood preset chips that concatenate into the prompt à
+  la the make-noise reference UI at
+  `~/examples/make-noise/app/page.tsx:279`). MVP has a free-form
+  prompt with a helpful placeholder.
+- Listener-written lyrics. MVP LLM-writes them from the prompt when
+  the vocal toggle is on; listener never types a lyric directly.
+- Audio-level output moderation (speech-to-text the generated song
+  to catch MiniMax singing something the LLM didn't write). Current
+  MVP moderates the prompt on the way in and the LLM-drafted
+  lyrics before they're sent to MiniMax.
 - Dashboard operator curation UI (which generated songs rotate vs.
   stay library-only, deleting tracks, analytics).
 - Payment / monetization.
