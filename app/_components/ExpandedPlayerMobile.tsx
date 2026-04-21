@@ -7,6 +7,8 @@ import { PauseIcon, PlayIcon, LoadingIcon } from "./Icons";
 import { ListenerCount } from "./ListenerCount";
 import { RequestForm } from "./RequestForm";
 import { OnAirFeed } from "./OnAirFeed";
+import { ShareControls } from "./ShareControls";
+import { VolumeControl } from "./VolumeControl";
 
 function initials(title: string | undefined): string {
   if (!title) return "··";
@@ -59,6 +61,10 @@ function ListenPane() {
       >
         {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
       </button>
+      <div className="ep-listen-extras">
+        <ShareControls />
+        <VolumeControl />
+      </div>
       <div className="ep-listen-lena">
         <div style={{
           fontFamily: "var(--font-mono)",

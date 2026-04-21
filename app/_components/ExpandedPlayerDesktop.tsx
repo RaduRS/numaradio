@@ -3,6 +3,8 @@
 import { usePlayer } from "./PlayerProvider";
 import { useBroadcast } from "./useBroadcast";
 import { PauseIcon, PlayIcon, LoadingIcon } from "./Icons";
+import { ShareControls } from "./ShareControls";
+import { VolumeControl } from "./VolumeControl";
 
 function fmtDuration(totalSeconds: number | undefined): string {
   if (!totalSeconds || !Number.isFinite(totalSeconds)) return "—";
@@ -53,6 +55,7 @@ export function ExpandedPlayerDesktop() {
           <div className="ep-booth-artist">{artist}</div>
         </div>
         <div className="ep-booth-controls">
+          <ShareControls />
           <button
             className="btn-play"
             onClick={toggle}
@@ -62,6 +65,7 @@ export function ExpandedPlayerDesktop() {
           >
             {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>
+          <VolumeControl />
         </div>
       </div>
 

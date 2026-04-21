@@ -353,6 +353,13 @@
   box-shadow: 0 0 0 1px var(--accent), 0 10px 32px var(--accent-glow);
   cursor: pointer;
 }
+.ep-listen-extras {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
 .ep-listen-lena {
   width: 100%;
   background: rgba(79, 209, 197, 0.06);
