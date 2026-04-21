@@ -2,6 +2,7 @@ import { ListenLiveButton } from "./ListenLiveButton";
 import { ListenerCount } from "./ListenerCount";
 import { SparklesIcon } from "./Icons";
 import { PlayerCard } from "./PlayerCard";
+import { HeroStats } from "./HeroStats";
 
 export function Hero() {
   return (
@@ -34,22 +35,7 @@ export function Hero() {
               Request a Song
             </a>
           </div>
-          <div className="hero-stats">
-            <div className="hero-stat">
-              <div className="n">
-                18<span className="unit">hrs</span>
-              </div>
-              <div className="l">Since last silence</div>
-            </div>
-            <div className="hero-stat">
-              <div className="n">1,204</div>
-              <div className="l">Tracks this week</div>
-            </div>
-            <div className="hero-stat">
-              <div className="n">87</div>
-              <div className="l">Requests tonight</div>
-            </div>
-          </div>
+          <HeroStats />
         </div>
 
         <div className="hero-right">

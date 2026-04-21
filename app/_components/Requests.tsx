@@ -5,10 +5,9 @@ import {
   MegaphoneIcon,
   SparklesIcon,
   SendIcon,
-  CopyIcon,
-  BlueskyIcon,
   LoadingIcon,
 } from "./Icons";
+import { ShoutoutWall } from "./ShoutoutWall";
 
 // Two request types only: Song + Shoutout. Suno-link tab dropped per
 // Decisions Log 2026-04-19 — listener-pasted URLs can't be rights-verified.
@@ -292,163 +291,7 @@ export function Requests() {
             </div>
           </div>
 
-          {/* Shoutout column 1 */}
-          <div className="shout-col">
-            <div className="shout-card featured">
-              <div className="shout-head">
-                <div className="shout-avatar">M</div>
-                <div className="shout-meta">
-                  <div className="shout-name">Mika — Osaka</div>
-                  <div className="shout-time">02:41 AM · Local</div>
-                </div>
-                <div className="shout-tag live">On Air</div>
-              </div>
-              <div className="shout-text">
-                &ldquo;can you tell my sister happy birthday? she&apos;s on night
-                shift and she loves you.&rdquo;
-              </div>
-              <div className="shout-track">
-                <span className="ico" />
-                <span className="tt">Worn Halo</span>
-                <span className="sep">·</span>
-                <span className="ta">Russell Ross</span>
-              </div>
-              <div className="shout-reply">
-                <div className="rep-stamp">
-                  <span className="rep-dot" />
-                  Lena
-                </div>
-                <div className="rep-text">
-                  <span className="q">&ldquo;Mika, you beautiful human.&rdquo;</span>
-                  Happy birthday Yuki — Russell&apos;s got one queued up just for
-                  you, at 2:51.
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  marginTop: 12,
-                  paddingTop: 12,
-                  borderTop: "1px dashed var(--line)",
-                }}
-              >
-                <button className="shout-share" title="Copy link">
-                  <CopyIcon className="" />
-                  Copy link
-                </button>
-                <button className="shout-share" title="Share to Bluesky">
-                  <BlueskyIcon className="" />
-                  Share
-                </button>
-              </div>
-            </div>
-
-            <div className="shout-card">
-              <div className="shout-head">
-                <div className="shout-avatar c2">R</div>
-                <div className="shout-meta">
-                  <div className="shout-name">Reza — Tehran</div>
-                  <div className="shout-time">11:14 AM · Local</div>
-                </div>
-                <div className="shout-tag">Queued · 3</div>
-              </div>
-              <div className="shout-text">
-                &ldquo;first coffee, first sunlight. play something that sounds
-                like the city waking up.&rdquo;
-              </div>
-              <div className="shout-track">
-                <span
-                  className="ico"
-                  style={{ background: "var(--fg-mute)", boxShadow: "none" }}
-                />
-                <span className="tt">Morning Room</span>
-                <span className="sep">·</span>
-                <span className="ta">Russell Ross</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Shoutout column 2 */}
-          <div className="shout-col">
-            <div className="shout-card">
-              <div className="shout-head">
-                <div className="shout-avatar c3">J</div>
-                <div className="shout-meta">
-                  <div className="shout-name">June — Brooklyn</div>
-                  <div className="shout-time">02:38 AM · Local</div>
-                </div>
-                <div className="shout-tag">Played · 02:42</div>
-              </div>
-              <div className="shout-text">
-                &ldquo;lena, we&apos;re on the fire escape again. send us off into
-                sleep.&rdquo;
-              </div>
-              <div className="shout-track">
-                <span
-                  className="ico"
-                  style={{ background: "var(--fg-mute)", boxShadow: "none" }}
-                />
-                <span className="tt">Copperline</span>
-                <span className="sep">·</span>
-                <span className="ta">Russell Ross</span>
-              </div>
-            </div>
-
-            <div className="shout-card">
-              <div className="shout-head">
-                <div className="shout-avatar c4">N</div>
-                <div className="shout-meta">
-                  <div className="shout-name">Nolan — Lisbon</div>
-                  <div className="shout-time">07:51 AM · Local</div>
-                </div>
-                <div className="shout-tag">Queued · 1</div>
-              </div>
-              <div className="shout-text">
-                &ldquo;slow and a little heartbroken, please. it&apos;s one of those
-                mornings.&rdquo;
-              </div>
-              <div className="shout-track">
-                <span className="ico" />
-                <span className="tt">Slow Fade, Brighter</span>
-                <span className="sep">·</span>
-                <span className="ta">Russell Ross</span>
-              </div>
-              <div className="shout-reply">
-                <div className="rep-stamp">
-                  <span className="rep-dot" />
-                  Lena
-                </div>
-                <div className="rep-text">
-                  <span className="q">&ldquo;Heard you, Nolan.&rdquo;</span>
-                  Playing right now — look out the window.
-                </div>
-              </div>
-            </div>
-
-            <div className="shout-card">
-              <div className="shout-head">
-                <div className="shout-avatar c5">E</div>
-                <div className="shout-meta">
-                  <div className="shout-name">Elin — Göteborg</div>
-                  <div className="shout-time">08:24 AM · Local</div>
-                </div>
-                <div className="shout-tag">Queued · 6</div>
-              </div>
-              <div className="shout-text">
-                &ldquo;commute request — something with teeth. thanks.&rdquo;
-              </div>
-              <div className="shout-track">
-                <span
-                  className="ico"
-                  style={{ background: "var(--fg-mute)", boxShadow: "none" }}
-                />
-                <span className="tt">Tunnel 61</span>
-                <span className="sep">·</span>
-                <span className="ta">Russell Ross</span>
-              </div>
-            </div>
-          </div>
+          <ShoutoutWall />
         </div>
       </div>
     </section>
