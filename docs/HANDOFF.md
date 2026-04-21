@@ -1,86 +1,89 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-21 (late evening — Listener Song Generation
-Phase A built; Orion systemd install + Vercel deploy pending operator
-sudo / push)
+Last updated: 2026-04-21 (night — Listener Song Generation Phase A
+LIVE end-to-end)
 
-## Listener Song Generation (Phase A) — BUILT, deploy pending (2026-04-21 late)
+## Listener Song Generation (Phase A) — LIVE (2026-04-21 night)
 
 Listener fills the existing `Song request` tab on `numaradio.com` with
 a prompt (mood / genre / BPM / key / vibe), artist name, and optional
-"instrumental only" toggle. A dedicated `numa-song-worker` on Orion
+"instrumental only" toggle. The dedicated `numa-song-worker` on Orion
 polls Neon, runs a 6-step pipeline per job (LLM prompt-expansion →
-MiniMax `music-2.6` + OpenRouter flux.2-pro artwork in parallel → B2
-upload → Track + TrackAsset insert → queue-daemon push) and airs the
-new song on the stream within ~3-4 min.
+MiniMax `music-2.6` + OpenRouter `black-forest-labs/flux.2-pro`
+artwork in parallel → MP3 duration probe → B2 upload → Track +
+TrackAsset insert → queue-daemon push) and airs the new song on the
+stream within ~1–4 min.
 
 - **Spec:** `docs/superpowers/specs/2026-04-21-song-generation-design.md`
 - **Plan:** `docs/superpowers/plans/2026-04-21-song-generation.md`
-- **Rate limits:** 1/hour, 3/day per IP (enforced via `Shoutout`-style
-  IP-hash lookup in `lib/rate-limit.ts:checkSongRateLimit`). Worker runs
-  one job at a time, bounding spend to the 20/hr MiniMax subscription
-  cap.
-- **Moderation:** prompt runs through the same MiniMax moderator as
-  shoutouts (`moderateShoutout`). Profane artist names fall back to
-  "Numa Radio". Vocal jobs whose LLM-generated lyrics trip the
-  profanity prefilter silently fall back to instrumental
-  (`lyricsFallback=true` on the row).
-- **Database:** new `SongRequest` table (migration `add_song_request`,
-  already applied to Neon). Successful jobs also create a normal
-  `Track` + `TrackAsset` pair — the generated song joins the library
-  and re-airs in future rotations after the initial priority play.
+- **Rate limits:** 1/hour, 3/day per IP (see
+  `lib/rate-limit.ts:checkSongRateLimit`). The worker runs one job at
+  a time — that's the real backpressure against the 20/hr MiniMax
+  subscription cap.
+- **Moderation:** song prompts use a song-specific moderator
+  (`moderateSongPrompt` in `lib/moderate.ts`) that defaults to
+  `allowed` for normal creative briefs (moods, genres, tempos, even
+  dark moods like "rage" / "heartbreak") and only blocks hate speech,
+  targeted real-person attacks, content involving minors, etc. Profane
+  artist names fall back to "Numa Radio". Vocal jobs whose
+  LLM-generated lyrics trip the profanity prefilter silently fall back
+  to instrumental (`lyricsFallback=true` on the row).
+- **Anti-repeat:** new tracks are created with `airingPolicy =
+  "priority_request"`. Rotation refresh only considers `"library"`
+  tracks, so the track is invisible to rotation until it airs. The
+  `track-started` endpoint flips it to `library` in the same
+  transaction that writes PlayHistory — by that point the track is
+  already in the "last 20 played" window, so it can't rotate back
+  until it ages out. No more A → B → A immediate repeats.
 
-**What's committed but not live yet:**
-- Code for the full backend + UI is on `main` (14 commits on top of
-  the last deploy — see `git log --oneline main origin/main^..main`).
-  Nothing is pushed to origin; Vercel is still serving the previous
-  build. No remote side-effects yet.
-- `deploy/systemd/numa-song-worker.service` exists in the repo but is
-  not yet installed to `/etc/systemd/system/` on Orion.
-- `deploy/systemd/numa-nopasswd.sudoers` has the new unit's
-  restart/start/stop/status permits; the file in `/etc/sudoers.d/` is
-  still the old version.
+**Deployed surfaces:**
+- **Vercel:** `/api/booth/song` (POST — creates request, rate-limits,
+  moderates); `/api/booth/song/queue-stats` (GET — live "N ahead of
+  you"); `/api/booth/song/[id]/status` (GET — polled every 5s by the
+  UI); `app/_components/SongTab.tsx` now drives the `Song request` tab
+  on the homepage (was a `setTimeout` stub for months).
+- **Orion:** `numa-song-worker.service` is `enabled` + `active`,
+  polling Neon every 3s. Loopback-pushes to `numa-queue-daemon` at
+  `127.0.0.1:4000`.
+- **Neon:** `SongRequest` table holds each job's lifecycle
+  (`queued → processing → finalizing → done`; `failed` with
+  `errorMessage` on pipeline crash; rows get deleted on failure so
+  the listener's rate-limit slot is refunded).
 
-**To go live (two short operator sessions):**
+**Operator ergonomics:**
+- **Redeploy worker after code change:**
+  `sudo systemctl restart numa-song-worker` — password-free for
+  `marku` via `/etc/sudoers.d/numa-nopasswd`.
+- **Redeploy UI + booth API:** `git push origin main`; Vercel
+  auto-deploys.
+- **Watch the pipeline:** `journalctl -u numa-song-worker -f`.
+- **Find a row in Neon:**
+  `SELECT id, status, titleGenerated, trackId, errorMessage
+     FROM "SongRequest" ORDER BY "createdAt" DESC LIMIT 10;`.
+- **Backfill a missing duration** (probes MP3 from B2, writes
+  `Track.durationSeconds` + `TrackAsset.durationSeconds`):
+  `npx tsx scripts/backfill-song-duration.ts`.
 
-1. Install the worker on Orion (needs sudo — one-time):
-   ```bash
-   cd /home/marku/saas/numaradio
-   sudo cp deploy/systemd/numa-song-worker.service /etc/systemd/system/
-   sudo cp deploy/systemd/numa-nopasswd.sudoers /etc/sudoers.d/numa-nopasswd
-   sudo visudo -cf /etc/sudoers.d/numa-nopasswd   # expect 'parsed OK'
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now numa-song-worker
-   journalctl -u numa-song-worker -n 40 --no-pager -f   # expect '[song-worker] starting', quiet polling
-   ```
-   `OPEN_ROUTER_API` already lives in `.env.local`, which the unit
-   reads via `EnvironmentFile` — no `/etc/numa/env` edit strictly
-   required (though adding it there as canonical source is cleaner).
+**Kill the feature temporarily** (no redeploy needed):
+```
+sudo systemctl stop numa-song-worker
+sudo systemctl disable numa-song-worker
+```
+Queued rows pile up; new submissions still hit the rate limiter but
+nothing airs. `start` + `enable` to resume; the startup sweep re-queues
+anything left in `processing`.
 
-2. Ship the UI + API to Vercel:
-   ```bash
-   cd /home/marku/saas/numaradio
-   git push origin main
-   ```
-   Vercel auto-deploys. Smoke-test from any device:
-   - Visit `numaradio.com` → the existing "Send it to Lena" section →
-     the `Song request` tab is now live (was a setTimeout stub).
-   - Submit `chill lo-fi 90 BPM A minor rainy afternoon melancholic`
-     with any artist name, instrumental off. Form should flip to
-     `queued → processing → finalizing → done` within ~3-4 min; a
-     cover appears; Lena airs the new song next.
-   - Negative tests (see plan Task 17 step 5): profane prompt → 422,
-     profane artist name → substituted to "Numa Radio", 2nd submit
-     from same IP within an hour → 429.
-
-**Rollback if anything misbehaves:**
-- Kill the worker without a redeploy:
-  `sudo systemctl stop numa-song-worker && sudo systemctl disable numa-song-worker`.
-  Queued rows pile up; new submissions still hit the rate limiter but
-  nothing airs. Restart to resume.
-- Revert the Vercel side: `git revert` the UI commit (or both the UI
-  and booth API commits), push; the backend worker keeps draining any
-  still-queued jobs harmlessly.
+**Pipeline quirks learned the hard way on launch day:**
+- MiniMax `music-2.6` has two response shapes: async
+  (`{task_id,...}` → poll) and sync (`{audio,...}` with no `task_id` —
+  the generation finished inside the initial request window). Handler
+  accepts either.
+- OpenRouter's image-only models (like Flux) require
+  `modalities: ["image"]`; the `["image","text"]` form only works for
+  dual-output models like Gemini and returns `404 No endpoints found
+  …`.
+- MiniMax sync responses also skip `extra_info.duration`, so we probe
+  the downloaded MP3 with `music-metadata.parseBuffer` as a fallback.
 
 **Phase B/C deferred** (out of scope here):
 - Shareable "your song" pages / account system.
@@ -89,6 +92,9 @@ new song on the stream within ~3-4 min.
 - Dashboard operator curation for generated songs.
 - `NEXT_PUBLIC_SONG_CREATION_ENABLED` kill-switch flag (add when we
   need scheduled maintenance).
+- Custom site-wide cursor (radio-vibe accent-teal ring); sketched out
+  in conversation but deferred — revisit when there's a dedicated UI
+  pass.
 
 ---
 
