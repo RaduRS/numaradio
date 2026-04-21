@@ -151,6 +151,26 @@ else
   log "lazydocker already installed."
 fi
 
+# --------------------- NanoClaw agent image ------------------------
+
+# NanoClaw spawns a container per agent session and expects the image
+# nanoclaw-agent:latest to already exist locally — it does NOT pull or
+# build on demand. After migrating to a fresh dockerd, the image has
+# to be rebuilt from ~/nanoclaw/container.
+
+NANOCLAW_BUILD="${HOME}/nanoclaw/container/build.sh"
+if [[ -x "$NANOCLAW_BUILD" ]]; then
+  if sudo docker image inspect nanoclaw-agent:latest >/dev/null 2>&1; then
+    log "nanoclaw-agent:latest already present — skipping rebuild."
+  else
+    log "Building nanoclaw-agent:latest (first build takes 3-6 min)…"
+    ( cd "$(dirname "$NANOCLAW_BUILD")" && sudo "$NANOCLAW_BUILD" )
+  fi
+else
+  warn "NanoClaw build script not found at $NANOCLAW_BUILD; skipping image build."
+  warn "Run it manually later if NanoClaw complains about 'nanoclaw-agent:latest' not found."
+fi
+
 # --------------------------- NanoClaw reload -----------------------
 
 if systemctl --user list-unit-files nanoclaw.service >/dev/null 2>&1; then
