@@ -86,6 +86,7 @@ function useBroadcastFeed() {
   dataRef.current = data;
   const lastTrackIdRef = useRef<string | null>(null);
   const followUpIdRef = useRef<number | null>(null);
+  const lastShoutoutActiveRef = useRef<boolean>(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -123,6 +124,16 @@ function useBroadcastFeed() {
           }, TRACK_CHANGE_FOLLOWUP_MS);
         }
         lastTrackIdRef.current = nextId;
+
+        // Shoutout-end detection: when the overlay flips from active → inactive
+        // the DB has just written deliveryStatus='aired'. Fire a window event
+        // so the ShoutoutWall can refetch without waiting for its own 30s
+        // poll cycle.
+        const isActive = json.shoutout.active;
+        if (lastShoutoutActiveRef.current && !isActive) {
+          window.dispatchEvent(new CustomEvent("numa:shoutout-ended"));
+        }
+        lastShoutoutActiveRef.current = isActive;
       } catch {
         /* network blip — keep prior */
       }

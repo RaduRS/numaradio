@@ -97,9 +97,15 @@ export function ShoutoutWall() {
   useEffect(() => {
     const ctrl = new AbortController();
 
-    async function poll() {
+    // Regular polls hit the CDN-cached URL (30s s-maxage). Event-triggered
+    // refetches append a timestamp so they bypass the cache and see the
+    // freshly-written "aired" row.
+    async function poll(fresh = false) {
       try {
-        const r = await fetch("/api/station/shoutouts/recent", {
+        const url = fresh
+          ? `/api/station/shoutouts/recent?t=${Date.now()}`
+          : "/api/station/shoutouts/recent";
+        const r = await fetch(url, {
           signal: ctrl.signal,
           cache: "no-store",
         });
@@ -112,11 +118,23 @@ export function ShoutoutWall() {
     }
 
     poll();
-    const pollId = setInterval(poll, POLL_MS);
+    const pollId = setInterval(() => poll(false), POLL_MS);
     const tickId = setInterval(() => setNow(Date.now()), 30_000);
+
+    // Refetch as soon as Broadcast detects a shoutout has finished airing —
+    // the `deliveryStatus='aired'` row has just been written, so the wall
+    // should update within a second instead of waiting for the next poll.
+    const onShoutoutEnded = () => {
+      // Tiny delay to let the shoutout-ended webhook's DB write commit
+      // before we re-read.
+      window.setTimeout(() => poll(true), 1_000);
+    };
+    window.addEventListener("numa:shoutout-ended", onShoutoutEnded);
+
     return () => {
       clearInterval(pollId);
       clearInterval(tickId);
+      window.removeEventListener("numa:shoutout-ended", onShoutoutEnded);
       ctrl.abort();
     };
   }, []);
