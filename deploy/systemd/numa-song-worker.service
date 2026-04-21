@@ -1,0 +1,24 @@
+[Unit]
+Description=Numa Radio — song generation worker
+After=network-online.target numa-queue-daemon.service
+Wants=network-online.target
+PartOf=multi-user.target
+
+[Service]
+Type=simple
+User=marku
+WorkingDirectory=/home/marku/saas/numaradio
+EnvironmentFile=/home/marku/saas/numaradio/.env.local
+EnvironmentFile=-/etc/numa/env
+ExecStart=/usr/bin/npx tsx workers/song-worker/index.ts
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=numa-song-worker
+
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

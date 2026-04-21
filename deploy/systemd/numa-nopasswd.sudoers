@@ -27,6 +27,14 @@ Cmnd_Alias NUMA_UNITS = \
     /usr/bin/systemctl restart numa-queue-daemon.service, \
     /usr/bin/systemctl restart numa-liquidsoap, \
     /usr/bin/systemctl restart numa-liquidsoap.service, \
-    /usr/bin/systemctl restart numa-rotation-refresher.timer
+    /usr/bin/systemctl restart numa-rotation-refresher.timer, \
+    /usr/bin/systemctl restart numa-song-worker, \
+    /usr/bin/systemctl restart numa-song-worker.service, \
+    /usr/bin/systemctl start numa-song-worker, \
+    /usr/bin/systemctl start numa-song-worker.service, \
+    /usr/bin/systemctl stop numa-song-worker, \
+    /usr/bin/systemctl stop numa-song-worker.service, \
+    /usr/bin/systemctl status numa-song-worker, \
+    /usr/bin/systemctl status numa-song-worker.service
 
 marku ALL=(root) NOPASSWD: NUMA_UNITS
