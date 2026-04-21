@@ -249,20 +249,18 @@ If any of the four verifications don't match, STOP and inspect the script output
 
 ## Task 4: Dry-run the task to prove S4U can launch WSL
 
-The load-bearing unverified assumption is that an S4U (no-session) principal can successfully launch `wsl.exe`. Prove it before trusting the fix.
+The load-bearing unverified assumption is that an S4U (no-session) principal can successfully launch `wsl.exe`. Prove the task returns `LastTaskResult=0` against the already-running distro — a full cold-boot can't be tested from inside WSL without killing our own shell, so that's left to the real next reboot (documented in Task 5).
 
 **Files:**
 - None
 
-- [ ] **Step 1: Shut WSL down so we see a real boot**
+- [ ] **Step 1: Note current LastRunTime for diff purposes**
 
 ```bash
-powershell.exe -NoProfile -Command "wsl.exe --shutdown"
-# Wait a few seconds for the VM to terminate, then:
-powershell.exe -NoProfile -Command "wsl.exe -l -v"
+powershell.exe -NoProfile -Command "Get-ScheduledTaskInfo -TaskName 'Start WSL (Numa Radio)' | Format-List LastRunTime, LastTaskResult"
 ```
 
-Expected: Ubuntu state is `Stopped`.
+Note the `LastRunTime` — after Step 2 we'll confirm it advanced.
 
 - [ ] **Step 2: Fire the task manually**
 
@@ -270,14 +268,11 @@ Expected: Ubuntu state is `Stopped`.
 powershell.exe -NoProfile -Command "Start-ScheduledTask -TaskName 'Start WSL (Numa Radio)'"
 ```
 
-- [ ] **Step 3: Wait and confirm WSL booted**
+- [ ] **Step 3: Wait a few seconds for the task to finish**
 
 ```bash
-sleep 15
-powershell.exe -NoProfile -Command "wsl.exe -l -v"
+sleep 5
 ```
-
-Expected: Ubuntu state is `Running`.
 
 - [ ] **Step 4: Confirm the task reported success**
 
