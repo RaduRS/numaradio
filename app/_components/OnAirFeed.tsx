@@ -15,6 +15,10 @@ type ShoutsPayload = {
   }>;
 };
 
+// Module-level cache so reopening the overlay shows the last-known shoutouts
+// immediately instead of an empty list while the first fetch is in flight.
+let cachedShouts: ShoutItem[] = [];
+
 function relativeTime(fromMs: number, nowMs: number): string {
   const diff = Math.max(0, Math.floor((nowMs - fromMs) / 1000));
   if (diff < 60) return "just now";
@@ -28,7 +32,7 @@ function relativeTime(fromMs: number, nowMs: number): string {
 
 export function OnAirFeed() {
   const { justPlayed, now } = useBroadcast();
-  const [shouts, setShouts] = useState<ShoutItem[]>([]);
+  const [shouts, setShouts] = useState<ShoutItem[]>(cachedShouts);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -40,7 +44,8 @@ export function OnAirFeed() {
         const r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
         if (!r.ok) return;
         const json = (await r.json()) as ShoutsPayload;
-        setShouts(json.shoutouts as ShoutItem[]);
+        cachedShouts = json.shoutouts as ShoutItem[];
+        setShouts(cachedShouts);
       } catch {
         /* keep previous */
       }

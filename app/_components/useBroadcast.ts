@@ -43,8 +43,12 @@ const EMPTY: BroadcastPayload = {
   shoutout: { active: false },
 };
 
+// Module-level cache so a remount (e.g. opening the expanded overlay again)
+// starts from the last-known payload instead of a blank flash.
+let cachedData: BroadcastPayload = EMPTY;
+
 export function useBroadcast() {
-  const [data, setData] = useState<BroadcastPayload>(EMPTY);
+  const [data, setData] = useState<BroadcastPayload>(cachedData);
   const [now, setNow] = useState<number>(() => Date.now());
   const mounted = useRef(true);
   const lastShoutoutActiveRef = useRef(false);
@@ -61,6 +65,7 @@ export function useBroadcast() {
         });
         if (!r.ok) return;
         const json = (await r.json()) as BroadcastPayload;
+        cachedData = json;
         if (!mounted.current) return;
         setData(json);
 
