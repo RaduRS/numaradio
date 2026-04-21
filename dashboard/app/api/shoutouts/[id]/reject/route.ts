@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
-import { getShoutout, markShoutoutBlocked } from "@/lib/shoutouts";
+import { rejectShoutout } from "@/lib/shoutouts-ops";
 
 export const dynamic = "force-dynamic";
 
@@ -10,23 +10,21 @@ export async function POST(
 ): Promise<NextResponse> {
   const { id } = await ctx.params;
   const pool = getDbPool();
-  const existing = await getShoutout(pool, id);
-  if (!existing) {
-    return NextResponse.json({ ok: false, error: "not found" }, { status: 404 });
-  }
-  if (existing.deliveryStatus === "aired") {
+  const operator =
+    req.headers.get("cf-access-authenticated-user-email") ?? "operator";
+
+  const result = await rejectShoutout({ id, operator, pool });
+
+  if (!result.ok) {
+    if (result.code === "not_found") {
+      return NextResponse.json({ ok: false, error: "not found" }, { status: 404 });
+    }
     return NextResponse.json(
-      { ok: false, error: "already aired" },
+      { ok: false, error: result.code === "already_aired" ? "already aired" : "not held" },
       { status: 409 },
     );
   }
 
-  const operator =
-    req.headers.get("cf-access-authenticated-user-email") ?? "operator";
-
-  await markShoutoutBlocked(pool, id, `rejected_by:${operator}`);
-
-  console.info(`action=shoutout-reject row=${id} operator=${operator}`);
-
+  console.info(`action=shoutout-reject route=web row=${id} operator=${operator}`);
   return NextResponse.json({ ok: true });
 }
