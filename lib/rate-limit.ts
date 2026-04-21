@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { prisma } from "@/lib/db";
+import { prisma } from "./db/index.ts";
 
 const HOUR_LIMIT = 3;
 const DAY_LIMIT = 10;
@@ -84,3 +84,60 @@ export async function checkShoutoutRateLimit(ipHash: string): Promise<RateLimitR
 }
 
 export const SHOUTOUT_LIMITS = { HOUR_LIMIT, DAY_LIMIT };
+
+const SONG_HOUR_LIMIT = 1;
+const SONG_DAY_LIMIT = 3;
+
+/**
+ * Counts SongRequest rows matching this ipHash in the last hour and last 24h.
+ * Blocks if either threshold is exceeded.
+ * Mirrors checkShoutoutRateLimit but against the SongRequest table.
+ */
+export async function checkSongRateLimit(ipHash: string): Promise<RateLimitResult> {
+  const now = new Date();
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const [hourCount, dayCount] = await Promise.all([
+    prisma.songRequest.count({
+      where: { ipHash, createdAt: { gte: hourAgo } },
+    }),
+    prisma.songRequest.count({
+      where: { ipHash, createdAt: { gte: dayAgo } },
+    }),
+  ]);
+
+  if (hourCount >= SONG_HOUR_LIMIT) {
+    const oldest = await prisma.songRequest.findFirst({
+      where: { ipHash, createdAt: { gte: hourAgo } },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    });
+    const waitUntil = oldest
+      ? oldest.createdAt.getTime() + 60 * 60 * 1000
+      : now.getTime() + 60 * 60 * 1000;
+    return {
+      ok: false,
+      reason: "hour_limit",
+      retryAfterSeconds: Math.max(60, Math.ceil((waitUntil - now.getTime()) / 1000)),
+      hourCount,
+      dayCount,
+    };
+  }
+  if (dayCount >= SONG_DAY_LIMIT) {
+    return {
+      ok: false,
+      reason: "day_limit",
+      retryAfterSeconds: 60 * 60 * 6, // come back in 6h; precise time isn't worth the query
+      hourCount,
+      dayCount,
+    };
+  }
+
+  return { ok: true, hourCount, dayCount };
+}
+
+export const SONG_LIMITS = {
+  HOUR_LIMIT: SONG_HOUR_LIMIT,
+  DAY_LIMIT: SONG_DAY_LIMIT,
+};
