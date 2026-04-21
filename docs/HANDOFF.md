@@ -1,7 +1,96 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-21 (evening — Docker-in-WSL migration complete;
-NanoClaw now survives unattended reboots)
+Last updated: 2026-04-21 (late evening — Listener Song Generation
+Phase A built; Orion systemd install + Vercel deploy pending operator
+sudo / push)
+
+## Listener Song Generation (Phase A) — BUILT, deploy pending (2026-04-21 late)
+
+Listener fills the existing `Song request` tab on `numaradio.com` with
+a prompt (mood / genre / BPM / key / vibe), artist name, and optional
+"instrumental only" toggle. A dedicated `numa-song-worker` on Orion
+polls Neon, runs a 6-step pipeline per job (LLM prompt-expansion →
+MiniMax `music-2.6` + OpenRouter flux.2-pro artwork in parallel → B2
+upload → Track + TrackAsset insert → queue-daemon push) and airs the
+new song on the stream within ~3-4 min.
+
+- **Spec:** `docs/superpowers/specs/2026-04-21-song-generation-design.md`
+- **Plan:** `docs/superpowers/plans/2026-04-21-song-generation.md`
+- **Rate limits:** 1/hour, 3/day per IP (enforced via `Shoutout`-style
+  IP-hash lookup in `lib/rate-limit.ts:checkSongRateLimit`). Worker runs
+  one job at a time, bounding spend to the 20/hr MiniMax subscription
+  cap.
+- **Moderation:** prompt runs through the same MiniMax moderator as
+  shoutouts (`moderateShoutout`). Profane artist names fall back to
+  "Numa Radio". Vocal jobs whose LLM-generated lyrics trip the
+  profanity prefilter silently fall back to instrumental
+  (`lyricsFallback=true` on the row).
+- **Database:** new `SongRequest` table (migration `add_song_request`,
+  already applied to Neon). Successful jobs also create a normal
+  `Track` + `TrackAsset` pair — the generated song joins the library
+  and re-airs in future rotations after the initial priority play.
+
+**What's committed but not live yet:**
+- Code for the full backend + UI is on `main` (14 commits on top of
+  the last deploy — see `git log --oneline main origin/main^..main`).
+  Nothing is pushed to origin; Vercel is still serving the previous
+  build. No remote side-effects yet.
+- `deploy/systemd/numa-song-worker.service` exists in the repo but is
+  not yet installed to `/etc/systemd/system/` on Orion.
+- `deploy/systemd/numa-nopasswd.sudoers` has the new unit's
+  restart/start/stop/status permits; the file in `/etc/sudoers.d/` is
+  still the old version.
+
+**To go live (two short operator sessions):**
+
+1. Install the worker on Orion (needs sudo — one-time):
+   ```bash
+   cd /home/marku/saas/numaradio
+   sudo cp deploy/systemd/numa-song-worker.service /etc/systemd/system/
+   sudo cp deploy/systemd/numa-nopasswd.sudoers /etc/sudoers.d/numa-nopasswd
+   sudo visudo -cf /etc/sudoers.d/numa-nopasswd   # expect 'parsed OK'
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now numa-song-worker
+   journalctl -u numa-song-worker -n 40 --no-pager -f   # expect '[song-worker] starting', quiet polling
+   ```
+   `OPEN_ROUTER_API` already lives in `.env.local`, which the unit
+   reads via `EnvironmentFile` — no `/etc/numa/env` edit strictly
+   required (though adding it there as canonical source is cleaner).
+
+2. Ship the UI + API to Vercel:
+   ```bash
+   cd /home/marku/saas/numaradio
+   git push origin main
+   ```
+   Vercel auto-deploys. Smoke-test from any device:
+   - Visit `numaradio.com` → the existing "Send it to Lena" section →
+     the `Song request` tab is now live (was a setTimeout stub).
+   - Submit `chill lo-fi 90 BPM A minor rainy afternoon melancholic`
+     with any artist name, instrumental off. Form should flip to
+     `queued → processing → finalizing → done` within ~3-4 min; a
+     cover appears; Lena airs the new song next.
+   - Negative tests (see plan Task 17 step 5): profane prompt → 422,
+     profane artist name → substituted to "Numa Radio", 2nd submit
+     from same IP within an hour → 429.
+
+**Rollback if anything misbehaves:**
+- Kill the worker without a redeploy:
+  `sudo systemctl stop numa-song-worker && sudo systemctl disable numa-song-worker`.
+  Queued rows pile up; new submissions still hit the rate limiter but
+  nothing airs. Restart to resume.
+- Revert the Vercel side: `git revert` the UI commit (or both the UI
+  and booth API commits), push; the backend worker keeps draining any
+  still-queued jobs harmlessly.
+
+**Phase B/C deferred** (out of scope here):
+- Shareable "your song" pages / account system.
+- Listener-written lyrics (we generate them for now).
+- Structured form fields (genre dropdown, tempo slider).
+- Dashboard operator curation for generated songs.
+- `NEXT_PUBLIC_SONG_CREATION_ENABLED` kill-switch flag (add when we
+  need scheduled maintenance).
+
+---
 
 ## Docker Engine in WSL — LIVE (2026-04-21 evening)
 
