@@ -12,6 +12,32 @@
 const MINIMAX_URL = "https://api.minimax.io/anthropic/v1/messages";
 const MODERATION_MODEL = process.env.MINIMAX_MODERATION_MODEL ?? "MiniMax-M2.7";
 
+/**
+ * Deterministic pre-filter for profanity. Anything matching here skips the
+ * LLM entirely and lands in `held` so the operator reviews it. Word-boundary
+ * matching keeps "class"/"mass"/"assume" from false-positive on "ass".
+ */
+const PROFANITY_PATTERNS: ReadonlyArray<{ name: string; regex: RegExp }> = [
+  { name: "motherfucker", regex: /\bmotherfuck(ing|ed|er|ers|s)?\b/i },
+  { name: "fuck", regex: /\bfuck(ing|ed|er|ers|s)?\b/i },
+  { name: "bullshit", regex: /\bbullshit\b/i },
+  { name: "shit", regex: /\bshit(ty|s|ting|ted|head|heads)?\b/i },
+  { name: "ass", regex: /\bass(es|hole|holes|wipe|wipes|hat|hats)?\b/i },
+  { name: "bitch", regex: /\bbitch(es|ing|y)?\b/i },
+  { name: "cunt", regex: /\bcunt(s)?\b/i },
+  { name: "dick", regex: /\bdick(head|s|heads)?\b/i },
+  { name: "cock", regex: /\bcock(sucker|suckers|s)?\b/i },
+  { name: "pussy", regex: /\bpussy\b/i },
+  { name: "bastard", regex: /\bbastard(s)?\b/i },
+];
+
+export function profanityPrefilter(text: string): { matched: string } | null {
+  for (const { name, regex } of PROFANITY_PATTERNS) {
+    if (regex.test(text)) return { matched: name };
+  }
+  return null;
+}
+
 export type ModerationDecision = "allowed" | "rewritten" | "held" | "blocked";
 
 export interface ModerationResult {
@@ -97,6 +123,17 @@ function extractModerationJson(raw: string): Partial<ModerationResult> | null {
 }
 
 export async function moderateShoutout(rawText: string): Promise<ModerationResult> {
+  // Deterministic prefilter: profanity always hits `held` regardless of how
+  // the LLM feels about it. Cheaper too — we skip the MiniMax round-trip.
+  const hit = profanityPrefilter(rawText);
+  if (hit) {
+    return {
+      decision: "held",
+      reason: `profanity_prefilter:${hit.matched}`,
+      text: rawText,
+    };
+  }
+
   const apiKey = process.env.MINIMAX_API_KEY;
   if (!apiKey) {
     // Fail closed: treat missing config as "held" so nothing airs by accident.
