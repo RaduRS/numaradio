@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { usePolling } from "@/hooks/use-polling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +50,34 @@ export default function ShoutoutsPage() {
   );
   const [composeText, setComposeText] = useState("");
   const [composing, setComposing] = useState(false);
+  const [autoHostOn, setAutoHostOn] = useState<boolean | null>(null);
+  const [autoHostPending, setAutoHostPending] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    fetch("/api/shoutouts/auto-host")
+      .then((r) => r.json())
+      .then((d: { ok?: boolean; enabled?: boolean }) => {
+        if (!cancel && d.ok) setAutoHostOn(Boolean(d.enabled));
+      })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, []);
+
+  async function toggleAutoHost(next: boolean) {
+    setAutoHostPending(true);
+    try {
+      const r = await fetch("/api/shoutouts/auto-host", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const d = (await r.json()) as { ok?: boolean; enabled?: boolean };
+      if (d.ok) setAutoHostOn(Boolean(d.enabled));
+    } finally {
+      setAutoHostPending(false);
+    }
+  }
 
   async function compose() {
     const text = composeText.trim();
@@ -107,6 +135,35 @@ export default function ShoutoutsPage() {
           Shoutouts · {held.length} held · {recent.length} recent · polling every 8s{isStale ? " · ⚠ stale, retrying" : ""}
         </span>
       </header>
+
+      <Card className="bg-bg-1 border-line">
+        <CardHeader className="gap-2">
+          <CardTitle className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
+            Auto-chatter
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4">
+          <div className="text-sm text-fg-mute">
+            <div className="text-fg font-medium">Lena speaks between every 2 tracks</div>
+            <div className="text-xs">
+              …when no shoutout airs in that window. Changes take effect within 30 s.
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={autoHostOn === null || autoHostPending}
+            onClick={() => autoHostOn !== null && toggleAutoHost(!autoHostOn)}
+            className={`font-mono text-[11px] uppercase tracking-[0.15em] px-3 py-1.5 rounded-full border transition ${
+              autoHostOn
+                ? "border-accent text-accent bg-[var(--accent-soft)]"
+                : "border-line text-fg-mute hover:text-fg hover:border-fg-mute"
+            } ${autoHostPending ? "opacity-60 cursor-wait" : ""}`}
+            aria-pressed={autoHostOn === true}
+          >
+            {autoHostOn === null ? "…" : autoHostOn ? "On" : "Off"}
+          </button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
