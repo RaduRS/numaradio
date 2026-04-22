@@ -164,7 +164,10 @@ async function runModerator(
     },
     body: JSON.stringify({
       model: MODERATION_MODEL,
-      max_tokens: 400,
+      // MiniMax-M2.7 is a reasoning model — its `thinking` block runs
+      // before the actual decision JSON and can easily swallow a small
+      // budget. 3200 leaves comfortable headroom; operator has tokens.
+      max_tokens: 3200,
       system: systemPrompt,
       messages: [{ role: "user", content: rawText }],
     }),

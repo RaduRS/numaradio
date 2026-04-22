@@ -107,7 +107,12 @@ export async function humanizeScript(text: string): Promise<string> {
       },
       body: JSON.stringify({
         model: HUMANIZE_MODEL,
-        max_tokens: 400,
+        // MiniMax-M2.7 is a reasoning model — its `thinking` block runs
+        // before the rewritten output and can crowd a small budget,
+        // which would trip the length-sanity check and drop us to the
+        // original-text fallback. 3200 gives reasoning room; operator
+        // has tokens.
+        max_tokens: 3200,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: original }],
       }),
