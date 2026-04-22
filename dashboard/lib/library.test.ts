@@ -22,6 +22,7 @@ test("fetchLibraryTracks maps rows including null asset URLs", async () => {
       mood: "warm",
       trackStatus: "ready",
       airingPolicy: "library",
+      source_type: "suno_manual",
       createdAt: created,
       audio_stream_url: "https://b2/audio.mp3",
       artwork_url: "https://b2/art.jpg",
@@ -36,6 +37,7 @@ test("fetchLibraryTracks maps rows including null asset URLs", async () => {
       mood: null,
       trackStatus: "draft",
       airingPolicy: "library",
+      source_type: null, // legacy row — mapped to "unknown"
       createdAt: created,
       audio_stream_url: null,
       artwork_url: null,
@@ -46,8 +48,10 @@ test("fetchLibraryTracks maps rows including null asset URLs", async () => {
   assert.equal(tracks[0].title, "Sunset");
   assert.equal(tracks[0].audioStreamUrl, "https://b2/audio.mp3");
   assert.equal(tracks[0].createdAt, "2026-04-20T12:00:00.000Z");
+  assert.equal(tracks[0].sourceType, "suno_manual");
   assert.equal(tracks[1].audioStreamUrl, null);
   assert.equal(tracks[1].artworkUrl, null);
+  assert.equal(tracks[1].sourceType, "unknown");
 });
 
 test("resolvePushTarget returns null when no row matches", async () => {

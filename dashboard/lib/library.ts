@@ -10,6 +10,12 @@ export interface LibraryTrack {
   mood: string | null;
   trackStatus: string;
   airingPolicy: string;
+  /**
+   * Maps to Track.sourceType. Used client-side to hide shoutouts
+   * (sourceType='external_import') from the default library view
+   * since they're voice overlays, not music.
+   */
+  sourceType: string;
   createdAt: string;
   audioStreamUrl: string | null;
   artworkUrl: string | null;
@@ -30,6 +36,7 @@ const LIBRARY_TRACKS_SQL = `
     t.mood,
     t."trackStatus",
     t."airingPolicy",
+    t."sourceType"    AS source_type,
     t."createdAt",
     audio."publicUrl" AS audio_stream_url,
     art."publicUrl"   AS artwork_url,
@@ -78,6 +85,7 @@ interface RawRow {
   mood: string | null;
   trackStatus: string;
   airingPolicy: string;
+  source_type: string | null;
   createdAt: Date;
   audio_stream_url: string | null;
   artwork_url: string | null;
@@ -97,6 +105,7 @@ export async function fetchLibraryTracks(pool: Pool): Promise<LibraryTrack[]> {
     mood: r.mood,
     trackStatus: r.trackStatus,
     airingPolicy: r.airingPolicy,
+    sourceType: r.source_type ?? "unknown",
     createdAt: r.createdAt.toISOString(),
     audioStreamUrl: r.audio_stream_url,
     artworkUrl: r.artwork_url,

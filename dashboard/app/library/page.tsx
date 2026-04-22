@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { usePolling } from "@/hooks/use-polling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,6 +105,14 @@ function labelFor(entry: DaemonPush): string {
 
 // ─── Component ─────────────────────────────────────────────────────
 
+const PAGE_SIZE = 10;
+
+// Shoutouts live in the Track table too (sourceType='external_import')
+// but operators shouldn't see them in the music library by default.
+function isShoutout(t: LibraryTrack): boolean {
+  return t.sourceType === "external_import";
+}
+
 export default function LibraryPage() {
   const tracksPoll = usePolling<TracksResponse>("/api/library/tracks", 30_000);
   const pushesPoll = usePolling<DaemonStatusResponse>(
@@ -114,12 +122,20 @@ export default function LibraryPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [includeShoutouts, setIncludeShoutouts] = useState(false);
+  const [page, setPage] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const tracks = tracksPoll.data?.tracks ?? [];
+  const shoutoutCount = useMemo(
+    () => tracks.filter(isShoutout).length,
+    [tracks],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tracks.filter((t) => {
+      if (!includeShoutouts && isShoutout(t)) return false;
       if (statusFilter !== "all" && categoriseStatus(t.trackStatus) !== statusFilter) return false;
       if (q) {
         const hay = `${t.title} ${t.artist ?? ""}`.toLowerCase();
@@ -127,7 +143,23 @@ export default function LibraryPage() {
       }
       return true;
     });
-  }, [tracks, search, statusFilter]);
+    // Server already returns newest-first (ORDER BY createdAt DESC).
+  }, [tracks, search, statusFilter, includeShoutouts]);
+
+  // Reset to page 0 whenever the filtered set changes — prevents the
+  // operator from being stuck on an out-of-range page after typing a
+  // search or flipping a filter.
+  const filteredKey = `${search}|${statusFilter}|${includeShoutouts}|${tracks.length}`;
+  useEffect(() => {
+    setPage(0);
+  }, [filteredKey]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageTracks = useMemo(
+    () => filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE),
+    [filtered, safePage],
+  );
 
   const musicPushes = useMemo(
     () => (pushesPoll.data?.lastPushes ?? []).filter((p) => !isVoicePush(p)),
@@ -195,7 +227,7 @@ export default function LibraryPage() {
           </Link>
         </div>
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
-          Library · {tracks.length} tracks · {musicPushes.length} recent pushes
+          Library · {tracks.length} tracks · {filtered.length} shown · {musicPushes.length} recent pushes
           {tracksPoll.isStale ? " · ⚠ stale" : ""}
         </span>
       </header>
@@ -223,6 +255,20 @@ export default function LibraryPage() {
               {f} <span className="opacity-60">({counts[f]})</span>
             </button>
           ))}
+          {shoutoutCount > 0 && (
+            <button
+              onClick={() => setIncludeShoutouts((v) => !v)}
+              title="Shoutouts are voice overlays, not music — hidden from the library by default."
+              className={`font-mono text-[11px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full border transition ${
+                includeShoutouts
+                  ? "border-[var(--warn)] text-[var(--warn)] bg-[color-mix(in_oklab,var(--warn)_12%,transparent)]"
+                  : "border-line text-fg-mute hover:text-fg hover:border-fg-mute"
+              }`}
+            >
+              {includeShoutouts ? "✓ " : "+ "}Shoutouts{" "}
+              <span className="opacity-60">({shoutoutCount})</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -251,13 +297,13 @@ export default function LibraryPage() {
                       <th className="text-left px-2 py-2.5">Artist</th>
                       <th className="text-right px-2 py-2.5 w-14">Time</th>
                       <th className="text-left px-2 py-2.5 w-20">Genre</th>
-                      <th className="text-right px-2 py-2.5 w-20">Votes</th>
+                      <th className="text-right px-3 py-2.5 w-28">Votes</th>
                       <th className="text-left px-2 py-2.5 w-16">Status</th>
                       <th className="text-right px-4 py-2.5 w-28"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((t) => {
+                    {pageTracks.map((t) => {
                       const disabled = !t.audioStreamUrl || pendingId === t.id;
                       return (
                         <tr
@@ -282,13 +328,13 @@ export default function LibraryPage() {
                             {fmtDuration(t.durationSeconds)}
                           </td>
                           <td className="px-2 py-2 text-fg-mute text-xs">{t.genre ?? "—"}</td>
-                          <td className="px-2 py-2 text-right font-mono text-xs tabular-nums">
+                          <td className="px-3 py-2 text-right font-mono text-xs tabular-nums whitespace-nowrap">
                             <span className={t.votesUp > 0 ? "text-accent" : "text-fg-mute"}>
-                              ▲ {t.votesUp}
+                              ▲&nbsp;{t.votesUp}
                             </span>
-                            <span className="mx-1.5 text-fg-mute opacity-50">·</span>
+                            <span className="inline-block w-3" />
                             <span className={t.votesDown > 0 ? "text-[var(--bad)]" : "text-fg-mute"}>
-                              ▼ {t.votesDown}
+                              ▼&nbsp;{t.votesDown}
                             </span>
                           </td>
                           <td className="px-2 py-2">
@@ -312,6 +358,35 @@ export default function LibraryPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {/* Pagination footer — only shown when we have more than one page. */}
+            {filtered.length > PAGE_SIZE && (
+              <div className="border-t border-line px-4 py-2.5 flex items-center justify-between gap-3 font-mono text-[11px] text-fg-mute">
+                <span>
+                  {safePage * PAGE_SIZE + 1}–
+                  {Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of{" "}
+                  {filtered.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={safePage === 0}
+                    className="px-2.5 py-1 rounded border border-line text-fg-mute hover:text-fg hover:border-fg-mute disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  >
+                    ← Prev
+                  </button>
+                  <span className="px-2 uppercase tracking-[0.15em]">
+                    page {safePage + 1} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={safePage >= totalPages - 1}
+                    className="px-2.5 py-1 rounded border border-line text-fg-mute hover:text-fg hover:border-fg-mute disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  >
+                    Next →
+                  </button>
+                </div>
               </div>
             )}
           </CardContent>
