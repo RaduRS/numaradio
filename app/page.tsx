@@ -14,13 +14,13 @@ export default function Home() {
     <>
       <Nav />
       <Hero />
+      <Marquee />
       <section className="stats-band">
         <div className="shell">
           <HeroStats />
         </div>
       </section>
       <Requests />
-      <Marquee />
       <Format />
       <Broadcast />
       <Schedule />
