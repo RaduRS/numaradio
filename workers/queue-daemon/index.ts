@@ -228,6 +228,16 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
   const resolved = await resolveTrackId(body, lookup);
   if (!resolved) return;
 
+  // Music-track boundary → count it for auto-chatter (fires for both
+  // rotation and priority-queue tracks). Fire-and-forget, non-blocking
+  // so the existing priority-queue bookkeeping below isn't delayed.
+  const action = autoHost.onMusicTrackStart();
+  if (action === "trigger") {
+    autoHost.runChatter().catch((err) =>
+      console.error("[auto-chatter] runChatter threw:", err),
+    );
+  }
+
   // Complete any prior playing priority item.
   await prisma.queueItem.updateMany({
     where: { stationId: sid, priorityBand: "priority_request", queueStatus: "playing" },
@@ -256,14 +266,6 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
       where: { id: staged.sourceObjectId },
       data: { requestStatus: "aired" },
     });
-  }
-  // Music-track boundary → maybe trigger auto-chatter. Non-blocking so
-  // this handler returns quickly.
-  const action = autoHost.onMusicTrackStart();
-  if (action === "trigger") {
-    autoHost.runChatter().catch((err) =>
-      console.error("[auto-chatter] runChatter threw:", err),
-    );
   }
 }
 
