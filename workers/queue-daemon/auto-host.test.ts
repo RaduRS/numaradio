@@ -101,7 +101,7 @@ function fakeDeps(overrides: Partial<Parameters<typeof AutoHostOrchestrator.prot
   const pushes: RecordedPush[] = [];
   const deps = {
     flag: { async isEnabled() { return true; } },
-    resolveNowPlaying: async () => ({ title: "Midnight Drive", artist: "Russell Ross" }),
+    resolveJustEndedTrack: async () => ({ title: "Midnight Drive", artist: "Russell Ross" }),
     generateScript: async () => "That was Midnight Drive by Russell Ross. Stick around.",
     synthesizeSpeech: async () => Buffer.from([0xff, 0xfb]),
     uploadChatter: async () => "https://cdn.numaradio.com/file/numaradio/stations/numaradio/chatter/x.mp3",
@@ -204,9 +204,9 @@ test("orchestrator is a no-op while a chatter is already in flight", async () =>
   assert.equal(calls, 1);
 });
 
-test("back_announce without NowPlaying falls back to generic prompt context", async () => {
+test("back_announce without a just-ended track falls back to generic prompt context", async () => {
   const { deps, pushes } = fakeDeps({
-    resolveNowPlaying: async () => null,
+    resolveJustEndedTrack: async () => null,
   });
   const orch = new AutoHostOrchestrator(deps);
   // Force slot 0 (back_announce) — happy path:

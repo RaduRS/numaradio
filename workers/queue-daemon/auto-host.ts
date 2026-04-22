@@ -72,14 +72,20 @@ export class AutoHostStateMachine {
 
 import { slotTypeFor, promptFor, type ChatterType } from "./chatter-prompts.ts";
 
-export interface NowPlayingInfo {
+export interface TrackInfo {
   title: string;
   artist: string;
 }
 
 export interface AutoHostDeps {
   flag: { isEnabled(): Promise<boolean> };
-  resolveNowPlaying: () => Promise<NowPlayingInfo | null>;
+  /**
+   * Returns metadata for the track that just ENDED (not the one currently
+   * playing). Called only for back_announce chatters, where Lena says
+   * "That was X by Y" — X is the finished track, and the currently-playing
+   * track is the music bed Lena is speaking over.
+   */
+  resolveJustEndedTrack: () => Promise<TrackInfo | null>;
   generateScript: (prompts: { system: string; user: string }) => Promise<string>;
   synthesizeSpeech: (text: string) => Promise<Buffer>;
   uploadChatter: (body: Buffer, chatterId: string) => Promise<string>;
@@ -154,8 +160,8 @@ export class AutoHostOrchestrator {
     let context: { title?: string; artist?: string } = {};
     if (type === "back_announce") {
       try {
-        const np = await this.deps.resolveNowPlaying();
-        if (np) context = { title: np.title, artist: np.artist };
+        const last = await this.deps.resolveJustEndedTrack();
+        if (last) context = { title: last.title, artist: last.artist };
       } catch {
         // non-fatal — back_announce falls back to generic wording
       }
