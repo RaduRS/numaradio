@@ -5,6 +5,12 @@ import { RingBuffer } from "./status-buffers.ts";
 import { hydrate, type StagedItem } from "./hydrator.ts";
 import { createHandler, type OnTrackBody, type PushBody, type StatusSnapshot } from "./server.ts";
 import { resolveTrackId, type TrackLookup } from "./resolve-track.ts";
+import { S3Client } from "@aws-sdk/client-s3";
+import { AutoHostOrchestrator } from "./auto-host.ts";
+import { StationFlagCache } from "./station-flag.ts";
+import { generateChatterScript } from "./minimax-script.ts";
+import { synthesizeChatter } from "./deepgram-tts.ts";
+import { uploadChatterAudio } from "./chatter-upload.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -14,6 +20,81 @@ const HTTP_PORT = Number(process.env.NUMA_DAEMON_PORT ?? 4000);
 const sock = new SupervisedSocket({ host: LS_HOST, port: LS_PORT });
 const lastPushes = new RingBuffer<{ at: string; trackId: string; url: string }>(10);
 const lastFailures = new RingBuffer<{ at: string; reason: string; detail?: string }>(10);
+
+// ─── Auto-chatter wiring ─────────────────────────────────────────
+
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`${name} not set`);
+  return v;
+}
+
+const s3ChatterClient = new S3Client({
+  region: requireEnv("B2_REGION"),
+  endpoint: requireEnv("B2_ENDPOINT"),
+  credentials: {
+    accessKeyId: requireEnv("B2_ACCESS_KEY_ID"),
+    secretAccessKey: requireEnv("B2_SECRET_ACCESS_KEY"),
+  },
+});
+const B2_BUCKET = requireEnv("B2_BUCKET_NAME");
+const B2_PUBLIC_BASE = requireEnv("B2_BUCKET_PUBLIC_URL");
+
+const stationFlag = new StationFlagCache({
+  ttlMs: 30_000,
+  fetchOnce: async () => {
+    const s = await prisma.station.findUniqueOrThrow({
+      where: { slug: STATION_SLUG },
+      select: { autoHostEnabled: true },
+    });
+    return s.autoHostEnabled;
+  },
+});
+
+const autoHost = new AutoHostOrchestrator({
+  flag: stationFlag,
+  resolveNowPlaying: async () => {
+    const sid = await stationId();
+    const np = await prisma.nowPlaying.findUnique({
+      where: { stationId: sid },
+      select: {
+        currentTrackId: true,
+      },
+    });
+    if (!np?.currentTrackId) return null;
+    const t = await prisma.track.findUnique({
+      where: { id: np.currentTrackId },
+      select: { title: true, artistDisplay: true },
+    });
+    if (!t) return null;
+    return { title: t.title, artist: t.artistDisplay ?? "an artist" };
+  },
+  generateScript: (prompts) =>
+    generateChatterScript(prompts, { apiKey: requireEnv("MINIMAX_API_KEY") }),
+  synthesizeSpeech: (text) =>
+    synthesizeChatter(text, { apiKey: requireEnv("DEEPGRAM_API_KEY") }),
+  uploadChatter: (body, id) =>
+    uploadChatterAudio(body, id, {
+      bucket: B2_BUCKET,
+      publicBaseUrl: B2_PUBLIC_BASE,
+      s3: s3ChatterClient,
+    }),
+  pushToOverlay: async (url) => {
+    await sock.send(`overlay_queue.push ${url}`);
+  },
+  logPush: ({ chatterId, type, slot, url }) => {
+    lastPushes.push({
+      at: new Date().toISOString(),
+      trackId: `auto-chatter:${chatterId}:${type}:slot${slot}`,
+      url,
+    });
+    console.log(`[auto-chatter] slot=${slot} type=${type} id=${chatterId}`);
+  },
+  logFailure: ({ reason, detail }) => {
+    lastFailures.push({ at: new Date().toISOString(), reason, detail });
+    console.warn(`[auto-chatter] fail ${reason}: ${detail ?? ""}`);
+  },
+});
 
 async function stationId(): Promise<string> {
   const s = await prisma.station.findUniqueOrThrow({
@@ -119,6 +200,8 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
         detail: err instanceof Error ? err.message : String(err),
       }),
     );
+  // Any voice push (shoutout or our own chatter) resets the music counter.
+  if (kind === "shoutout") autoHost.onVoicePushed();
   return { queueItemId: item.id };
 }
 
@@ -173,6 +256,14 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
       where: { id: staged.sourceObjectId },
       data: { requestStatus: "aired" },
     });
+  }
+  // Music-track boundary → maybe trigger auto-chatter. Non-blocking so
+  // this handler returns quickly.
+  const action = autoHost.onMusicTrackStart();
+  if (action === "trigger") {
+    autoHost.runChatter().catch((err) =>
+      console.error("[auto-chatter] runChatter threw:", err),
+    );
   }
 }
 
