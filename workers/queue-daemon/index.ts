@@ -22,6 +22,13 @@ const lastPushes = new RingBuffer<{ at: string; trackId: string; url: string }>(
 const lastFailures = new RingBuffer<{ at: string; reason: string; detail?: string }>(10);
 
 // ─── Auto-chatter wiring ─────────────────────────────────────────
+//
+// IMPORTANT: all env reads here are LAZY. A missing MINIMAX_API_KEY /
+// DEEPGRAM_API_KEY / B2_* var should NOT crash the daemon at boot —
+// it should surface as a logged failure in lastFailures when the
+// first chatter is attempted. The core queue-daemon behaviour
+// (priority-pushes, shoutouts, on-track tracking) doesn't need any
+// of these vars.
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -29,16 +36,24 @@ function requireEnv(name: string): string {
   return v;
 }
 
-const s3ChatterClient = new S3Client({
-  region: requireEnv("B2_REGION"),
-  endpoint: requireEnv("B2_ENDPOINT"),
-  credentials: {
-    accessKeyId: requireEnv("B2_ACCESS_KEY_ID"),
-    secretAccessKey: requireEnv("B2_SECRET_ACCESS_KEY"),
-  },
-});
-const B2_BUCKET = requireEnv("B2_BUCKET_NAME");
-const B2_PUBLIC_BASE = requireEnv("B2_BUCKET_PUBLIC_URL");
+let s3ChatterClientMemo: S3Client | undefined;
+function getChatterS3Bits(): { s3: S3Client; bucket: string; publicBase: string } {
+  if (!s3ChatterClientMemo) {
+    s3ChatterClientMemo = new S3Client({
+      region: requireEnv("B2_REGION"),
+      endpoint: requireEnv("B2_ENDPOINT"),
+      credentials: {
+        accessKeyId: requireEnv("B2_ACCESS_KEY_ID"),
+        secretAccessKey: requireEnv("B2_SECRET_ACCESS_KEY"),
+      },
+    });
+  }
+  return {
+    s3: s3ChatterClientMemo,
+    bucket: requireEnv("B2_BUCKET_NAME"),
+    publicBase: requireEnv("B2_BUCKET_PUBLIC_URL"),
+  };
+}
 
 const stationFlag = new StationFlagCache({
   ttlMs: 30_000,
@@ -70,15 +85,17 @@ const autoHost = new AutoHostOrchestrator({
     return { title: t.title, artist: t.artistDisplay ?? "an artist" };
   },
   generateScript: (prompts) =>
-    generateChatterScript(prompts, { apiKey: requireEnv("MINIMAX_API_KEY") }),
+    generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
   synthesizeSpeech: (text) =>
-    synthesizeChatter(text, { apiKey: requireEnv("DEEPGRAM_API_KEY") }),
-  uploadChatter: (body, id) =>
-    uploadChatterAudio(body, id, {
-      bucket: B2_BUCKET,
-      publicBaseUrl: B2_PUBLIC_BASE,
-      s3: s3ChatterClient,
-    }),
+    synthesizeChatter(text, { apiKey: process.env.DEEPGRAM_API_KEY ?? "" }),
+  uploadChatter: (body, id) => {
+    const bits = getChatterS3Bits();
+    return uploadChatterAudio(body, id, {
+      bucket: bits.bucket,
+      publicBaseUrl: bits.publicBase,
+      s3: bits.s3,
+    });
+  },
   pushToOverlay: async (url) => {
     await sock.send(`overlay_queue.push ${url}`);
   },
