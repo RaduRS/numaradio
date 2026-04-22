@@ -10,6 +10,7 @@ import { fetchSunoMetadata } from "../lib/suno";
 const SEED_DIR = join(process.cwd(), "seed");
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const STATION_NAME = process.env.STATION_NAME ?? "Numa Radio";
+const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 // ─── Field normalization & parsing ──────────────────────────────
 
@@ -174,9 +175,11 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
     );
   }
 
-  // Audio asset
+  // Audio asset. Cache-Control: immutable — the key embeds the track id,
+  // so a given URL's bytes never change. Long max-age lets listener browsers
+  // and any future CDN layer avoid re-fetching.
   const audioKey = `stations/${STATION_SLUG}/tracks/${track.id}/audio/stream.mp3`;
-  await putObject(audioKey, audioBuffer, "audio/mpeg");
+  await putObject(audioKey, audioBuffer, "audio/mpeg", IMMUTABLE_CACHE_CONTROL);
   const audioAsset = await prisma.trackAsset.create({
     data: {
       trackId: track.id,
@@ -198,7 +201,12 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
   if (picture) {
     const ext = picture.format === "image/png" ? "png" : "jpg";
     const artKey = `stations/${STATION_SLUG}/tracks/${track.id}/artwork/primary.${ext}`;
-    await putObject(artKey, Buffer.from(picture.data), picture.format);
+    await putObject(
+      artKey,
+      Buffer.from(picture.data),
+      picture.format,
+      IMMUTABLE_CACHE_CONTROL,
+    );
     const artAsset = await prisma.trackAsset.create({
       data: {
         trackId: track.id,

@@ -19,6 +19,10 @@ const QUEUE_DAEMON_URL =
 const POLL_INTERVAL_MS = 10_000;
 const POLL_TIMEOUT_MS = 360_000; // 6 min
 
+// Key embeds the track id so URL contents are immutable; safe to cache forever
+// in listener browsers and any future CDN layer.
+const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
 export interface PipelineJob {
   id: string;
   prompt: string;
@@ -64,6 +68,7 @@ async function uploadToB2(
       Key: key,
       Body: body,
       ContentType: contentType,
+      CacheControl: IMMUTABLE_CACHE_CONTROL,
     }),
   );
   return b2PublicUrl(key);

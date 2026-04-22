@@ -32,6 +32,7 @@ export async function putObject(
   key: string,
   body: Buffer | Uint8Array | string,
   contentType: string,
+  cacheControl?: string,
 ): Promise<void> {
   await s3().send(
     new PutObjectCommand({
@@ -39,6 +40,7 @@ export async function putObject(
       Key: key,
       Body: body,
       ContentType: contentType,
+      CacheControl: cacheControl,
     }),
   );
 }

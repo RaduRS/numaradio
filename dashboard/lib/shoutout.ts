@@ -15,6 +15,10 @@ const MODEL_FALLBACK = "aura-asteria-en";
 export const SHOUTOUT_MAX_CHARS = 2000;
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 
+// Shoutout MP3 key embeds the track id → URL contents are immutable. Safe
+// to cache aggressively in listener browsers and any future CDN layer.
+const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
 let s3Cache: S3Client | null = null;
 function getS3(): S3Client {
   if (s3Cache) return s3Cache;
@@ -160,6 +164,7 @@ export async function generateShoutout(
         Key: storageKey,
         Body: mp3,
         ContentType: "audio/mpeg",
+        CacheControl: IMMUTABLE_CACHE_CONTROL,
       }),
     );
   } catch (e) {
