@@ -1,7 +1,68 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-21 (night — Listener Song Generation Phase A
-LIVE end-to-end)
+Last updated: 2026-04-22 (night — Lena auto-chatter LIVE)
+
+## Lena auto-chatter — LIVE (2026-04-22)
+
+When the **Auto-chatter** toggle on `dashboard.numaradio.com/shoutouts`
+is on, Lena speaks for ~15 s over the beginning of every 3rd music
+track (i.e. after every 2 music tracks with no voice). A shoutout in
+that window replaces the slot — the counter resets and the next
+opportunity is 2 music tracks later. Off by default; flipping the
+toggle in the dashboard propagates to the queue-daemon within ~30 s
+(flag cache TTL).
+
+Chatter content is chosen deterministically from a 20-slot rotation
+in `workers/queue-daemon/chatter-prompts.ts`:
+
+- **10 × back-announce** — *"That was [title] by [artist], [colour]. You're on Numa Radio, more ahead."*
+- **3 × shoutout-CTA + 3 × song-CTA** — nudges listeners to use the site features.
+- **4 × generic filler** — station-ID lines.
+
+No same-type adjacency. `slotCounter` only advances on successful
+chatter push, so a MiniMax/Deepgram failure doesn't cost a slot —
+the same variant retries at the next opportunity.
+
+**Pipeline per chatter** (in `workers/queue-daemon/auto-host.ts`):
+MiniMax-M2.7 (Anthropic-compat endpoint, `max_tokens=2000` to fit
+M2.7's reasoning `thinking` block + the ~40-word output) → Deepgram
+Aura-2-Andromeda-en → B2 upload with immutable Cache-Control →
+`overlay_queue.push` via the daemon's existing telnet socket. Rides
+over music via Liquidsoap's pre-existing `smooth_add` ducker — same
+mechanism shoutouts use.
+
+**Failure handling:** retry once after 2 s. Each failure attempt logs
+to the daemon's `lastFailures` ring buffer with a distinct reason
+code (`auto_chatter_script_failed`, `auto_chatter_tts_failed`,
+`auto_chatter_b2_failed`, `auto_chatter_push_failed`). Both attempts
+show in the dashboard's new **Auto-chatter activity** card at the
+bottom of `/shoutouts` — also shows recent successes with slot
+number + variant type.
+
+**Operator ergonomics:**
+- **Toggle on/off:** `dashboard.numaradio.com/shoutouts` → Auto-chatter
+  card. No daemon restart needed; effect within ~30 s.
+- **Watch it work:** `journalctl -u numa-queue-daemon -f | grep auto-chatter`
+- **Redeploy after a code change:** `git pull && sudo systemctl
+  restart numa-queue-daemon` (password-free via the existing sudoers
+  drop-in).
+
+**Env deps** (all read lazily — missing keys surface as
+`auto_chatter_*_failed` in `lastFailures`, never crash the daemon):
+`MINIMAX_API_KEY`, `DEEPGRAM_API_KEY`, `B2_*` + `B2_BUCKET_PUBLIC_URL`.
+All are picked up from `.env.local` via `workers/queue-daemon/prisma.ts`
+which imports `lib/load-env`.
+
+**Rotation-size fix, same-day** (`scripts/refresh-rotation.ts`):
+`MIN_POOL` was raised from 2 to 6 after a listener-report of a track
+airing back-to-back. With a 13-track library Liquidsoap's default
+`playlist(mode="randomize")` previously had a 30-50% reshuffle-repeat
+probability; pool=6 keeps it ≤ 1/6 and gives real variety.
+
+**Spec:** `docs/superpowers/specs/2026-04-22-lena-auto-chatter-design.md`
+**Plan:** `docs/superpowers/plans/2026-04-22-lena-auto-chatter.md`
+
+---
 
 ## Listener Song Generation (Phase A) — LIVE (2026-04-21 night)
 

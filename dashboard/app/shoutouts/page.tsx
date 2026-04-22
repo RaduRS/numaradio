@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { usePolling } from "@/hooks/use-polling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,24 @@ import { HeldShoutoutsCard } from "@/components/held-shoutouts-card";
 interface ListResponse {
   held: ShoutoutRow[];
   recent: ShoutoutRow[];
+}
+
+// Matches what `workers/queue-daemon/index.ts` pushes into its
+// lastPushes / lastFailures ring buffers. Fields are optional because
+// the buffer's schema predates some of them.
+interface DaemonPush {
+  at?: string;
+  trackId?: string;
+  url?: string;
+}
+interface DaemonFailure {
+  at?: string;
+  reason?: string;
+  detail?: string;
+}
+interface DaemonStatusResponse {
+  lastPushes: DaemonPush[];
+  lastFailures: DaemonFailure[];
 }
 
 function fmtRelative(iso: string): string {
@@ -48,10 +66,26 @@ export default function ShoutoutsPage() {
     "/api/shoutouts/list",
     8_000,
   );
+  const daemonPoll = usePolling<DaemonStatusResponse>(
+    "/api/library/recent-pushes",
+    5_000,
+  );
   const [composeText, setComposeText] = useState("");
   const [composing, setComposing] = useState(false);
   const [autoHostOn, setAutoHostOn] = useState<boolean | null>(null);
   const [autoHostPending, setAutoHostPending] = useState(false);
+
+  const autoChatter = useMemo(() => {
+    const pushes = (daemonPoll.data?.lastPushes ?? []).filter(
+      (p): p is DaemonPush & { trackId: string } =>
+        typeof p.trackId === "string" && p.trackId.startsWith("auto-chatter:"),
+    );
+    const failures = (daemonPoll.data?.lastFailures ?? []).filter(
+      (f): f is DaemonFailure & { reason: string } =>
+        typeof f.reason === "string" && f.reason.startsWith("auto_chatter_"),
+    );
+    return { pushes, failures };
+  }, [daemonPoll.data]);
 
   useEffect(() => {
     let cancel = false;
@@ -246,6 +280,66 @@ export default function ShoutoutsPage() {
                 </li>
               ))}
             </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-bg-1 border-line">
+        <CardHeader>
+          <CardTitle className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
+            Auto-chatter activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {!daemonPoll.data ? (
+            <div className="px-4 py-6 text-sm text-fg-mute">Loading…</div>
+          ) : autoChatter.pushes.length === 0 && autoChatter.failures.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-fg-mute">
+              {autoHostOn
+                ? "No chatter aired yet — first one lands after 2 music tracks without a shoutout."
+                : "Toggle auto-chatter on above to start. Recent Lena lines will show here."}
+            </div>
+          ) : (
+            <div className="divide-y divide-line">
+              {autoChatter.pushes.slice(0, 10).map((p, i) => {
+                // trackId format: auto-chatter:<chatterId>:<type>:slot<N>
+                const parts = p.trackId.split(":");
+                const type = parts[2] ?? "?";
+                const slot = parts[3] ?? "?";
+                return (
+                  <div key={`p${i}`} className="px-4 py-2 flex items-center justify-between gap-3">
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-mono text-xs text-accent truncate">
+                        ✓ {type}
+                      </span>
+                      <span className="font-mono text-[10px] text-fg-mute truncate">
+                        {slot}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] text-fg-mute shrink-0">
+                      {p.at ? fmtRelative(p.at) : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+              {autoChatter.failures.slice(0, 10).map((f, i) => (
+                <div key={`f${i}`} className="px-4 py-2 flex items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-mono text-xs text-[var(--bad)] truncate">
+                      ✗ {f.reason}
+                    </span>
+                    {f.detail && (
+                      <span className="font-mono text-[10px] text-fg-mute truncate" title={f.detail}>
+                        {f.detail.length > 120 ? f.detail.slice(0, 120) + "…" : f.detail}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono text-[11px] text-fg-mute shrink-0">
+                    {f.at ? fmtRelative(f.at) : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
