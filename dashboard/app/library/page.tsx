@@ -292,7 +292,7 @@ export default function LibraryPage() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-bg-1 z-[1] border-b border-line">
                     <tr className="text-fg-mute font-mono text-[10px] uppercase tracking-[0.2em]">
-                      <th className="text-left px-4 py-2.5 w-10"></th>
+                      <th className="text-left px-4 py-2.5 w-16"></th>
                       <th className="text-left px-2 py-2.5">Title</th>
                       <th className="text-left px-2 py-2.5">Artist</th>
                       <th className="text-right px-2 py-2.5 w-14">Time</th>
@@ -316,10 +316,10 @@ export default function LibraryPage() {
                               <img
                                 src={t.artworkUrl}
                                 alt=""
-                                className="w-9 h-9 rounded object-cover bg-bg-1"
+                                className="w-14 h-14 rounded-md object-cover bg-bg-1 shadow-sm shadow-black/40"
                               />
                             ) : (
-                              <div className="w-9 h-9 rounded bg-bg" />
+                              <div className="w-14 h-14 rounded-md bg-bg border border-line" />
                             )}
                           </td>
                           <td className="px-2 py-2 font-medium">{t.title}</td>
