@@ -2,7 +2,12 @@ import type { PromptPair } from "./chatter-prompts.ts";
 
 const MINIMAX_URL = "https://api.minimax.io/anthropic/v1/messages";
 const DEFAULT_MODEL = process.env.MINIMAX_HUMANIZE_MODEL ?? "MiniMax-M2.7";
-const MAX_TOKENS = 200;
+// MiniMax-M2.7 is a reasoning model that emits a `thinking` content block
+// before the final `text` block (same shape as Claude's extended thinking).
+// max_tokens counts BOTH blocks — 200 was only enough for the thinking
+// prelude, leaving nothing for the actual output. 2000 comfortably fits a
+// verbose chain-of-thought plus a ~40-word spoken line.
+const MAX_TOKENS = 2_000;
 
 interface AnthropicContentBlock {
   type: string;
