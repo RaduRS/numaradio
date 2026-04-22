@@ -7,11 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ShoutoutRow } from "@/lib/shoutouts";
-import { HeldShoutoutsCard } from "@/components/held-shoutouts-card";
 
 // ─── Types ─────────────────────────────────────────────────────────
 
 interface ListResponse {
+  // Held shoutouts also surface on the main dashboard (/) — we don't
+  // duplicate the action UI here, but we still fetch `held` so the
+  // header counter reflects the moderation queue size.
   held: ShoutoutRow[];
   recent: ShoutoutRow[];
 }
@@ -281,7 +283,7 @@ export default function ShoutoutsPage() {
   const totalFailed = events.filter((e) => e.kind === "failure").length;
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10 flex flex-col gap-6">
+    <main className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-6">
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
@@ -342,48 +344,48 @@ export default function ShoutoutsPage() {
         </button>
       </div>
 
-      {/* ── Main grid: Compose (+ Log) // Held sidebar ───── */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        {/* LEFT COLUMN ─ Compose + On Air Log */}
-        <div className="flex flex-col gap-6 min-w-0">
-          {/* Compose */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Compose</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-3 text-sm text-fg-mute">
-                Type exactly what Lena should say on air — no moderation,
-                no rate limit. Airs at the next track boundary.
-              </p>
-              <textarea
-                value={composeText}
-                onChange={(e) => setComposeText(e.target.value)}
-                placeholder='e.g. "This one goes out to Mihai — happy birthday, champ. Back to the music."'
-                maxLength={COMPOSE_MAX}
-                rows={3}
-                className="w-full resize-y rounded-md border border-[var(--line)] bg-transparent p-3 text-sm font-sans focus:outline-none focus:border-accent"
-                disabled={composing}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                    e.preventDefault();
-                    compose();
-                  }
-                }}
-              />
-              <div className="mt-2 flex items-center justify-between">
-                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-fg-mute">
-                  {composeText.length}/{COMPOSE_MAX} · ⌘/Ctrl+Enter to send
-                </span>
-                <Button size="sm" onClick={compose} disabled={composing}>
-                  {composing ? "Sending…" : "Send to Lena"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+      {/* ── Compose ──────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Compose</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-fg-mute">
+            Type exactly what Lena should say on air — no moderation,
+            no rate limit. Airs at the next track boundary.
+          </p>
+          <textarea
+            value={composeText}
+            onChange={(e) => setComposeText(e.target.value)}
+            placeholder='e.g. "This one goes out to Mihai — happy birthday, champ. Back to the music."'
+            maxLength={COMPOSE_MAX}
+            rows={3}
+            className="w-full resize-y rounded-md border border-[var(--line)] bg-transparent p-3 text-sm font-sans focus:outline-none focus:border-accent"
+            disabled={composing}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                compose();
+              }
+            }}
+          />
+          <div className="mt-2 flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-fg-mute">
+              {composeText.length}/{COMPOSE_MAX} · ⌘/Ctrl+Enter to send
+            </span>
+            <Button size="sm" onClick={compose} disabled={composing}>
+              {composing ? "Sending…" : "Send to Lena"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* On Air Log */}
-          <Card className="bg-bg-1 border-line">
+      {/* Held shoutouts are handled on the main dashboard (/) — kept out
+          of this page so operators have one canonical "action required"
+          surface to watch. */}
+
+      {/* ── On-Air Log ───────────────────────────────────── */}
+      <Card className="bg-bg-1 border-line">
             <CardHeader className="gap-3">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <CardTitle className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
@@ -435,29 +437,6 @@ export default function ShoutoutsPage() {
               )}
             </CardContent>
           </Card>
-        </div>
-
-        {/* RIGHT COLUMN ─ Held shoutouts sidebar */}
-        <aside className="flex flex-col gap-6">
-          {held.length === 0 ? (
-            <Card className="bg-bg-1 border-line">
-              <CardHeader>
-                <CardTitle className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
-                  Held for review
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-fg-mute">
-                  Nothing held. Messages flagged by the moderator will land
-                  here for you to approve or reject.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <HeldShoutoutsCard held={held} onAction={refresh} />
-          )}
-        </aside>
-      </div>
     </main>
   );
 }
