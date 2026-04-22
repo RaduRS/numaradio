@@ -36,16 +36,10 @@ export function Requests() {
 
             <RequestForm />
 
-            <div className="req-tickers">
-              <span className="dot">●</span>
-              <span>Queue length · 14</span>
-              <span style={{ color: "var(--fg-mute)" }}>—</span>
-              <span>Avg wait · 9 min</span>
-            </div>
             <div
               style={{
-                marginTop: 16,
-                paddingTop: 12,
+                marginTop: 20,
+                paddingTop: 16,
                 borderTop: "1px dashed var(--line)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 10,

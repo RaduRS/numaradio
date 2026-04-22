@@ -258,21 +258,14 @@ export function SongTab() {
           minLength={ARTIST_MIN}
           required
         />
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 13,
-            color: "var(--fg-dim)",
-          }}
-        >
+        <label className="req-check">
           <input
             type="checkbox"
             checked={isInstrumental}
             onChange={(e) => setIsInstrumental(e.target.checked)}
           />
-          Instrumental only
+          <span className="req-check-box" aria-hidden />
+          <span className="req-check-label">Instrumental only</span>
         </label>
       </div>
       <button
