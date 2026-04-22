@@ -199,7 +199,7 @@
   color: var(--fg-mute);
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 18px;
 }
 
 .ep-justplayed-list {
@@ -468,20 +468,20 @@
 .ep-onair {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 .ep-onair-item {
   display: grid;
   grid-template-columns: 42px 1fr auto;
   gap: 12px;
   align-items: center;
-  padding: 10px 0;
+  padding: 14px 0;
   border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
 }
 .ep-onair-item.shout {
   grid-template-columns: 42px 1fr;
   gap: 12px;
-  padding: 12px;
+  padding: 16px;
   background: rgba(79, 209, 197, 0.04);
   border: 1px solid rgba(79, 209, 197, 0.14);
   border-radius: 10px;
