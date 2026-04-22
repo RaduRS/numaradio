@@ -27,9 +27,16 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!target) {
     return NextResponse.json({ ok: false, error: "track not found" }, { status: 404 });
   }
-  if (target.airingPolicy !== "library") {
+  // 'library' = currently in rotation; 'request_only' = aired once, awaiting
+  // manual re-push (typically a listener-generated song). Both are valid push
+  // targets. 'hold' and 'priority_request' are rejected — the former is
+  // deliberately hidden, the latter is mid-pipeline and would double-queue.
+  if (
+    target.airingPolicy !== "library" &&
+    target.airingPolicy !== "request_only"
+  ) {
     return NextResponse.json(
-      { ok: false, error: `track airingPolicy is '${target.airingPolicy}', not 'library'` },
+      { ok: false, error: `track airingPolicy is '${target.airingPolicy}', cannot push` },
       { status: 409 },
     );
   }

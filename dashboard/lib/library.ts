@@ -59,7 +59,11 @@ const LIBRARY_TRACKS_SQL = `
     WHERE "trackId" = t.id
   ) v ON true
   WHERE s.slug = $1
-    AND t."airingPolicy" = 'library'
+    -- 'library' = in rotation, 'request_only' = played once via priority
+    -- (typically a listener-generated song) and now awaits manual re-push.
+    -- Both should be browsable + pushable from the dashboard; 'hold' and
+    -- 'priority_request' (pre-first-air) intentionally stay hidden.
+    AND t."airingPolicy" IN ('library', 'request_only')
   ORDER BY t."createdAt" DESC
   LIMIT 1000
 `;

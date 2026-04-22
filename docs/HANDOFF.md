@@ -28,13 +28,15 @@ stream within ~1–4 min.
   artist names fall back to "Numa Radio". Vocal jobs whose
   LLM-generated lyrics trip the profanity prefilter silently fall back
   to instrumental (`lyricsFallback=true` on the row).
-- **Anti-repeat:** new tracks are created with `airingPolicy =
-  "priority_request"`. Rotation refresh only considers `"library"`
-  tracks, so the track is invisible to rotation until it airs. The
-  `track-started` endpoint flips it to `library` in the same
-  transaction that writes PlayHistory — by that point the track is
-  already in the "last 20 played" window, so it can't rotate back
-  until it ages out. No more A → B → A immediate repeats.
+- **Air-once default:** listener-generated songs are created with
+  `airingPolicy = "priority_request"` and stay out of rotation until
+  after their first air. The `track-started` endpoint flips them to
+  `"request_only"` in the same transaction that writes PlayHistory —
+  which keeps them permanently out of rotation. Any re-air requires
+  the operator to push from the dashboard library page (which lists
+  both `library` and `request_only` tracks and accepts pushes of
+  either). Backfilled on 2026-04-22 via
+  `scripts/demote-listener-songs.ts`.
 
 **Deployed surfaces:**
 - **Vercel:** `/api/booth/song` (POST — creates request, rate-limits,

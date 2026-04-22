@@ -121,16 +121,17 @@ export async function POST(req: Request) {
       completedNormally: true,
     },
   });
-  // After a listener-generated song airs once via the priority queue, promote
-  // it into rotation. Doing the flip only at this point guarantees the track
-  // is already in the 'last 20 played' window when it first becomes a
-  // rotation candidate, so refresh-rotation can't re-pick it for a while.
+  // After a listener-generated song airs once via the priority queue, move
+  // it OUT of rotation by flipping to 'request_only'. The operator can
+  // re-air it on demand from the dashboard library page (which now surfaces
+  // request_only tracks and allows pushing them). This makes listener
+  // submissions one-shot by default rather than permanent rotation adds.
   if (track.airingPolicy === "priority_request") {
-    const promoteOp = prisma.track.update({
+    const demoteOp = prisma.track.update({
       where: { id: track.id },
-      data: { airingPolicy: "library" },
+      data: { airingPolicy: "request_only" },
     });
-    await prisma.$transaction([nowPlayingOp, playHistoryOp, promoteOp]);
+    await prisma.$transaction([nowPlayingOp, playHistoryOp, demoteOp]);
   } else {
     await prisma.$transaction([nowPlayingOp, playHistoryOp]);
   }
