@@ -56,18 +56,21 @@ test("buildPlaylist returns empty string when library is empty", () => {
   assert.equal(buildPlaylist([], new Set(), () => 0), "");
 });
 
-test("recentWindowFor scales with library size to leave a pool of at least 2", () => {
-  // Big libraries cap at the 20-slot window.
+test("recentWindowFor scales with library size to leave a pool of at least 6", () => {
+  // Big libraries cap at the 20-slot window (pool = librarySize - 20).
   assert.equal(recentWindowFor(30), 20);
-  assert.equal(recentWindowFor(22), 20);
-  // Small libraries shrink the window so that pool = library - window >= 2.
-  // With 8 tracks, excluding the 6 most-recent leaves 2 candidates — the
-  // just-played track can't be picked again on Liquidsoap's next reshuffle.
-  assert.equal(recentWindowFor(8), 6);
-  assert.equal(recentWindowFor(4), 2);
+  assert.equal(recentWindowFor(26), 20);
+  // Mid libraries: pool = MIN_POOL = 6, window = librarySize - 6.
+  assert.equal(recentWindowFor(20), 14);
+  assert.equal(recentWindowFor(13), 7);
+  assert.equal(recentWindowFor(8), 2);
+  // Small libraries: librarySize - 6 < 1 so window clamps to 1; pool is
+  // just the rest. We can't achieve MIN_POOL=6 with <7 tracks — accept
+  // a smaller pool rather than returning window=0 (which would defeat
+  // the exclusion entirely).
+  assert.equal(recentWindowFor(7), 1);
+  assert.equal(recentWindowFor(4), 1);
   assert.equal(recentWindowFor(3), 1);
-  // Degenerate libraries: never go below 1 (a window of 0 would short-circuit
-  // the exclusion entirely and defeat the purpose).
   assert.equal(recentWindowFor(2), 1);
   assert.equal(recentWindowFor(1), 1);
 });

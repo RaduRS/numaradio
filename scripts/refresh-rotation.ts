@@ -8,14 +8,18 @@ export type RotationTrack = { id: string; url: string; title: string };
 
 const PLAYLIST_PATH = process.env.NUMA_PLAYLIST_PATH ?? "/etc/numa/playlist.m3u";
 const MAX_RECENT_WINDOW = 20;
+const MIN_POOL = 6;
 
-// Size the "avoid recent" window so that the non-recent pool is at least 2
-// tracks. With a small library the fixed 20-slot window would always cover
-// every track (pool=0 → fallback to full library → Liquidsoap's per-reload
-// reshuffle could put the just-played track next). Pool=2 keeps the
-// just-played out while preserving shuffle randomness.
+// Size the "avoid recent" window so that the non-recent pool is at least
+// MIN_POOL tracks. Liquidsoap's default `playlist()` mode is "randomize":
+// when it exhausts the file it reshuffles and plays through again. With a
+// tiny pool (2-3) that reshuffle has a ~1-in-pool chance of landing the
+// just-played track first, so a 2-track pool gave back-to-back repeats
+// in live operation. MIN_POOL=6 keeps the repeat probability ≤ 1/6 and
+// gives listeners actual variety between refreshes. Capped at 20 to
+// match the PlayHistory read limit; clamped to 1 for degenerate libraries.
 export function recentWindowFor(librarySize: number): number {
-  return Math.max(1, Math.min(MAX_RECENT_WINDOW, librarySize - 2));
+  return Math.max(1, Math.min(MAX_RECENT_WINDOW, librarySize - MIN_POOL));
 }
 
 export function buildPlaylist(
