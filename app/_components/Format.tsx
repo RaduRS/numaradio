@@ -5,7 +5,7 @@ export function Format() {
         <div className="section-head">
           <div>
             <div className="eyebrow" style={{ marginBottom: 20 }}>
-              02 — The Format
+              03 — The Format
             </div>
             <h2>
               Not a<br />playlist.
@@ -77,8 +77,8 @@ export function Format() {
               You<br />shape the<br />next hour.
             </h3>
             <div className="desc">
-              Send a track or a shoutout. If it lands, you&apos;ll hear Lena read
-              it out — and the whole station will hear it with you.
+              Every request you send lands in Lena&apos;s queue. If it fits the
+              moment, the whole station hears it with you.
             </div>
             <div className="flow-viz">
               <div className="viz-req">

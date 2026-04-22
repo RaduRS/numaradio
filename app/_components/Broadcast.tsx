@@ -210,7 +210,7 @@ export function Broadcast() {
     <section className="broadcast" id="now">
       <div className="shell">
         <div className="broadcast-head">
-          <div className="eyebrow">03 — Live Queue</div>
+          <div className="eyebrow">04 — Live Queue</div>
           <h2>The booth.</h2>
           <p className="broadcast-sub">
             On air right now, plus the last handful of tracks Lena put

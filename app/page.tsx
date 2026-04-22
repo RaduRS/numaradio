@@ -13,10 +13,10 @@ export default function Home() {
     <>
       <Nav />
       <Hero />
+      <Requests />
       <Marquee />
       <Format />
       <Broadcast />
-      <Requests />
       <Schedule />
       <Mobile />
       <Footer />

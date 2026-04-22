@@ -27,7 +27,7 @@ const STATIC_ITEMS: Item[] = [
     key: "requests",
     type: "soft",
     label: "Requests read on air",
-    meta: "Send yours below",
+    meta: "Send yours in",
   },
 ];
 

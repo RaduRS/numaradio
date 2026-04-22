@@ -11,7 +11,7 @@ export function Requests() {
         <div className="section-head">
           <div>
             <div className="eyebrow" style={{ marginBottom: 20 }}>
-              04 — The Wall
+              02 — The Wall
             </div>
             <h2>
               Send it<br />to Lena.

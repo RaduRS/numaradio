@@ -32,7 +32,7 @@ export function Hero() {
             <ListenLiveButton />
             <a className="btn btn-ghost" href="#requests">
               <SparklesIcon className="btn-icon" />
-              Request a Song
+              Send it to Lena
             </a>
           </div>
           <HeroStats />
