@@ -222,10 +222,10 @@ test("back_announce without a current track falls back to generic prompt context
   assert.equal(pushes.length, 1); // still airs, just without track-specific data
 });
 
-test("runChatter waits until 10s before current track ends before pushing", async () => {
+test("runChatter waits until 15s before current track ends before pushing", async () => {
   // Track started at 1000ms, lasts 30s → ends at 31000ms.
-  // Target push time = end − 10s = 21000ms.
-  // Now is 6000ms (5s into track) → expected waitMs = 15000.
+  // Target push time = end − 15s = 16000ms.
+  // Now is 6000ms (5s into track) → expected waitMs = 10000.
   const { deps, pushes, sleepCalls } = fakeDeps({
     now: () => 6000,
     resolveCurrentTrack: async () => ({
@@ -237,8 +237,8 @@ test("runChatter waits until 10s before current track ends before pushing", asyn
   const orch = new AutoHostOrchestrator(deps);
   await orch.runChatter();
   assert.ok(
-    sleepCalls.includes(15000),
-    `expected a 15000ms sleep, got ${JSON.stringify(sleepCalls)}`,
+    sleepCalls.includes(10000),
+    `expected a 10000ms sleep, got ${JSON.stringify(sleepCalls)}`,
   );
   assert.equal(pushes.length, 1);
 });
@@ -259,8 +259,8 @@ test("runChatter pushes immediately when duration is unknown", async () => {
 });
 
 test("runChatter pushes immediately when the target push time is already past", async () => {
-  // Track started at 0, duration 30 → ends at 30000. Target = 20000.
-  // Now = 25000 (5s before end, already past the 10-s-before-end target).
+  // Track started at 0, duration 30 → ends at 30000. Target = 15000.
+  // Now = 25000 (5s before end, well past the 15-s-before-end target).
   const { deps, pushes, sleepCalls } = fakeDeps({
     now: () => 25_000,
     resolveCurrentTrack: async () => ({

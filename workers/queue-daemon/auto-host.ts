@@ -110,10 +110,11 @@ export interface AutoHostDeps {
 const RETRY_DELAY_MS = 2_000;
 /**
  * How many seconds before the current track's end Lena starts speaking.
- * Her ~15s line spans the last 10s of the current track + ~5s of the next,
- * so listeners hear a radio-style back-announce bridging the two songs.
+ * With a ~15s speech and a 15s offset, Lena finishes roughly at the
+ * track boundary — her voice overlays the outro of the current track
+ * and lands just as the next track begins. Standard radio-DJ style.
  */
-const PUSH_OFFSET_BEFORE_END_SECONDS = 10;
+const PUSH_OFFSET_BEFORE_END_SECONDS = 15;
 
 function makeChatterId(): string {
   return `chatter-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
