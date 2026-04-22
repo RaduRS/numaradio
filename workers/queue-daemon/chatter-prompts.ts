@@ -2,7 +2,11 @@ export type ChatterType =
   | "back_announce"
   | "shoutout_cta"
   | "song_cta"
-  | "filler";
+  | "filler"
+  // Event-driven — fires on the FIRST air of a listener-generated song.
+  // Not part of the ROTATION table below; used by the daemon's announce
+  // flow, not the auto-chatter orchestrator.
+  | "listener_song_announce";
 
 // Hand-crafted 20-slot rotation: 10 back-announce, 3 shoutout CTA,
 // 3 song CTA, 4 filler, no same-type adjacency.
@@ -23,6 +27,12 @@ export function slotTypeFor(slotCounter: number): ChatterType {
 export interface PromptContext {
   title?: string;
   artist?: string;
+}
+
+export interface AnnouncementContext {
+  listenerName: string;
+  userPrompt: string;
+  title: string;
 }
 
 export interface PromptPair {
@@ -98,5 +108,30 @@ Good example shapes (write a fresh one, don't copy verbatim):
 - "Numa Radio, always on. Thanks for riding with me."
 - "You're listening to Numa Radio. More music coming up."`,
       };
+    case "listener_song_announce":
+      throw new Error(
+        "listener_song_announce uses announcementPrompt(), not promptFor()",
+      );
   }
+}
+
+export function announcementPrompt(ctx: AnnouncementContext): PromptPair {
+  return {
+    system: BASE_SYSTEM,
+    user: `A brand-new LISTENER-GENERATED song is about to air for the first time. Write Lena's intro — she speaks over the opening seconds of the song and welcomes the track in.
+
+Context:
+- Listener's artist name: ${ctx.listenerName}
+- What the listener asked for: ${ctx.userPrompt}
+- Song title: ${ctx.title}
+
+Shape: mention it's a fresh/new listener song, include the listener's name, briefly paraphrase what they wanted (reword casually, don't quote the prompt verbatim), and include the title. Keep it DJ-plain — "here's a fresh one for you" energy.
+
+Good example shapes (write a fresh one, don't copy verbatim):
+- "Here's a fresh one just made for ${ctx.listenerName} — they asked for something chill. This is '${ctx.title}'. Enjoy."
+- "A brand new track from ${ctx.listenerName} on Numa Radio. They wanted a warm groove. '${ctx.title}', here we go."
+- "Just in, a new listener song from ${ctx.listenerName}. '${ctx.title}' — check it out."
+
+Do NOT: describe the music poetically, stack adjectives, mention AI/generation/how it was made, or use atmospheric/mood language.`,
+  };
 }

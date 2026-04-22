@@ -98,6 +98,11 @@ async function pushToQueueDaemon(input: {
   trackId: string;
   sourceUrl: string;
   reason: string;
+  announce?: {
+    listenerName: string;
+    userPrompt: string;
+    title: string;
+  };
 }): Promise<void> {
   const res = await fetch(`${QUEUE_DAEMON_URL}/push`, {
     method: "POST",
@@ -240,12 +245,21 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
     select: { id: true },
   });
 
-  // Step 6: push to queue daemon so Lena airs it next.
+  // Step 6: push to queue daemon so Lena airs it next. The `announce`
+  // field triggers a Lena-voice intro over the first seconds of this
+  // song on its FIRST air ("Here's a fresh one from <listener>…").
+  // Generation happens in the daemon's background while we wait for
+  // the song to bubble up the priority queue.
   try {
     await pushToQueueDaemon({
       trackId: track.id,
       sourceUrl: audioUrl,
       reason: `song_request:${job.id}`,
+      announce: {
+        listenerName: job.artistName,
+        userPrompt: job.prompt,
+        title,
+      },
     });
   } catch (err) {
     console.warn(

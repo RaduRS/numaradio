@@ -2,6 +2,15 @@ import type { IncomingMessage, ServerResponse, RequestListener } from "node:http
 
 export type PushKind = "music" | "shoutout";
 
+export type PushAnnounce = {
+  /** Listener's requested artist name (falls back to station name in song-worker). */
+  listenerName: string;
+  /** Whatever the listener originally typed into the song-request form. */
+  userPrompt: string;
+  /** LLM-generated song title. */
+  title: string;
+};
+
 export type PushBody = {
   trackId: string;
   sourceUrl: string;
@@ -11,6 +20,13 @@ export type PushBody = {
   // queue (voice on top of music), music goes to the priority music queue
   // (replaces rotation at track boundary). Default: "music".
   kind?: PushKind;
+  /**
+   * Optional. When present on a "music" push, the queue-daemon pre-generates
+   * a Lena-voice intro for this track and plays it over the song's opening
+   * seconds on FIRST air. Used by the song-worker for listener-generated
+   * songs. Ignored for shoutout kinds.
+   */
+  announce?: PushAnnounce;
 };
 
 export type OnTrackBody = {

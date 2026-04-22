@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { slotTypeFor, promptFor, type ChatterType } from "./chatter-prompts.ts";
+import {
+  slotTypeFor,
+  promptFor,
+  announcementPrompt,
+  type ChatterType,
+} from "./chatter-prompts.ts";
 
 test("slotTypeFor matches the hand-crafted 20-slot rotation", () => {
   // slot:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
@@ -24,12 +29,16 @@ test("slotTypeFor wraps with modulo 20", () => {
 test("slot distribution over one full cycle is 10/3/3/4", () => {
   const tally: Record<ChatterType, number> = {
     back_announce: 0, shoutout_cta: 0, song_cta: 0, filler: 0,
+    // listener_song_announce is event-driven, never in the rotation.
+    listener_song_announce: 0,
   };
   for (let i = 0; i < 20; i++) tally[slotTypeFor(i)] += 1;
   assert.equal(tally.back_announce, 10);
   assert.equal(tally.shoutout_cta, 3);
   assert.equal(tally.song_cta, 3);
   assert.equal(tally.filler, 4);
+  assert.equal(tally.listener_song_announce, 0,
+    "listener_song_announce must never appear in the 20-slot rotation");
 });
 
 test("no same-type adjacency in the 20-slot pattern", () => {
@@ -86,4 +95,34 @@ test("back_announce user prompt includes bad-example anti-patterns", () => {
   const p = promptFor("back_announce", { title: "Midnight Drive", artist: "Russell Ross" });
   assert.match(p.user, /Bad examples/i);
   assert.match(p.user, /do NOT/);
+});
+
+test("announcementPrompt includes listener name, prompt, and title in the user prompt", () => {
+  const p = announcementPrompt({
+    listenerName: "Mihai",
+    userPrompt: "chill house 120 BPM",
+    title: "Sunday Drive",
+  });
+  assert.match(p.user, /Mihai/);
+  assert.match(p.user, /chill house 120 BPM/);
+  assert.match(p.user, /Sunday Drive/);
+  // Shares the same DJ-plain system prompt as all other variants.
+  assert.match(p.system, /real DJ/i);
+});
+
+test("announcementPrompt flags the track as a new listener song", () => {
+  const p = announcementPrompt({
+    listenerName: "Anna",
+    userPrompt: "something lofi",
+    title: "Lost Hours",
+  });
+  // The core framing: this is a FRESH / NEW listener song's first air.
+  assert.match(p.user, /(fresh|new|first time|brand.?new|just made|just in)/i);
+});
+
+test("promptFor throws if called with listener_song_announce (wrong path)", () => {
+  assert.throws(
+    () => promptFor("listener_song_announce" as ChatterType, {}),
+    /announcementPrompt/,
+  );
 });

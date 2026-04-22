@@ -7,6 +7,7 @@ import { createHandler, type OnTrackBody, type PushBody, type StatusSnapshot } f
 import { resolveTrackId, type TrackLookup } from "./resolve-track.ts";
 import { S3Client } from "@aws-sdk/client-s3";
 import { AutoHostOrchestrator } from "./auto-host.ts";
+import { AnnouncementOrchestrator } from "./announce.ts";
 import { StationFlagCache } from "./station-flag.ts";
 import { generateChatterScript } from "./minimax-script.ts";
 import { synthesizeChatter } from "./deepgram-tts.ts";
@@ -123,6 +124,43 @@ const autoHost = new AutoHostOrchestrator({
   },
 });
 
+// ─── Listener-song announcement wiring ───────────────────────────────
+// Reuses the same MiniMax + Deepgram + B2 pipeline as auto-chatter.
+// Event-driven: pushHandler schedules generation when a song-worker push
+// includes an `announce` field, onTrackHandler pushes the stashed audio
+// on that trackId's first-air.
+const announce = new AnnouncementOrchestrator({
+  generateScript: (prompts) =>
+    generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+  synthesizeSpeech: (text) =>
+    synthesizeChatter(text, { apiKey: process.env.DEEPGRAM_API_KEY ?? "" }),
+  uploadChatter: (body, id) => {
+    const bits = getChatterS3Bits();
+    return uploadChatterAudio(body, id, {
+      bucket: bits.bucket,
+      publicBaseUrl: bits.publicBase,
+      s3: bits.s3,
+    });
+  },
+  pushToOverlay: async (url) => {
+    await sock.send(`overlay_queue.push ${url}`);
+  },
+  logPush: ({ chatterId, trackId, url, script }) => {
+    lastPushes.push({
+      at: new Date().toISOString(),
+      trackId: `announce:${trackId}:${chatterId}`,
+      url,
+      script,
+    });
+    console.log(`[announce] trackId=${trackId} chatterId=${chatterId}`);
+  },
+  logFailure: ({ reason, detail }) => {
+    lastFailures.push({ at: new Date().toISOString(), reason, detail });
+    console.warn(`[announce] fail ${reason}: ${detail ?? ""}`);
+  },
+  onVoicePushed: () => autoHost.onVoicePushed(),
+});
+
 async function stationId(): Promise<string> {
   const s = await prisma.station.findUniqueOrThrow({
     where: { slug: STATION_SLUG },
@@ -229,6 +267,15 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
     );
   // Any voice push (shoutout or our own chatter) resets the music counter.
   if (kind === "shoutout") autoHost.onVoicePushed();
+
+  // Listener-song announcement: pre-generate in the background so Lena can
+  // intro the song over its first seconds when it airs. Only applies to
+  // music pushes carrying explicit announce metadata (song-worker sets it
+  // for fresh listener-generated tracks).
+  if (kind === "music" && body.announce) {
+    announce.schedule(body.trackId, body.announce);
+  }
+
   return { queueItemId: item.id };
 }
 
@@ -264,6 +311,13 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
       console.error("[auto-chatter] runChatter threw:", err),
     );
   }
+
+  // Listener-song announcement: if this track has a pre-generated intro
+  // stashed (from a prior song-worker push with `announce` metadata),
+  // push it to overlay_queue. Fire-and-forget — the announce module
+  // awaits any still-in-progress generation internally. Also calls
+  // autoHost.onVoicePushed() when it fires, so we don't stack voices.
+  announce.announceIfPending(resolved.id);
 
   // Complete any prior playing priority item.
   await prisma.queueItem.updateMany({
