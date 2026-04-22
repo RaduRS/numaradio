@@ -42,9 +42,20 @@ priority = request.queue(id="priority")
 overlay_queue = request.queue(id="overlay_queue")
 
 # Rotation playlist — polled every 2 min in sync with the refresher's
-# atomic tmp→rename. Fisher–Yates shuffled.
+# atomic tmp→rename.
+#
+# mode="normal": play the file top-to-bottom in the order we wrote it.
+# (The default, "randomize", does its OWN shuffle AND reshuffles at
+# cycle boundary — which is how listeners ended up hearing the same
+# track twice in a row: the reshuffle had a ~1/N chance of landing
+# the just-ended track first. With mode="normal" + an authoritative
+# Fisher-Yates from scripts/refresh-rotation.ts, Liquidsoap respects
+# our ordering. Our pool excludes the currently-playing track via
+# PlayHistory + NowPlaying, so position 0 can never be the track
+# that's just finishing.)
 rotation = playlist(
   id="rotation",
+  mode="normal",
   reload=120,
   reload_mode="seconds",
   playlist_file

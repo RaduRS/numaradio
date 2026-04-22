@@ -81,6 +81,16 @@ async function main() {
     });
     const recentIds = new Set(recent.map((r) => r.trackId!).filter(Boolean));
 
+    // Belt-and-braces: always exclude the currently-playing track, even
+    // if its PlayHistory row hasn't propagated yet (sub-second race
+    // between Liquidsoap on_track → Vercel /api/internal/track-started
+    // → Neon write → this script's query).
+    const nowPlaying = await prisma.nowPlaying.findUnique({
+      where: { stationId: station.id },
+      select: { currentTrackId: true },
+    });
+    if (nowPlaying?.currentTrackId) recentIds.add(nowPlaying.currentTrackId);
+
     const content = buildPlaylist(library, recentIds);
 
     const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}.m3u`);
