@@ -13,7 +13,10 @@ export interface ExpandOptions {
 
 const TITLE_MAX = 50;
 const ARTWORK_MAX = 280;
-const LYRICS_MAX = 400;
+// Tight 400-char cap gave us 55-60s songs because MiniMax music-2.6
+// sizes the track by lyrics length. 1500 comfortably fits a full
+// verse/chorus/verse/chorus/bridge/chorus structure for a 2-3 min song.
+const LYRICS_MAX = 1500;
 
 export function buildPromptExpansionSystem(opts: ExpandOptions): string {
   const lines: string[] = [
@@ -25,7 +28,7 @@ export function buildPromptExpansionSystem(opts: ExpandOptions): string {
   ];
   if (opts.withLyrics) {
     lines.push(
-      '  "lyrics": 4-12 short lines suitable for a 2-3 minute song, <= 400 chars total, separated by newlines, clearly tagged like [verse] or [chorus]. The listener did NOT write these; you do, guided by the prompt\'s vibe. Keep it clean — no profanity, slurs, or references to real public figures.',
+      '  "lyrics": full-length lyrics for a 2-3 minute song. 16-24 lines total, <= 1500 chars. Structure MUST include [verse 1] (4 lines), [chorus] (4 lines), [verse 2] (4 lines), [chorus] (4 lines), [bridge] (2-4 lines), [chorus] (4 lines). Write ALL sections explicitly — do not abbreviate "chorus repeats" or use a single [chorus] tag; MiniMax music-2.6 sizes the song by the lyrics text length, so shorter lyrics = shorter song. The listener did NOT write these; you do, guided by the prompt\'s vibe. Keep it clean — no profanity, slurs, or references to real public figures.',
     );
   }
   lines.push(
@@ -96,7 +99,12 @@ export async function expandPrompt(
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 700,
+      // MiniMax-M2.7 is a reasoning model that emits a `thinking` block
+      // before `text` (same pattern as Claude extended thinking). 700 was
+      // enough for short lyrics but truncates full-song lyrics — bumped so
+      // thinking prelude + ~1500 chars of lyrics + title + artworkPrompt
+      // all fit.
+      max_tokens: 3000,
       system: buildPromptExpansionSystem(opts),
       messages: [{ role: "user", content: listenerPrompt }],
     }),

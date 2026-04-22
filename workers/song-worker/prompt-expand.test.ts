@@ -25,12 +25,12 @@ test("parsePromptExpansion caps long strings", () => {
   const raw = JSON.stringify({
     title: "x".repeat(200),
     artworkPrompt: "y".repeat(500),
-    lyrics: "z".repeat(1000),
+    lyrics: "z".repeat(2500),
   });
   const parsed = parsePromptExpansion(raw, { withLyrics: true });
   assert.equal(parsed?.title.length, 50);
   assert.equal(parsed?.artworkPrompt.length, 280);
-  assert.ok((parsed?.lyrics ?? "").length <= 400);
+  assert.ok((parsed?.lyrics ?? "").length <= 1500);
 });
 
 test("parsePromptExpansion returns null for garbage so caller can fall back", () => {

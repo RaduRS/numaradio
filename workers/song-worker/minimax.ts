@@ -1,6 +1,14 @@
 const MINIMAX_MUSIC_URL = "https://api.minimax.io/v1/music_generation";
 const MUSIC_MODEL = process.env.MINIMAX_MUSIC_MODEL ?? "music-2.6";
 
+// Belt-and-braces duration hint. music-2.6 primarily sizes the song by
+// the `lyrics` text length (see prompt-expand.ts), but for instrumental
+// tracks there's no lyrics to anchor against — appending this nudge to
+// the prompt helps the model commit to a full-length composition instead
+// of a ~60s sketch.
+const DURATION_HINT =
+  "A full-length song of about 2 to 3 minutes, with intro, development, and outro.";
+
 export interface StartMusicInput {
   prompt: string;
   lyrics?: string;
@@ -39,9 +47,10 @@ function apiKey(): string {
 export async function startMusicGeneration(
   input: StartMusicInput,
 ): Promise<StartMusicResult> {
+  const prompt = `${input.prompt.trim()}. ${DURATION_HINT}`;
   const body: Record<string, unknown> = {
     model: MUSIC_MODEL,
-    prompt: input.prompt,
+    prompt,
     is_instrumental: input.isInstrumental,
     lyrics_optimizer: true,
     stream: false,
