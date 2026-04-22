@@ -68,30 +68,30 @@ const stationFlag = new StationFlagCache({
 
 const autoHost = new AutoHostOrchestrator({
   flag: stationFlag,
-  resolveJustEndedTrack: async () => {
-    // Timing at a track boundary:
-    //   1. Liquidsoap POSTs /api/internal/track-started to Vercel, which
-    //      writes a PlayHistory row for the NEW (now-playing) track.
-    //   2. Liquidsoap POSTs /on-track to us (this daemon), which fires
-    //      onMusicTrackStart() and then this callback.
-    // By the time this runs, PlayHistory[0] is the new track and
-    // PlayHistory[1] is the one that just ended — which is what the
-    // back_announce should reference ("That was X by Y").
+  resolveCurrentTrack: async () => {
+    // Returns the currently-playing track. Used for BOTH:
+    //   - back_announce context (Lena's speech bridges the current track's
+    //     outro into the next, so she references the current track as "just
+    //     ended" from the listener's POV by the time her sentence finishes).
+    //   - push scheduling (startedAt + durationSeconds → compute when to
+    //     push so Lena starts ~10s before the current track ends).
     const sid = await stationId();
-    const recent = await prisma.playHistory.findMany({
-      where: { stationId: sid, trackId: { not: null } },
-      orderBy: { startedAt: "desc" },
-      take: 2,
-      select: { trackId: true },
+    const np = await prisma.nowPlaying.findUnique({
+      where: { stationId: sid },
+      select: { currentTrackId: true, startedAt: true },
     });
-    const justEndedTrackId = recent[1]?.trackId;
-    if (!justEndedTrackId) return null;
+    if (!np?.currentTrackId || !np.startedAt) return null;
     const t = await prisma.track.findUnique({
-      where: { id: justEndedTrackId },
-      select: { title: true, artistDisplay: true },
+      where: { id: np.currentTrackId },
+      select: { title: true, artistDisplay: true, durationSeconds: true },
     });
     if (!t) return null;
-    return { title: t.title, artist: t.artistDisplay ?? "an artist" };
+    return {
+      title: t.title,
+      artist: t.artistDisplay ?? "an artist",
+      startedAtMs: np.startedAt.getTime(),
+      durationSeconds: t.durationSeconds ?? null,
+    };
   },
   generateScript: (prompts) =>
     generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),

@@ -99,19 +99,27 @@ interface RecordedPush { url: string }
 function fakeDeps(overrides: Partial<Parameters<typeof AutoHostOrchestrator.prototype.constructor>[0]> = {}) {
   const failures: RecordedFailure[] = [];
   const pushes: RecordedPush[] = [];
+  const sleepCalls: number[] = [];
   const deps = {
     flag: { async isEnabled() { return true; } },
-    resolveJustEndedTrack: async () => ({ title: "Midnight Drive", artist: "Russell Ross" }),
+    // Default: duration=null so the orchestrator skips the pre-end wait
+    // and pushes immediately. Tests that care about timing override this.
+    resolveCurrentTrack: async () => ({
+      title: "Midnight Drive",
+      artist: "Russell Ross",
+      startedAtMs: 0,
+      durationSeconds: null as number | null,
+    }),
     generateScript: async () => "That was Midnight Drive by Russell Ross. Stick around.",
     synthesizeSpeech: async () => Buffer.from([0xff, 0xfb]),
     uploadChatter: async () => "https://cdn.numaradio.com/file/numaradio/stations/numaradio/chatter/x.mp3",
     pushToOverlay: async (url: string) => { pushes.push({ url }); },
     logPush: () => {},
     logFailure: (f: RecordedFailure) => { failures.push(f); },
-    sleep: async () => {}, // instant retries in tests
+    sleep: async (ms: number) => { sleepCalls.push(ms); },
     ...overrides,
   };
-  return { deps, failures, pushes };
+  return { deps, failures, pushes, sleepCalls };
 }
 
 test("orchestrator happy path: generate, upload, push, markSuccess", async () => {
@@ -204,12 +212,101 @@ test("orchestrator is a no-op while a chatter is already in flight", async () =>
   assert.equal(calls, 1);
 });
 
-test("back_announce without a just-ended track falls back to generic prompt context", async () => {
+test("back_announce without a current track falls back to generic prompt context", async () => {
   const { deps, pushes } = fakeDeps({
-    resolveJustEndedTrack: async () => null,
+    resolveCurrentTrack: async () => null,
   });
   const orch = new AutoHostOrchestrator(deps);
   // Force slot 0 (back_announce) — happy path:
   await orch.runChatter();
   assert.equal(pushes.length, 1); // still airs, just without track-specific data
+});
+
+test("runChatter waits until 10s before current track ends before pushing", async () => {
+  // Track started at 1000ms, lasts 30s → ends at 31000ms.
+  // Target push time = end − 10s = 21000ms.
+  // Now is 6000ms (5s into track) → expected waitMs = 15000.
+  const { deps, pushes, sleepCalls } = fakeDeps({
+    now: () => 6000,
+    resolveCurrentTrack: async () => ({
+      title: "X", artist: "Y",
+      startedAtMs: 1000,
+      durationSeconds: 30,
+    }),
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.ok(
+    sleepCalls.includes(15000),
+    `expected a 15000ms sleep, got ${JSON.stringify(sleepCalls)}`,
+  );
+  assert.equal(pushes.length, 1);
+});
+
+test("runChatter pushes immediately when duration is unknown", async () => {
+  const { deps, pushes, sleepCalls } = fakeDeps({
+    resolveCurrentTrack: async () => ({
+      title: "X", artist: "Y",
+      startedAtMs: 0,
+      durationSeconds: null,
+    }),
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  // No pre-end wait recorded — push fired immediately.
+  assert.equal(sleepCalls.length, 0);
+  assert.equal(pushes.length, 1);
+});
+
+test("runChatter pushes immediately when the target push time is already past", async () => {
+  // Track started at 0, duration 30 → ends at 30000. Target = 20000.
+  // Now = 25000 (5s before end, already past the 10-s-before-end target).
+  const { deps, pushes, sleepCalls } = fakeDeps({
+    now: () => 25_000,
+    resolveCurrentTrack: async () => ({
+      title: "X", artist: "Y",
+      startedAtMs: 0,
+      durationSeconds: 30,
+    }),
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  // No wait fired (waitMs would be negative; orchestrator skips it).
+  assert.equal(sleepCalls.length, 0);
+  assert.equal(pushes.length, 1);
+});
+
+test("onVoicePushed during the pre-push wait cancels the chatter push", async () => {
+  // Set up: sleep resolves only when we explicitly tell it to. That way we
+  // can simulate "the sleep hasn't finished yet" and fire a voice event
+  // before pushing.
+  let sleepResolver: (() => void) | null = null;
+  const sleepPromise = new Promise<void>((resolve) => {
+    sleepResolver = resolve;
+  });
+  const { deps, pushes } = fakeDeps({
+    now: () => 0,
+    sleep: (ms: number) => {
+      // Only stub the long pre-end wait; instant-resolve anything shorter
+      // (e.g. the 2s retry delay) by not trapping it.
+      if (ms > 1000) return sleepPromise;
+      return Promise.resolve();
+    },
+    resolveCurrentTrack: async () => ({
+      title: "X", artist: "Y",
+      startedAtMs: 0,
+      durationSeconds: 30, // target push at 20000ms, waitMs = 20000
+    }),
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  const runPromise = orch.runChatter();
+  // Let the orchestrator reach its pre-push wait.
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  // Shoutout arrives — cancels the scheduled push.
+  orch.onVoicePushed();
+  // Let sleep resolve (simulate time passing).
+  sleepResolver?.();
+  await runPromise;
+  assert.equal(pushes.length, 0, "push should have been cancelled");
 });

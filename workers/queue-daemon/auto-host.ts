@@ -72,20 +72,30 @@ export class AutoHostStateMachine {
 
 import { slotTypeFor, promptFor, type ChatterType } from "./chatter-prompts.ts";
 
-export interface TrackInfo {
+export interface CurrentTrackInfo {
   title: string;
   artist: string;
+  /** Unix ms. Used to compute the target push time. */
+  startedAtMs: number;
+  /**
+   * Null when unknown — orchestrator skips the pre-end wait and pushes
+   * immediately (equivalent to the old at-track-boundary behaviour).
+   */
+  durationSeconds: number | null;
 }
 
 export interface AutoHostDeps {
   flag: { isEnabled(): Promise<boolean> };
   /**
-   * Returns metadata for the track that just ENDED (not the one currently
-   * playing). Called only for back_announce chatters, where Lena says
-   * "That was X by Y" — X is the finished track, and the currently-playing
-   * track is the music bed Lena is speaking over.
+   * Returns the currently-playing music track. Used for two things:
+   *   - back_announce context: "That was <title> by <artist>" — at generation
+   *     time this is the track CURRENTLY playing, but by the time Lena
+   *     finishes speaking (her speech starts 10s before end of this track
+   *     and continues into the next) it will have just ended.
+   *   - push scheduling: startedAtMs + durationSeconds tell the orchestrator
+   *     when to push (target = trackEnd − PUSH_OFFSET_BEFORE_END_SECONDS).
    */
-  resolveJustEndedTrack: () => Promise<TrackInfo | null>;
+  resolveCurrentTrack: () => Promise<CurrentTrackInfo | null>;
   generateScript: (prompts: { system: string; user: string }) => Promise<string>;
   synthesizeSpeech: (text: string) => Promise<Buffer>;
   uploadChatter: (body: Buffer, chatterId: string) => Promise<string>;
@@ -93,17 +103,40 @@ export interface AutoHostDeps {
   logPush: (entry: { chatterId: string; type: ChatterType; slot: number; url: string; script: string }) => void;
   logFailure: (entry: { reason: string; detail?: string }) => void;
   sleep?: (ms: number) => Promise<void>;
+  /** Injectable clock for testing; defaults to Date.now. */
+  now?: () => number;
 }
 
 const RETRY_DELAY_MS = 2_000;
+/**
+ * How many seconds before the current track's end Lena starts speaking.
+ * Her ~15s line spans the last 10s of the current track + ~5s of the next,
+ * so listeners hear a radio-style back-announce bridging the two songs.
+ */
+const PUSH_OFFSET_BEFORE_END_SECONDS = 10;
 
 function makeChatterId(): string {
   return `chatter-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+interface ReadyAsset {
+  chatterId: string;
+  type: ChatterType;
+  slot: number;
+  url: string;
+  script: string;
+}
+
 export class AutoHostOrchestrator {
   readonly state = new AutoHostStateMachine();
   private readonly deps: AutoHostDeps;
+  /**
+   * Invalidated by onVoicePushed(). A runChatter() that's sleeping until
+   * its push window compares its local run-token to this field before
+   * pushing; a mismatch means a shoutout took the slot while we waited.
+   */
+  #currentRun: symbol | null = null;
+
   constructor(deps: AutoHostDeps) {
     this.deps = deps;
   }
@@ -116,58 +149,110 @@ export class AutoHostOrchestrator {
   }
   onVoicePushed(): void {
     this.state.onVoicePushed();
+    // Invalidate any run that's sleeping before its push — the slot is gone.
+    this.#currentRun = null;
   }
 
   /**
-   * Run one chatter cycle end-to-end. Caller decides when — typically when
-   * onMusicTrackStart returned "trigger".
+   * Generate a chatter, wait until ~10s before the current track ends,
+   * then push to overlay_queue. Caller fires this when onMusicTrackStart
+   * returns "trigger". Never rethrows — all failures land in lastFailures.
    */
   async runChatter(): Promise<void> {
     if (this.state.isInFlight()) return;
     this.state.markInFlight();
+    const myRun = Symbol("autoHostRun");
+    this.#currentRun = myRun;
 
     try {
       if (!(await this.deps.flag.isEnabled())) {
-        this.state.markFailure(); // no-op for counter, but releases in-flight + resets tracks
-        // Release the music counter fully rather than leaving it at 0 — the
-        // markFailure() does that already. No slotCounter change (correct;
-        // feature is off, rotation shouldn't advance).
+        this.state.markFailure();
         return;
       }
 
-      const ok = await this.attempt();
-      if (ok) return;
+      // Snapshot current-track info BEFORE generation so timing is
+      // anchored to what's playing when we fire, not whatever is playing
+      // 10s later after MiniMax/Deepgram round-trips.
+      const current = await this.safeResolveCurrentTrack();
 
-      // Retry once.
-      await (this.deps.sleep ?? defaultSleep)(RETRY_DELAY_MS);
-      const ok2 = await this.attempt();
-      if (!ok2) this.state.markFailure();
+      // Generate, with one retry on failure.
+      let asset = await this.generateAsset(current);
+      if (!asset) {
+        await (this.deps.sleep ?? defaultSleep)(RETRY_DELAY_MS);
+        if (this.#currentRun !== myRun) return;
+        asset = await this.generateAsset(current);
+      }
+      if (!asset) {
+        this.state.markFailure();
+        return;
+      }
+
+      // Wait until ~10s before the current track ends before pushing.
+      // If duration is unknown OR we're already past the target, push now.
+      if (current?.durationSeconds != null) {
+        const now = (this.deps.now ?? Date.now)();
+        const pushAtMs =
+          current.startedAtMs +
+          (current.durationSeconds - PUSH_OFFSET_BEFORE_END_SECONDS) * 1000;
+        const waitMs = pushAtMs - now;
+        if (waitMs > 0) {
+          await (this.deps.sleep ?? defaultSleep)(waitMs);
+        }
+      }
+
+      // Shoutout during the wait? Discard — the slot is already taken.
+      if (this.#currentRun !== myRun) return;
+
+      // Push to overlay_queue.
+      try {
+        await this.deps.pushToOverlay(asset.url);
+      } catch (e) {
+        this.deps.logFailure({
+          reason: "auto_chatter_push_failed",
+          detail: e instanceof Error ? e.message : String(e),
+        });
+        this.state.markFailure();
+        return;
+      }
+
+      this.deps.logPush({ ...asset });
+      this.state.markSuccess();
     } catch (err) {
-      // Defensive catch — should never happen because attempt() never rethrows.
+      // Defensive catch — should never happen because generateAsset never rethrows.
       this.deps.logFailure({
         reason: "auto_chatter_unexpected",
         detail: err instanceof Error ? err.message : String(err),
       });
-      this.state.markFailure();
+      if (this.state.isInFlight()) this.state.markFailure();
     }
   }
 
-  private async attempt(): Promise<boolean> {
+  private async safeResolveCurrentTrack(): Promise<CurrentTrackInfo | null> {
+    try {
+      return await this.deps.resolveCurrentTrack();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Run the full pipeline (script → TTS → B2 upload) and return the
+   * asset on success. Never rethrows — on failure logs a specific reason
+   * and returns null so the caller can retry or give up.
+   */
+  private async generateAsset(
+    current: CurrentTrackInfo | null,
+  ): Promise<ReadyAsset | null> {
     const slot = this.state.slotCounter % 20;
     const type = slotTypeFor(slot);
 
-    // 1. gather track context for back_announce
-    let context: { title?: string; artist?: string } = {};
-    if (type === "back_announce") {
-      try {
-        const last = await this.deps.resolveJustEndedTrack();
-        if (last) context = { title: last.title, artist: last.artist };
-      } catch {
-        // non-fatal — back_announce falls back to generic wording
-      }
-    }
+    // Back_announce uses the currently-playing track as context — by the
+    // time Lena finishes speaking, this track has just ended.
+    const context =
+      type === "back_announce" && current
+        ? { title: current.title, artist: current.artist }
+        : {};
 
-    // 2. MiniMax script
     const prompts = promptFor(type, context);
     let script: string;
     try {
@@ -177,10 +262,9 @@ export class AutoHostOrchestrator {
         reason: "auto_chatter_script_failed",
         detail: e instanceof Error ? e.message : String(e),
       });
-      return false;
+      return null;
     }
 
-    // 3. Deepgram TTS
     let audio: Buffer;
     try {
       audio = await this.deps.synthesizeSpeech(script);
@@ -189,10 +273,9 @@ export class AutoHostOrchestrator {
         reason: "auto_chatter_tts_failed",
         detail: e instanceof Error ? e.message : String(e),
       });
-      return false;
+      return null;
     }
 
-    // 4. B2 upload
     const chatterId = makeChatterId();
     let url: string;
     try {
@@ -202,23 +285,10 @@ export class AutoHostOrchestrator {
         reason: "auto_chatter_b2_failed",
         detail: e instanceof Error ? e.message : String(e),
       });
-      return false;
+      return null;
     }
 
-    // 5. Liquidsoap overlay_queue push
-    try {
-      await this.deps.pushToOverlay(url);
-    } catch (e) {
-      this.deps.logFailure({
-        reason: "auto_chatter_push_failed",
-        detail: e instanceof Error ? e.message : String(e),
-      });
-      return false;
-    }
-
-    this.deps.logPush({ chatterId, type, slot, url, script });
-    this.state.markSuccess();
-    return true;
+    return { chatterId, type, slot, url, script };
   }
 }
 
