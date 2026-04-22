@@ -2,7 +2,6 @@ import { ListenLiveButton } from "./ListenLiveButton";
 import { ListenerCount } from "./ListenerCount";
 import { SparklesIcon } from "./Icons";
 import { PlayerCard } from "./PlayerCard";
-import { HeroStats } from "./HeroStats";
 
 export function Hero() {
   return (
@@ -35,7 +34,6 @@ export function Hero() {
               Send it to Lena
             </a>
           </div>
-          <HeroStats />
         </div>
 
         <div className="hero-right">

@@ -39,7 +39,9 @@ export function PlayerCard() {
       }}
     >
       <div className="player-head">
-        <div className="onair">On Air — Lena</div>
+        <div className="onair">
+          {np.shoutout?.active ? "On Air" : "On Air — Lena"}
+        </div>
         <div className="player-time"><LiveClock /></div>
       </div>
 

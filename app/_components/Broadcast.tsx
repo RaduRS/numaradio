@@ -201,8 +201,8 @@ export function Broadcast() {
       : 0;
   }
 
-  const title = live?.title ?? "—";
-  const artist = live?.artistDisplay ?? "—";
+  const title = live?.title ?? "Warming up";
+  const artist = live?.artistDisplay ?? "Numa Radio";
   const art = live?.artworkUrl;
   const artGlyph = live ? initials(live.title) : "··";
 
@@ -261,10 +261,6 @@ export function Broadcast() {
           <div className="broadcast-next">
             <div className="up-next-head">
               <h3>{upNext ? "Up Next" : "Just Played"}</h3>
-              <div className="live-pill">
-                <span className="dot" />
-                Live
-              </div>
             </div>
             <div className="queue-list">
               {upNext && (

@@ -1,6 +1,6 @@
-// Day-parts from the design + Decisions Log. The "now" card depends on
-// current local time; for MVP we hardcode Night Shift as live (matches the
-// design mockup at 02:47 AM). TODO Phase 4: make `nowSlot` time-aware.
+"use client";
+
+import { useEffect, useState } from "react";
 
 const SHOWS = [
   {
@@ -29,9 +29,25 @@ const SHOWS = [
   },
 ];
 
-const NOW_INDEX = 0; // Night Shift is "Live Now" in the mockup.
+function slotForHour(h: number): number {
+  if (h < 5) return 0;
+  if (h < 10) return 1;
+  if (h < 17) return 2;
+  return 3;
+}
 
 export function Schedule() {
+  // Start as null so SSR output is deterministic (no Live Now pill). Client
+  // resolves to the active slot on mount and refreshes every minute.
+  const [nowIndex, setNowIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    const update = () => setNowIndex(slotForHour(new Date().getHours()));
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <section className="schedule" id="schedule">
       <div className="shell">
@@ -53,9 +69,9 @@ export function Schedule() {
 
         <div className="sched-grid">
           {SHOWS.map((s, i) => (
-            <div key={i} className={`show-card ${i === NOW_INDEX ? "now" : ""}`}>
+            <div key={i} className={`show-card ${i === nowIndex ? "now" : ""}`}>
               <div className="show-time">
-                {i === NOW_INDEX ? (
+                {i === nowIndex ? (
                   <>
                     <span className="live">● Live Now</span>
                     <span>·</span>

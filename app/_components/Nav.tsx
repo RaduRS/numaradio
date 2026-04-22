@@ -7,9 +7,9 @@ export function Nav() {
       <div className="shell nav-inner">
         <Logo />
         <div className="nav-links">
-          <a href="/#now">Now Playing</a>
-          <a href="/#format">The Station</a>
           <a href="/#requests">Requests</a>
+          <a href="/#format">The Station</a>
+          <a href="/#now">Now Playing</a>
           <a href="/#schedule">Shows</a>
         </div>
         <div className="nav-right">

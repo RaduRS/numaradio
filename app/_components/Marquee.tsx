@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useNowPlaying } from "./useNowPlaying";
 
 type Item = {
@@ -11,12 +10,6 @@ type Item = {
 };
 
 const STATIC_ITEMS: Item[] = [
-  {
-    key: "hosted",
-    type: "soft",
-    label: "Hosted by Lena",
-    meta: "24 / 7 / Forever",
-  },
   {
     key: "noads",
     type: "soft",
@@ -31,36 +24,8 @@ const STATIC_ITEMS: Item[] = [
   },
 ];
 
-function useListenerCount() {
-  const [count, setCount] = useState<number | null>(null);
-  useEffect(() => {
-    const ctrl = new AbortController();
-    async function poll() {
-      try {
-        const r = await fetch("/api/station/listeners", {
-          signal: ctrl.signal,
-          cache: "no-store",
-        });
-        if (!r.ok) return;
-        const data = (await r.json()) as { withFloor?: number };
-        if (typeof data.withFloor === "number") setCount(data.withFloor);
-      } catch {
-        /* network blip — keep previous value */
-      }
-    }
-    poll();
-    const id = setInterval(poll, 10_000);
-    return () => {
-      clearInterval(id);
-      ctrl.abort();
-    };
-  }, []);
-  return count;
-}
-
 export function Marquee() {
   const np = useNowPlaying();
-  const listeners = useListenerCount();
 
   const items: Item[] = [];
 
@@ -77,15 +42,6 @@ export function Marquee() {
       type: "now",
       label: "Numa Radio · Always On",
       meta: "Lena on the mic",
-    });
-  }
-
-  if (listeners !== null) {
-    items.push({
-      key: "listeners",
-      type: "soft",
-      label: `${listeners.toLocaleString()} listening right now`,
-      meta: "Live worldwide",
     });
   }
 

@@ -82,6 +82,34 @@
   margin-top: 6px;
 }
 
+/* ---------- Stats band ---------- */
+/* Thin breath between the Hero and the Requests section. Takes over the
+   dividing job from the old in-hero .hero-stats border, so the hero-scope
+   styles above are neutralised when HeroStats lives inside .stats-band. */
+
+.stats-band {
+  padding: 56px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.stats-band .hero-stats {
+  border-top: none;
+  padding-top: 0;
+  justify-content: space-between;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .stats-band { padding: 36px 0; }
+  .stats-band .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .stats-band .hero-stat .n { font-size: 26px; }
+  .stats-band .hero-stat .l { font-size: 9px; letter-spacing: 0.14em; }
+}
+
 /* ---------- Hero player ---------- */
 
 .player-card {

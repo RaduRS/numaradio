@@ -1,5 +1,6 @@
 import { Nav } from "./_components/Nav";
 import { Hero } from "./_components/Hero";
+import { HeroStats } from "./_components/HeroStats";
 import { Marquee } from "./_components/Marquee";
 import { Format } from "./_components/Format";
 import { Broadcast } from "./_components/Broadcast";
@@ -13,6 +14,11 @@ export default function Home() {
     <>
       <Nav />
       <Hero />
+      <section className="stats-band">
+        <div className="shell">
+          <HeroStats />
+        </div>
+      </section>
       <Requests />
       <Marquee />
       <Format />
