@@ -68,7 +68,12 @@ export async function generateChatterScript(
   const data = (await res.json()) as AnthropicResponse;
   const raw = data.content?.find((b) => b.type === "text" && b.text)?.text ?? "";
   const cleaned = cleanModelOutput(raw);
-  if (!cleaned) throw new Error("empty script from minimax");
+  if (!cleaned) {
+    // Dump enough of the raw response to diagnose (empty content? refusal?
+    // unexpected shape?). Truncated so journalctl stays readable.
+    const dump = JSON.stringify(data).slice(0, 400);
+    throw new Error(`empty script from minimax — raw=${dump}`);
+  }
   if (isSuspicious(cleaned)) throw new Error(`suspicious model output: ${cleaned.slice(0, 100)}`);
   return cleaned;
 }
