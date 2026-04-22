@@ -18,7 +18,7 @@ const LS_PORT = Number(process.env.NUMA_LS_PORT ?? 1234);
 const HTTP_PORT = Number(process.env.NUMA_DAEMON_PORT ?? 4000);
 
 const sock = new SupervisedSocket({ host: LS_HOST, port: LS_PORT });
-const lastPushes = new RingBuffer<{ at: string; trackId: string; url: string }>(10);
+const lastPushes = new RingBuffer<{ at: string; trackId: string; url: string; script?: string }>(10);
 const lastFailures = new RingBuffer<{ at: string; reason: string; detail?: string }>(10);
 
 // ─── Auto-chatter wiring ─────────────────────────────────────────
@@ -108,11 +108,12 @@ const autoHost = new AutoHostOrchestrator({
   pushToOverlay: async (url) => {
     await sock.send(`overlay_queue.push ${url}`);
   },
-  logPush: ({ chatterId, type, slot, url }) => {
+  logPush: ({ chatterId, type, slot, url, script }) => {
     lastPushes.push({
       at: new Date().toISOString(),
       trackId: `auto-chatter:${chatterId}:${type}:slot${slot}`,
       url,
+      script,
     });
     console.log(`[auto-chatter] slot=${slot} type=${type} id=${chatterId}`);
   },

@@ -90,7 +90,7 @@ export interface AutoHostDeps {
   synthesizeSpeech: (text: string) => Promise<Buffer>;
   uploadChatter: (body: Buffer, chatterId: string) => Promise<string>;
   pushToOverlay: (url: string) => Promise<void>;
-  logPush: (entry: { chatterId: string; type: ChatterType; slot: number; url: string }) => void;
+  logPush: (entry: { chatterId: string; type: ChatterType; slot: number; url: string; script: string }) => void;
   logFailure: (entry: { reason: string; detail?: string }) => void;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -216,7 +216,7 @@ export class AutoHostOrchestrator {
       return false;
     }
 
-    this.deps.logPush({ chatterId, type, slot, url });
+    this.deps.logPush({ chatterId, type, slot, url, script });
     this.state.markSuccess();
     return true;
   }

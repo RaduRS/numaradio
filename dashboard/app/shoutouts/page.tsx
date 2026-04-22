@@ -21,6 +21,7 @@ interface DaemonPush {
   at?: string;
   trackId?: string;
   url?: string;
+  script?: string;
 }
 interface DaemonFailure {
   at?: string;
@@ -307,14 +308,21 @@ export default function ShoutoutsPage() {
                 const type = parts[2] ?? "?";
                 const slot = parts[3] ?? "?";
                 return (
-                  <div key={`p${i}`} className="px-4 py-2 flex items-center justify-between gap-3">
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-mono text-xs text-accent truncate">
-                        ✓ {type}
-                      </span>
-                      <span className="font-mono text-[10px] text-fg-mute truncate">
-                        {slot}
-                      </span>
+                  <div key={`p${i}`} className="px-4 py-3 flex items-start justify-between gap-3">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-accent">
+                          ✓ {type}
+                        </span>
+                        <span className="font-mono text-[10px] text-fg-mute">
+                          {slot}
+                        </span>
+                      </div>
+                      {p.script && (
+                        <p className="mt-1 text-sm text-fg italic">
+                          &ldquo;{p.script}&rdquo;
+                        </p>
+                      )}
                     </div>
                     <span className="font-mono text-[11px] text-fg-mute shrink-0">
                       {p.at ? fmtRelative(p.at) : "—"}
