@@ -64,10 +64,26 @@ test("promptFor(filler) needs no context and has no track references", () => {
   assert.doesNotMatch(p.user, /\$\{.+\}/); // no unresolved template vars
 });
 
-test("all variants target roughly the same word count target in system prompt", () => {
+test("all variants share the same word count target in system prompt", () => {
   for (const type of ["back_announce", "shoutout_cta", "song_cta", "filler"] as ChatterType[]) {
     const p = promptFor(type, { title: "X", artist: "Y" });
-    assert.match(p.system, /30[–-]50 words|~40 words|roughly 40 words/i,
+    assert.match(p.system, /20[–-]30 words/i,
       `system prompt for ${type} should specify word count`);
   }
+});
+
+test("system prompt forbids poetic/atmospheric language explicitly", () => {
+  const p = promptFor("back_announce", { title: "X", artist: "Y" });
+  // Spot-check a few of the forbidden phrases — these are the specific
+  // failure modes observed live on 2026-04-22.
+  assert.match(p.system, /wandering piano lines/i);
+  assert.match(p.system, /dawn peeking/i);
+  assert.match(p.system, /night settles/i);
+  assert.match(p.system, /real DJ/i);
+});
+
+test("back_announce user prompt includes bad-example anti-patterns", () => {
+  const p = promptFor("back_announce", { title: "Midnight Drive", artist: "Russell Ross" });
+  assert.match(p.user, /Bad examples/i);
+  assert.match(p.user, /do NOT/);
 });
