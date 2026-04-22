@@ -157,13 +157,17 @@
   gap: 12px;
   min-height: 0;
   overflow: hidden;
+  /* Mirrors .ep-booth-left — center the head+feed block vertically so the
+     right column lines up with the centered left column instead of pinning
+     to the top with empty space below. */
+  justify-content: center;
 }
 
 /* Scrollable shell for the right-column live feed so the column height
    stays pinned to the left column while the list internally scrolls. */
 .ep-booth-feed {
-  flex: 1;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   padding-right: 4px;
 }

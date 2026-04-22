@@ -991,7 +991,9 @@
 
 .req-send {
   align-self: flex-start;
-  margin-top: 8px;
+  /* Below-button gap is handled by .req-form-card's 20px flex-gap between
+     form and review — only margin-top needed here for the checkbox above. */
+  margin-top: 20px;
 }
 
 /* Custom checkbox — matches the site's mono/editorial chrome.
