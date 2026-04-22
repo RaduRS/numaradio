@@ -147,6 +147,7 @@ model Station {
   defaultVoiceProfile String?
   defaultArtStyle     String?
   timezone            String        @default("Europe/London")
+  autoHostEnabled     Boolean       @default(false)
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
