@@ -4,10 +4,10 @@ const MINIMAX_URL = "https://api.minimax.io/anthropic/v1/messages";
 const DEFAULT_MODEL = process.env.MINIMAX_HUMANIZE_MODEL ?? "MiniMax-M2.7";
 // MiniMax-M2.7 is a reasoning model that emits a `thinking` content block
 // before the final `text` block (same shape as Claude's extended thinking).
-// max_tokens counts BOTH blocks — 200 was only enough for the thinking
-// prelude, leaving nothing for the actual output. 2000 comfortably fits a
-// verbose chain-of-thought plus a ~40-word spoken line.
-const MAX_TOKENS = 2_000;
+// max_tokens counts BOTH blocks. Set generously — operator has budget, and
+// a larger cap guarantees the reasoning prelude never truncates the
+// actual spoken output.
+const MAX_TOKENS = 16_000;
 
 interface AnthropicContentBlock {
   type: string;

@@ -100,11 +100,11 @@ export async function expandPrompt(
     body: JSON.stringify({
       model: MODEL,
       // MiniMax-M2.7 is a reasoning model that emits a `thinking` block
-      // before `text` (same pattern as Claude extended thinking). 700 was
-      // enough for short lyrics but truncates full-song lyrics — bumped so
-      // thinking prelude + ~1500 chars of lyrics + title + artworkPrompt
-      // all fit.
-      max_tokens: 3000,
+      // before `text` (same pattern as Claude extended thinking). Set
+      // generously — operator has token budget, and a larger cap
+      // guarantees the reasoning prelude never truncates full-song
+      // lyrics + title + artworkPrompt.
+      max_tokens: 24_000,
       system: buildPromptExpansionSystem(opts),
       messages: [{ role: "user", content: listenerPrompt }],
     }),
