@@ -122,20 +122,19 @@ export default function LibraryPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [includeShoutouts, setIncludeShoutouts] = useState(false);
   const [page, setPage] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const tracks = tracksPoll.data?.tracks ?? [];
-  const shoutoutCount = useMemo(
-    () => tracks.filter(isShoutout).length,
-    [tracks],
-  );
 
+  // Shoutouts are deleted from the DB by /api/internal/shoutout-ended
+  // immediately after they air, so the library should rarely see one.
+  // Still filter them defensively in case a cleanup failed or a row is
+  // mid-flight.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tracks.filter((t) => {
-      if (!includeShoutouts && isShoutout(t)) return false;
+      if (isShoutout(t)) return false;
       if (statusFilter !== "all" && categoriseStatus(t.trackStatus) !== statusFilter) return false;
       if (q) {
         const hay = `${t.title} ${t.artist ?? ""}`.toLowerCase();
@@ -144,12 +143,12 @@ export default function LibraryPage() {
       return true;
     });
     // Server already returns newest-first (ORDER BY createdAt DESC).
-  }, [tracks, search, statusFilter, includeShoutouts]);
+  }, [tracks, search, statusFilter]);
 
   // Reset to page 0 whenever the filtered set changes — prevents the
   // operator from being stuck on an out-of-range page after typing a
   // search or flipping a filter.
-  const filteredKey = `${search}|${statusFilter}|${includeShoutouts}|${tracks.length}`;
+  const filteredKey = `${search}|${statusFilter}|${tracks.length}`;
   useEffect(() => {
     setPage(0);
   }, [filteredKey]);
@@ -247,20 +246,6 @@ export default function LibraryPage() {
               {f} <span className="opacity-60">({counts[f]})</span>
             </button>
           ))}
-          {shoutoutCount > 0 && (
-            <button
-              onClick={() => setIncludeShoutouts((v) => !v)}
-              title="Shoutouts are voice overlays, not music — hidden from the library by default."
-              className={`font-mono text-[11px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full border transition ${
-                includeShoutouts
-                  ? "border-[var(--warn)] text-[var(--warn)] bg-[color-mix(in_oklab,var(--warn)_12%,transparent)]"
-                  : "border-line text-fg-mute hover:text-fg hover:border-fg-mute"
-              }`}
-            >
-              {includeShoutouts ? "✓ " : "+ "}Shoutouts{" "}
-              <span className="opacity-60">({shoutoutCount})</span>
-            </button>
-          )}
         </div>
       </div>
 
