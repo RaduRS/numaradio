@@ -126,3 +126,53 @@ test("promptFor throws if called with listener_song_announce (wrong path)", () =
     /announcementPrompt/,
   );
 });
+
+test("promptFor omits the Context block when no optional fields are set", () => {
+  const p = promptFor("filler", {});
+  assert.doesNotMatch(p.user, /Context \(optional/);
+});
+
+test("promptFor renders a Context block when currentShow is provided", () => {
+  const p = promptFor("back_announce", {
+    title: "Neon Fever",
+    artist: "Russell Ross",
+    currentShow: "Prime Hours",
+  });
+  assert.match(p.user, /Context \(optional/);
+  assert.match(p.user, /Current show: Prime Hours/);
+  // Description from SHOW_SCHEDULE is included alongside the name.
+  assert.match(p.user, /request wall runs hottest/i);
+});
+
+test("promptFor Context block lists recent artists newest-first when provided", () => {
+  const p = promptFor("back_announce", {
+    title: "Neon Fever",
+    artist: "Russell Ross",
+    recentArtists: ["Russell Ross", "Russell Ross", "Numa Radio"],
+  });
+  assert.match(p.user, /Last 3 artists aired.*Russell Ross, Russell Ross, Numa Radio/);
+});
+
+test("promptFor Context block includes rotation position when provided", () => {
+  const p = promptFor("back_announce", {
+    title: "X",
+    artist: "Y",
+    slotsSinceOpening: 12,
+  });
+  assert.match(p.user, /Position in the 20-slot rotation: 12/);
+});
+
+test("promptFor Context block includes the opt-out instruction", () => {
+  const p = promptFor("filler", { currentShow: "Morning Room" });
+  assert.match(p.user, /weave in only if natural/i);
+});
+
+test("promptFor Context block only lists fields that are present", () => {
+  const p = promptFor("filler", {
+    currentShow: "Morning Room",
+    // recentArtists and slotsSinceOpening intentionally omitted
+  });
+  assert.match(p.user, /Current show: Morning Room/);
+  assert.doesNotMatch(p.user, /Last 3 artists aired/);
+  assert.doesNotMatch(p.user, /Position in the 20-slot rotation/);
+});

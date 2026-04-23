@@ -1,3 +1,5 @@
+import { SHOW_SCHEDULE, type ShowBlock } from "../../lib/schedule.ts";
+
 export type ChatterType =
   | "back_announce"
   | "shoutout_cta"
@@ -27,6 +29,12 @@ export function slotTypeFor(slotCounter: number): ChatterType {
 export interface PromptContext {
   title?: string;
   artist?: string;
+  /** The current show block from lib/schedule.ts. Optional — passed as DJ-riff context. */
+  currentShow?: ShowBlock;
+  /** Last 3 aired artists, newest-first. Enables "second Russell Ross in a row" riffs. */
+  recentArtists?: string[];
+  /** Current slotCounter % 20. Enables mild "few songs in" / "cruising" flavor. */
+  slotsSinceOpening?: number;
 }
 
 export interface AnnouncementContext {
@@ -59,6 +67,28 @@ DO NOT:
 
 If you catch yourself reaching for an adjective, stop and cut it. Plain is better. Short is better. Real DJ.`;
 
+function renderContextBlock(ctx: PromptContext): string {
+  const lines: string[] = [];
+  if (ctx.currentShow) {
+    const slot = SHOW_SCHEDULE.find((s) => s.name === ctx.currentShow);
+    const desc = slot ? ` — ${slot.description}` : "";
+    lines.push(`- Current show: ${ctx.currentShow}${desc}`);
+  }
+  if (ctx.recentArtists && ctx.recentArtists.length > 0) {
+    lines.push(
+      `- Last 3 artists aired (newest first): ${ctx.recentArtists.join(", ")}`,
+    );
+  }
+  if (typeof ctx.slotsSinceOpening === "number") {
+    lines.push(`- Position in the 20-slot rotation: ${ctx.slotsSinceOpening}`);
+  }
+  if (lines.length === 0) return "";
+  return `
+
+Context (optional, weave in only if natural — skip if it doesn't fit. You do NOT have to use any of these):
+${lines.join("\n")}`;
+}
+
 export function promptFor(type: ChatterType, ctx: PromptContext): PromptPair {
   switch (type) {
     case "back_announce": {
@@ -77,7 +107,7 @@ Bad examples (do NOT write anything like these):
 - "a soft, wandering piano line that felt like dawn peeking through curtains"
 - "let the night settle into your bones"
 - "ease into what's coming next"
-- any sentence describing the song's mood, instruments, or atmosphere`,
+- any sentence describing the song's mood, instruments, or atmosphere${renderContextBlock(ctx)}`,
       };
     }
     case "shoutout_cta":
@@ -87,7 +117,7 @@ Bad examples (do NOT write anything like these):
 
 Good example shapes (write a fresh one, don't copy verbatim):
 - "Got something to say? Head to numaradio.com, Requests tab, drop me a shoutout. I'll read it here between songs."
-- "Want a shoutout on air? numaradio.com, Requests tab. Write what you want, I'll catch it."`,
+- "Want a shoutout on air? numaradio.com, Requests tab. Write what you want, I'll catch it."${renderContextBlock(ctx)}`,
       };
     case "song_cta":
       return {
@@ -96,7 +126,7 @@ Good example shapes (write a fresh one, don't copy verbatim):
 
 Good example shapes (write a fresh one, don't copy verbatim):
 - "Got a mood? numaradio.com, Song Request tab. Tell me what you want, I'll make it, airs here in a few minutes."
-- "Want your own track on air? numaradio.com, hit Song Request, describe it. Your song plays here shortly."`,
+- "Want your own track on air? numaradio.com, hit Song Request, describe it. Your song plays here shortly."${renderContextBlock(ctx)}`,
       };
     case "filler":
       return {
@@ -106,7 +136,7 @@ Good example shapes (write a fresh one, don't copy verbatim):
 Good example shapes (write a fresh one, don't copy verbatim):
 - "You're with Lena on Numa Radio. Good to have you here."
 - "Numa Radio, always on. Thanks for riding with me."
-- "You're listening to Numa Radio. More music coming up."`,
+- "You're listening to Numa Radio. More music coming up."${renderContextBlock(ctx)}`,
       };
     case "listener_song_announce":
       throw new Error(
