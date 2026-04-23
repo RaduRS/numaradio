@@ -82,6 +82,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       dir: ipcDir,
       shoutoutId: id,
       chatJid,
+      // Guarantee the agent's next session sees this prompt in context,
+      // regardless of what NanoClaw's default evolves to — otherwise the
+      // operator replies "no" and the agent has no idea what was being
+      // rejected. Paired with the NanoClaw-side fix that persists
+      // agent-addressed IPC messages to SQLite before Telegram-send.
+      persistInContext: true,
+      senderName: "Dashboard",
       text: formatTelegramText({
         id,
         rawText,
