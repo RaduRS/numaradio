@@ -32,6 +32,7 @@ export default function ChatPage() {
     sending,
     send,
     resolveConfirm,
+    clear,
   } = useChatStream();
 
   // Tiny "what's on air right now" ticker beneath the page title.
@@ -102,7 +103,27 @@ export default function ChatPage() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <ConnectionPill state={connection} typing={typing} />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (turns.length === 0) return;
+                  if (
+                    confirm(
+                      "Clear transcript? Memory is preserved — Lena's producer will still remember everything.",
+                    )
+                  ) {
+                    void clear();
+                  }
+                }}
+                disabled={turns.length === 0}
+                className="rounded-full border border-line-strong bg-bg-2 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute transition hover:border-fg-mute hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+                title="Clear transcript (memory is preserved)"
+              >
+                Clear
+              </button>
+              <ConnectionPill state={connection} typing={typing} />
+            </div>
             {onAir && (
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute">
                 On air ·{" "}
@@ -149,6 +170,13 @@ export default function ChatPage() {
             : undefined
         }
         onSend={send}
+        onSlashCommand={async (cmd) => {
+          if (cmd === "clear" || cmd === "cls") {
+            await clear();
+            return true;
+          }
+          return false;
+        }}
       />
     </main>
   );

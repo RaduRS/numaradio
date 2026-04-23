@@ -19,6 +19,7 @@ interface UseChatStreamResult {
     confirm: ChatConfirm,
     decision: "approve" | "cancel",
   ) => Promise<void>;
+  clear: () => Promise<void>;
 }
 
 interface SseMessage {
@@ -512,6 +513,20 @@ export function useChatStream(): UseChatStreamResult {
     [],
   );
 
+  const clear = useCallback(async () => {
+    // Optimistic: blank the local transcript immediately. The server call
+    // writes a cutoff timestamp so reloads stay clear; memory is untouched.
+    setTurns([]);
+    setPendingConfirm(null);
+    setTyping(false);
+    try {
+      await fetch("/api/chat/clear", { method: "POST" });
+    } catch {
+      // Non-fatal — the UI is already cleared; reload will revive history
+      // if the server call didn't land.
+    }
+  }, []);
+
   return useMemo(
     () => ({
       turns,
@@ -521,7 +536,17 @@ export function useChatStream(): UseChatStreamResult {
       sending,
       send,
       resolveConfirm,
+      clear,
     }),
-    [turns, connection, typing, pendingConfirm, sending, send, resolveConfirm],
+    [
+      turns,
+      connection,
+      typing,
+      pendingConfirm,
+      sending,
+      send,
+      resolveConfirm,
+      clear,
+    ],
   );
 }

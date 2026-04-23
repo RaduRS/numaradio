@@ -5,6 +5,7 @@ interface Props {
   disabled?: boolean;
   placeholder?: string;
   onSend: (text: string) => void | Promise<void>;
+  onSlashCommand?: (command: string, args: string) => boolean | Promise<boolean>;
 }
 
 /**
@@ -12,7 +13,12 @@ interface Props {
  * to send. Lives at the bottom of the transcript pane, grows up to ~8
  * lines and then scrolls internally.
  */
-export function ChatComposer({ disabled, placeholder, onSend }: Props) {
+export function ChatComposer({
+  disabled,
+  placeholder,
+  onSend,
+  onSlashCommand,
+}: Props) {
   const [value, setValue] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -27,9 +33,18 @@ export function ChatComposer({ disabled, placeholder, onSend }: Props) {
   useEffect(autosize, [value, autosize]);
 
   async function submit() {
-    if (!value.trim() || disabled) return;
-    const text = value;
+    const text = value.trim();
+    if (!text || disabled) return;
     setValue("");
+    // Slash-command interception (`/clear`, etc). If the handler returns
+    // true it means the command was consumed — don't forward to the agent.
+    if (text.startsWith("/") && onSlashCommand) {
+      const sp = text.indexOf(" ");
+      const cmd = sp === -1 ? text.slice(1) : text.slice(1, sp);
+      const args = sp === -1 ? "" : text.slice(sp + 1);
+      const handled = await onSlashCommand(cmd.toLowerCase(), args);
+      if (handled) return;
+    }
     await onSend(text);
   }
 
@@ -81,7 +96,7 @@ export function ChatComposer({ disabled, placeholder, onSend }: Props) {
         </button>
       </div>
       <div className="mt-1.5 flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.22em] text-fg-mute/70">
-        <span>Enter to send · Shift+Enter for newline</span>
+        <span>Enter to send · Shift+Enter for newline · /clear to reset view</span>
         {disabled && <span className="text-[--warn]">awaiting confirm…</span>}
       </div>
     </form>

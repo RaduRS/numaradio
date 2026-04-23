@@ -287,12 +287,13 @@ export default function ShoutoutsPage() {
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <span
+          <Link
+            href="/"
             className="font-display text-2xl font-extrabold uppercase tracking-wide"
             style={{ fontStretch: "125%" }}
           >
             Numa<span className="text-accent">·</span>Radio
-          </span>
+          </Link>
           <Link
             href="/"
             className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
