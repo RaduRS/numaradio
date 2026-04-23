@@ -1,40 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-const SHOWS = [
-  {
-    time: "00 – 05",
-    title: ["Night", "Shift"],
-    desc:
-      "Quiet-hours rotation. Low-BPM, spacious, voices that don't shout. Lena whispers. Mostly.",
-  },
-  {
-    time: "05 – 10",
-    title: ["Morning", "Room"],
-    desc:
-      "First coffee energy. Warmer tones, field recordings, the occasional cover of something you'd forgotten.",
-  },
-  {
-    time: "10 – 17",
-    title: ["Daylight", "Channel"],
-    desc:
-      "Focus-hours programming. Longer tracks, fewer host breaks. Good for writing, commuting, staring out.",
-  },
-  {
-    time: "17 – 24",
-    title: ["Prime", "Hours"],
-    desc:
-      "Dinner to midnight. Louder, stranger, more character. The request wall runs hottest here.",
-  },
-];
-
-function slotForHour(h: number): number {
-  if (h < 5) return 0;
-  if (h < 10) return 1;
-  if (h < 17) return 2;
-  return 3;
-}
+import { SHOW_SCHEDULE, showForHour } from "@/lib/schedule";
 
 export function Schedule() {
   // Start as null so SSR output is deterministic (no Live Now pill). Client
@@ -42,7 +9,10 @@ export function Schedule() {
   const [nowIndex, setNowIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    const update = () => setNowIndex(slotForHour(new Date().getHours()));
+    const update = () => {
+      const active = showForHour(new Date().getHours());
+      setNowIndex(SHOW_SCHEDULE.indexOf(active));
+    };
     update();
     const id = setInterval(update, 60_000);
     return () => clearInterval(id);
@@ -68,24 +38,24 @@ export function Schedule() {
         </div>
 
         <div className="sched-grid">
-          {SHOWS.map((s, i) => (
+          {SHOW_SCHEDULE.map((s, i) => (
             <div key={i} className={`show-card ${i === nowIndex ? "now" : ""}`}>
               <div className="show-time">
                 {i === nowIndex ? (
                   <>
                     <span className="live">● Live Now</span>
                     <span>·</span>
-                    <span>{s.time}</span>
+                    <span>{s.timeLabel}</span>
                   </>
                 ) : (
-                  <span>{s.time}</span>
+                  <span>{s.timeLabel}</span>
                 )}
               </div>
-              <div className="show-desc">{s.desc}</div>
+              <div className="show-desc">{s.description}</div>
               <div className="show-title">
-                {s.title[0]}
+                {s.titleLines[0]}
                 <br />
-                {s.title[1]}
+                {s.titleLines[1]}
               </div>
             </div>
           ))}
