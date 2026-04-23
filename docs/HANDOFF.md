@@ -79,6 +79,49 @@ the Prime Hours description without parroting it.
 
 Each is one-commit-one-restart.
 
+### Same-day follow-ups (2026-04-23 evening)
+
+Three post-launch iterations after the initial voice-tuning deploy:
+
+1. **Show-name throttle — `d5fb699`.** Passing `currentShow` on every
+   auto-chatter prompt produced "Prime Hours" framing every ~6 min.
+   Now gated behind a 15% random roll (`auto-host.ts:generateAsset`);
+   listeners hear a show-name reference roughly every ~40 min instead.
+   `deps.randomGate` is injectable for tests. Tune up/down in one line
+   if rate still feels wrong.
+
+2. **Voice model swap: Andromeda → Luna — `db44e7e`.** Andromeda's
+   "soft whisper late-night radio" register read "dead in the water"
+   in Prime Hours. Switched to `aura-2-luna-en` (friendly/upbeat/casual)
+   across both surfaces (`workers/queue-daemon/deepgram-tts.ts` and
+   `dashboard/lib/shoutout.ts`). Asteria still the 4xx fallback.
+   Lena's persona name unchanged — voice model is an implementation
+   detail, not the brand. If Luna doesn't stick, next step-downs are
+   Helena (warm) or Thalia (presenter). Two-line swap each time.
+
+3. **`broadcastText` fix — `7614cf7`.** Dashboard `/shoutouts` on-air
+   log was showing the pre-humanize listener input instead of what
+   Lena actually said. `generateShoutout()` now returns `spokenText`
+   (the final post-`humanizeScript` + post-`radioHostTransform` text
+   fed to Deepgram), and the booth route (`/api/internal/shoutout`)
+   persists it as `broadcastText`. New listener submissions log
+   correctly; existing rows have stale `broadcastText` (not worth
+   backfilling). Agent Compose + operator Compose paths don't write
+   Shoutout rows today — if we want those in the log, that's the
+   next addition.
+
+### Build gotcha to remember
+
+`workers/queue-daemon/minimax-script.ts:34` used a `/s` (dotAll) regex
+flag. Runs fine under node, but `next build` type-checks against
+tsconfig target ES2017 where `/s` isn't allowed. Removed the flag
+(`cbca4d4`) — the flag was inert anyway since the input is space-
+joined (no newlines to match). `scripts/preview-chatter.ts` also
+needed exclusion from Vercel deploy because it imports from
+`workers/queue-daemon/` which `.vercelignore` excludes; fix in
+`e73c710` added `scripts/` and `nanoclaw-groups/` to `.vercelignore`.
+Both lessons for future dev-only CLIs under `scripts/`.
+
 ---
 
 ## Dashboard Talkback (NanoClaw chat) — CODE READY, NEEDS DEPLOY (2026-04-23)
