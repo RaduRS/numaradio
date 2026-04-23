@@ -95,15 +95,17 @@ function deliveryBadgeClass(status: string): string {
 }
 
 function kindAccent(kind: LogEventKind): { border: string; label: string } {
-  // Left-edge accent color per event kind. Keeps the log visually scannable
-  // without relying on badge labels alone.
+  // Left-edge accent color per event kind. Reserved for categories the
+  // operator actually needs to notice — announce / chatter (teal family)
+  // and failure (red). Regular shoutouts are the page's main content,
+  // so they get a neutral hairline instead of a loud yellow stripe.
   switch (kind) {
     case "announce":
       return { border: "border-l-[var(--accent)]", label: "text-accent" };
     case "chatter":
       return { border: "border-l-[var(--accent-soft,theme(colors.teal.900))]", label: "text-accent/70" };
     case "shoutout":
-      return { border: "border-l-[var(--warn)]", label: "text-[var(--warn)]" };
+      return { border: "border-l-transparent", label: "text-fg-dim" };
     case "failure":
       return { border: "border-l-[var(--bad)]", label: "text-[var(--bad)]" };
   }
