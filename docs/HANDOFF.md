@@ -60,20 +60,30 @@ new `dashboard/app/api/internal/tools/*` routes for actions.
    ```bash
    cd /home/marku/nanoclaw
    npm run build
-   # copy the dashboard briefing into the NanoClaw groups dir
+   # 1a. Ship the briefing
    install -d groups/dashboard_main
    install -m 0644 /home/marku/saas/numaradio/nanoclaw-groups/dashboard_main/CLAUDE.md \
      groups/dashboard_main/CLAUDE.md
-   # add env
+   # 1b. Write the shared secret into the group folder so the agent
+   #     container (which only sees TZ + credential-proxy env) can curl
+   #     dashboard tools. `tr -d '\r\n'` is LOAD-BEARING: .env.local is
+   #     CRLF, and a trailing CR in an HTTP header gets Node to 400 the
+   #     whole request.
+   SECRET=$(grep '^INTERNAL_API_SECRET=' \
+     /home/marku/saas/numaradio/dashboard/.env.local | \
+     cut -d= -f2- | tr -d '\r\n')
+   printf '%s' "$SECRET" > groups/dashboard_main/.auth
+   chmod 0600 groups/dashboard_main/.auth
+   # 1c. Channel env
    grep -q '^DASHBOARD_CHANNEL_PORT=' .env || echo 'DASHBOARD_CHANNEL_PORT=4001' >> .env
-   grep -q '^INTERNAL_API_SECRET=' .env || \
-     sudo grep ^INTERNAL_API_SECRET= /etc/numa/env | sudo tee -a .env >/dev/null
-   # restart
+   grep -q '^INTERNAL_API_SECRET=' .env || printf 'INTERNAL_API_SECRET=%s\n' "$SECRET" >> .env
+   # 1d. Restart + smoke
    systemctl --user restart nanoclaw
-   # smoke
-   curl -sI http://127.0.0.1:4001/chat/health -H "x-internal-secret: $(grep ^INTERNAL_API_SECRET= .env | cut -d= -f2)"
+   sleep 2
+   ss -ltn | grep 4001                      # should show LISTEN 127.0.0.1:4001
+   curl -sS http://127.0.0.1:4001/chat/health -H "x-internal-secret: $SECRET"
    ```
-   If the channel binds cleanly, `/chat/health` returns 200.
+   `/chat/health` returns `{"ok":true,"subscribers":0}` once bound.
 2. **Ship the dashboard.** From `/home/marku/saas/numaradio`:
    ```bash
    cd dashboard
@@ -94,8 +104,13 @@ new `dashboard/app/api/internal/tools/*` routes for actions.
   systemctl --user restart nanoclaw`.
 - **Briefing only** (fine-tune Lena's voice / add tools): edit
   `nanoclaw-groups/dashboard_main/CLAUDE.md` in this repo, re-copy into
-  `/home/marku/nanoclaw/groups/dashboard_main/CLAUDE.md`. No restart
-  needed; container reads it fresh each turn.
+  `/home/marku/nanoclaw/groups/dashboard_main/CLAUDE.md`, and
+  **force-stop the cached container** so her next turn opens a fresh
+  Claude Code session that re-reads the briefing:
+  `docker ps --format '{{.Names}}' | grep nanoclaw-dashboard-main | xargs -r docker stop`
+  (NanoClaw keeps containers alive for IDLE_TIMEOUT = 30 min for
+  latency; the in-flight session holds the old briefing until it's
+  killed.)
 
 ### Operator mental model
 
