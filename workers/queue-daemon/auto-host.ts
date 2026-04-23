@@ -84,7 +84,8 @@ export class AutoHostStateMachine {
   }
 }
 
-import { slotTypeFor, promptFor, type ChatterType } from "./chatter-prompts.ts";
+import { slotTypeFor, promptFor, type ChatterType, type PromptContext } from "./chatter-prompts.ts";
+import { showForHour } from "../../lib/schedule.ts";
 
 export interface CurrentTrackInfo {
   title: string;
@@ -159,8 +160,8 @@ export class AutoHostOrchestrator {
   /**
    * External hooks delegated from queue-daemon index.ts.
    */
-  onMusicTrackStart(): TrackStartAction {
-    return this.state.onMusicTrackStart();
+  onMusicTrackStart(artist?: string): TrackStartAction {
+    return this.state.onMusicTrackStart(artist);
   }
   onVoicePushed(): void {
     this.state.onVoicePushed();
@@ -262,11 +263,22 @@ export class AutoHostOrchestrator {
     const type = slotTypeFor(slot);
 
     // Back_announce uses the currently-playing track as context — by the
-    // time Lena finishes speaking, this track has just ended.
-    const context =
-      type === "back_announce" && current
+    // time Lena finishes speaking, this track has just ended. All other
+    // variants get the optional context channel (show / recent artists /
+    // slot position) so Lena can weave station-aware texture when it fits.
+    const now = (this.deps.now ?? Date.now)();
+    const currentShow = showForHour(new Date(now).getHours()).name;
+    const recentArtists = [...this.state.recentArtists];
+    const slotsSinceOpening = this.state.slotCounter % 20;
+
+    const context: PromptContext = {
+      ...(type === "back_announce" && current
         ? { title: current.title, artist: current.artist }
-        : {};
+        : {}),
+      currentShow,
+      ...(recentArtists.length > 0 ? { recentArtists } : {}),
+      slotsSinceOpening,
+    };
 
     const prompts = promptFor(type, context);
     let script: string;

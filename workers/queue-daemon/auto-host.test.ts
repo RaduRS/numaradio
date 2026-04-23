@@ -343,3 +343,33 @@ test("onVoicePushed during the pre-push wait cancels the chatter push", async ()
   await runPromise;
   assert.equal(pushes.length, 0, "push should have been cancelled");
 });
+
+test("generateAsset includes currentShow + recentArtists + slotsSinceOpening in the prompt", async () => {
+  let capturedUser: string | null = null;
+  const { deps } = fakeDeps({
+    generateScript: async (p: { system: string; user: string }) => {
+      capturedUser = p.user;
+      return "A line.";
+    },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  // Simulate three music-track boundaries to populate the ring.
+  orch.onMusicTrackStart("Russell Ross");
+  orch.onMusicTrackStart("Russell Ross");
+  orch.onMusicTrackStart("Numa Radio");
+  // Now runChatter — slot 0 = back_announce.
+  await orch.runChatter();
+  assert.ok(capturedUser, "generateScript should have been called");
+  assert.match(capturedUser!, /Context \(optional/);
+  assert.match(capturedUser!, /Current show: (Night Shift|Morning Room|Daylight Channel|Prime Hours)/);
+  assert.match(capturedUser!, /Last 3 artists aired.*Numa Radio, Russell Ross, Russell Ross/);
+  // slotsSinceOpening for slot 0 is 0
+  assert.match(capturedUser!, /Position in the 20-slot rotation: 0/);
+});
+
+test("orchestrator.onMusicTrackStart forwards artist to the state machine", () => {
+  const { deps } = fakeDeps();
+  const orch = new AutoHostOrchestrator(deps);
+  orch.onMusicTrackStart("Test Artist");
+  assert.deepEqual(orch.state.recentArtists, ["Test Artist"]);
+});
