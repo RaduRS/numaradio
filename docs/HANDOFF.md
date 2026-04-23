@@ -1,6 +1,85 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-23 (Dashboard Talkback — code ready, needs deploy)
+Last updated: 2026-04-23 (Lena auto-chatter voice tuning — LIVE)
+
+## Lena auto-chatter voice tuning — LIVE (2026-04-23)
+
+Loosened Lena's on-air auto-chatter so she sounds like a DJ who riffs
+around the track-ID instead of reciting `[track]. Good one. [signoff].`
+on every break. No cadence / gating / pipeline changes — content only.
+
+- **Spec:** `docs/superpowers/specs/2026-04-23-lena-chatter-voice-design.md`
+- **Plan:** `docs/superpowers/plans/2026-04-23-lena-chatter-voice.md`
+
+**What changed:**
+- New `lib/schedule.ts` — shared 4-slot show grid (Night Shift / Morning
+  Room / Daylight Channel / Prime Hours) as the single source of truth.
+  Frontend `Schedule.tsx` and queue-daemon `auto-host.ts` both import
+  from it, so Lena's time-of-day context can't drift from the homepage
+  show grid.
+- Rewrote `BASE_SYSTEM` in `workers/queue-daemon/chatter-prompts.ts` to
+  actively encourage a beat of DJ-riff texture per break (rhetorical
+  question, listener callout, show-vibe line) while keeping all
+  anti-poetic bans from the 2026-04-22 failure mode
+  (no "wandering piano lines", no stacked adjectives, etc.).
+- Expanded per-type example banks from 3 identically-shaped lines to 6
+  deliberately varied ones — breaks MiniMax's skeletal anchor.
+- Bumped word budget 20-30 → 35-50. Budget slack: MiniMax still
+  undershoots ~1/8 samples; flag for v1.1 if it persists on air.
+- Pinned MiniMax `temperature: 1.0` explicitly in `minimax-script.ts`
+  (previously was whatever MiniMax-M2.7's default was). Knob for v1.1
+  bumps: 1.1 if still same-y, 0.8 if poetry drifts back.
+- New `PromptContext` optional fields: `currentShow`, `recentArtists`
+  (3-slot ring, tracked in `AutoHostStateMachine`), `slotsSinceOpening`.
+  `renderContextBlock()` emits an optional Context block the prompt
+  surfaces; back_announce slices `recentArtists[0]` (the currently-
+  announcing artist) so MiniMax doesn't double-count it as "second X in
+  a row". `body.artist` from the `on-track` handler is forwarded through
+  `autoHost.onMusicTrackStart(artist)` to populate the ring.
+- `back_announce` falls back to filler when `resolveCurrentTrack()`
+  returns null — previously would have aired literal `"that one" by
+  "the artist"` placeholders.
+- Pre-existing TS2018 regex flag `/s` on line 34 of `minimax-script.ts`
+  was unblocking `next build`; removed since the input is space-joined
+  (no newlines to match).
+
+**Deploy state:**
+- Queue-daemon restarted 2026-04-23 evening via
+  `sudo systemctl restart numa-queue-daemon` (sudoers password-free).
+  `/status` returns clean: `{"socket":"connected","lastPushes":[],
+  "lastFailures":[]}` post-restart.
+- Frontend pushed to `origin/main` — Vercel auto-deployed.
+  `Schedule.tsx` refactor is render-identical, no visual change.
+
+**Ear-check (pre-deploy) summary:**
+Ran `npx tsx scripts/preview-chatter.ts` against real MiniMax and got 8
+samples (2 per type). No poetry regressions, no stilted context
+parroting, no show-name invention when context absent. Best sample was
+Prime Hours filler: *"Prime Hours on Numa Radio, Lena with you until
+midnight. Dinner's done and we're going weirder from here — put your
+requests up, let's see what's hot. Stay locked."* Pulls directly from
+the Prime Hours description without parroting it.
+
+**Redeploy after a code change:**
+- Prompts / state machine: `git pull && sudo systemctl restart
+  numa-queue-daemon`
+- Frontend schedule labels: `git push origin main` (Vercel auto)
+- Preview any prompt tweak: `npx tsx scripts/preview-chatter.ts` —
+  hits real MiniMax, prints 8 samples with word counts. No tests run
+  it (burns API credit), manual dev tool only.
+
+**Knobs if on-air feel is still off after 24h:**
+- Still same-y → bump `temperature` to 1.1 in
+  `workers/queue-daemon/minimax-script.ts`
+- Poetry creeping back → drop to 0.8 AND add the newly-observed phrase
+  to the `DO NOT` list in `BASE_SYSTEM`
+- Context parroting (`"In Prime Hours, I am Lena, and I am playing…"`)
+  → strengthen the Context-block opt-out sentence in
+  `renderContextBlock()`
+
+Each is one-commit-one-restart.
+
+---
 
 ## Dashboard Talkback (NanoClaw chat) — CODE READY, NEEDS DEPLOY (2026-04-23)
 
