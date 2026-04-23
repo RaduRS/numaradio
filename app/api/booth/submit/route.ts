@@ -29,11 +29,11 @@ function publicMessageFor(
 ): string {
   switch (status) {
     case "queued":
-      return "Shoutout approved — Lena will read it next.";
+      return "Got it. It's on its way to air.";
     case "held":
-      return "Got it. A moderator will review your shoutout before it airs.";
+      return "Got it. A moderator's giving it a quick look.";
     case "blocked":
-      return "Sorry, that one doesn't fit what Lena can read on air.";
+      return "That one can't go on air.";
     case "failed":
       return "Something went wrong airing your shoutout. Try again in a minute.";
   }
@@ -200,70 +200,63 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  let internalRes: Response;
-  try {
-    internalRes = await fetch(INTERNAL_SHOUTOUT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-secret": secret,
-      },
-      body: JSON.stringify({
-        shoutoutRowId: shoutout.id,
-        text: moderation.text,
-        requesterName: requesterName ?? undefined,
-      }),
-    });
-  } catch (e) {
-    await prisma.shoutout.update({
-      where: { id: shoutout.id },
-      data: {
-        deliveryStatus: "failed",
-        moderationReason: e instanceof Error ? e.message.slice(0, 200) : "network",
-      },
-    });
-    return NextResponse.json(
-      {
-        ok: false,
-        status: "failed",
-        message: publicMessageFor("failed"),
-        shoutoutId: shoutout.id,
-      },
-      { status: 502 },
-    );
-  }
+  // Optimistic: hand the user a confirmation right away. The dashboard's
+  // internal shoutout route runs the radio-host rewrite + Deepgram TTS +
+  // B2 upload + queue push, and marks `Shoutout.deliveryStatus` `aired` or
+  // `failed` when it's done. The client stashes `shoutoutId` and pings
+  // /api/booth/shoutout/[id]/status on next focus to catch the rare silent
+  // failure.
+  const moderatedText = moderation.text;
+  const requesterForForward = requesterName ?? undefined;
+  after(async () => {
+    try {
+      const internalRes = await fetch(INTERNAL_SHOUTOUT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": secret,
+        },
+        body: JSON.stringify({
+          shoutoutRowId: shoutout.id,
+          text: moderatedText,
+          requesterName: requesterForForward,
+        }),
+      });
+      if (!internalRes.ok) {
+        const detail = await internalRes.text().catch(() => "");
+        await prisma.shoutout.update({
+          where: { id: shoutout.id },
+          data: {
+            deliveryStatus: "failed",
+            moderationReason: `http_${internalRes.status}: ${detail.slice(0, 160)}`,
+          },
+        });
+        console.warn(
+          `booth-submit: internal forward returned ${internalRes.status} for ${shoutout.id}`,
+        );
+      }
+      // On success, the dashboard internal route has already marked
+      // deliveryStatus='aired' as part of its queue-push transaction.
+    } catch (e) {
+      await prisma.shoutout.update({
+        where: { id: shoutout.id },
+        data: {
+          deliveryStatus: "failed",
+          moderationReason: e instanceof Error ? e.message.slice(0, 200) : "network",
+        },
+      });
+      console.warn(
+        `booth-submit: internal forward fetch failed for ${shoutout.id}: ${
+          e instanceof Error ? e.message : "unknown"
+        }`,
+      );
+    }
+  });
 
-  const internalJson = (await internalRes.json().catch(() => ({}))) as {
-    ok?: boolean;
-    queueItemId?: string;
-    error?: string;
-  };
-
-  if (!internalRes.ok || !internalJson.ok) {
-    await prisma.shoutout.update({
-      where: { id: shoutout.id },
-      data: {
-        deliveryStatus: "failed",
-        moderationReason: (internalJson.error ?? `http_${internalRes.status}`).slice(0, 200),
-      },
-    });
-    return NextResponse.json(
-      {
-        ok: false,
-        status: "failed",
-        message: publicMessageFor("failed"),
-        shoutoutId: shoutout.id,
-      },
-      { status: 502 },
-    );
-  }
-
-  // The dashboard's internal route already marked the Shoutout row aired.
   return NextResponse.json({
     ok: true,
     status: "queued",
     message: publicMessageFor("queued"),
     shoutoutId: shoutout.id,
-    queueItemId: internalJson.queueItemId,
   });
 }

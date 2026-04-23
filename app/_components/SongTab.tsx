@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { LoadingIcon, SendIcon } from "./Icons";
+import {
+  clearSongStash,
+  isFresh,
+  readSongStash,
+  SONG_STASH_MAX_AGE_MS,
+  writeSongStash,
+} from "@/lib/booth-stash";
+
+// Quiet-confidence rotator shown while Lena's working on the track. No
+// stage-specific machine-words ("Composing… / Painting the cover…") — just
+// reassurance that a person has it in hand.
+const PENDING_LINES: readonly string[] = [
+  "In the studio — your song's coming up.",
+  "Lena's giving it a listen.",
+  "Almost ready for air.",
+];
+const PENDING_LINE_MS = 4_500;
 
 interface QueueStats {
   queueDepth: number;
@@ -65,6 +82,20 @@ export function SongTab() {
   const [pending, setPending] = useState<{ requestId: string } | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
+  const [pendingLineIdx, setPendingLineIdx] = useState(0);
+
+  // Hydrate pending state from localStorage on mount so a tab-switch or
+  // page reload during the ~3 min wait doesn't wipe the "Lena's working
+  // on it" card and tempt the user to submit a duplicate.
+  useEffect(() => {
+    const stash = readSongStash();
+    if (!stash) return;
+    if (!isFresh(stash.submittedAt, SONG_STASH_MAX_AGE_MS)) {
+      clearSongStash();
+      return;
+    }
+    setPending({ requestId: stash.requestId });
+  }, []);
 
   useEffect(() => {
     if (pending) return;
@@ -83,12 +114,40 @@ export function SongTab() {
     return () => clearInterval(id);
   }, [pending]);
 
+  // Rotate the pending message every ~4.5s while Lena's working.
+  useEffect(() => {
+    if (!pending) return;
+    const id = setInterval(
+      () => setPendingLineIdx((i) => (i + 1) % PENDING_LINES.length),
+      PENDING_LINE_MS,
+    );
+    return () => clearInterval(id);
+  }, [pending]);
+
+  // Clear localStorage stash once we hit a terminal state, so the next
+  // visit shows a fresh form.
+  useEffect(() => {
+    if (!status) return;
+    if (status.status === "done" || status.status === "failed") {
+      clearSongStash();
+    }
+  }, [status]);
+
   useEffect(() => {
     if (!pending) return;
     let cancelled = false;
     const tick = async (): Promise<void> => {
       try {
         const res = await fetch(`/api/booth/song/${pending.requestId}/status`);
+        if (res.status === 404) {
+          // Server forgot this row (failure cleanup, or very stale stash).
+          // Unstick the UI instead of leaving the rotator running forever.
+          if (cancelled) return;
+          clearSongStash();
+          setPending(null);
+          setStatus(null);
+          return;
+        }
         if (!res.ok) return;
         const data = (await res.json()) as StatusResponse;
         if (!cancelled && data.ok) setStatus(data);
@@ -130,6 +189,8 @@ export function SongTab() {
         return;
       }
       setPending({ requestId: data.requestId! });
+      writeSongStash(data.requestId!);
+      setPendingLineIdx(0);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "network error");
     } finally {
@@ -176,7 +237,7 @@ export function SongTab() {
             </div>
           ) : null}
         </div>
-        <p style={{ fontSize: 13 }}>Airing on the stream now — tune in.</p>
+        <p style={{ fontSize: 13 }}>On air now — listen.</p>
       </div>
     );
   }
@@ -185,7 +246,7 @@ export function SongTab() {
     return (
       <div className="req-input-group">
         <p style={{ fontSize: 14 }}>
-          We couldn&rsquo;t generate your song: {status.errorMessage ?? "unknown"}.
+          We couldn&rsquo;t air your song: {status.errorMessage ?? "unknown"}.
         </p>
         <p style={{ fontSize: 13, color: "var(--fg-mute)" }}>
           Your slot has been refunded — try again in a minute.
@@ -194,6 +255,7 @@ export function SongTab() {
           type="button"
           className="btn btn-primary req-send"
           onClick={() => {
+            clearSongStash();
             setPending(null);
             setStatus(null);
             setSubmitError(null);
@@ -207,21 +269,22 @@ export function SongTab() {
   }
 
   if (pending) {
-    const headings: Record<string, string> = {
-      queued: "Queued…",
-      processing: "Composing…",
-      finalizing: "Painting the cover…",
-    };
-    const heading =
-      (status?.status && headings[status.status]) ?? "Queued…";
     return (
       <div className="req-input-group">
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 20 }}>
-          {heading}
+        <div
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 20,
+            minHeight: 28,
+            transition: "opacity 0.4s ease",
+          }}
+          key={pendingLineIdx}
+        >
+          {PENDING_LINES[pendingLineIdx]}
         </div>
-        {status?.queuePosition && status.queuePosition > 0 ? (
+        {status?.finalArtistName ? (
           <div style={{ color: "var(--fg-mute)", fontSize: 13 }}>
-            {status.queuePosition} ahead of you · est. {fmtWait(status.estWaitSeconds)}
+            For {status.finalArtistName}
           </div>
         ) : null}
       </div>

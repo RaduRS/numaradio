@@ -2,6 +2,13 @@
 import { useEffect, useState } from "react";
 import { MegaphoneIcon, SparklesIcon, SendIcon, LoadingIcon } from "./Icons";
 import { SongTab } from "./SongTab";
+import {
+  clearShoutoutStash,
+  isFresh,
+  readShoutoutStash,
+  SHOUTOUT_STASH_MAX_AGE_MS,
+  writeShoutoutStash,
+} from "@/lib/booth-stash";
 
 type Tab = "song" | "shout";
 type StatusTone = "none" | "success" | "pending" | "error";
@@ -36,6 +43,7 @@ export function RequestForm({
   const [statusMessage, setStatusMessage] = useState("");
   const [statusTone, setStatusTone] = useState<StatusTone>("none");
   const [formKey, setFormKey] = useState(0);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const id = setInterval(
@@ -43,6 +51,60 @@ export function RequestForm({
       4_200,
     );
     return () => clearInterval(id);
+  }, []);
+
+  // Focus-time recovery: if the last optimistic submit's background pipeline
+  // failed (rare but possible since we no longer await TTS/B2/queue push),
+  // surface a one-time line and clear the stash.
+  useEffect(() => {
+    let cancelled = false;
+    const check = async (): Promise<void> => {
+      const stash = readShoutoutStash();
+      if (!stash) return;
+      if (!isFresh(stash.submittedAt, SHOUTOUT_STASH_MAX_AGE_MS)) {
+        clearShoutoutStash();
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/booth/shoutout/${stash.shoutoutId}/status`,
+          { cache: "no-store" },
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          // 404 (row gone) or 5xx — give up, don't nag the user about it
+          clearShoutoutStash();
+          return;
+        }
+        const data = (await res.json()) as { ok?: boolean; status?: string };
+        if (cancelled || !data.ok) return;
+        if (data.status === "failed") {
+          setRecoveryMessage(
+            "Heads up — your last shoutout didn't make it on air. Try again.",
+          );
+          clearShoutoutStash();
+        } else if (
+          data.status === "aired" ||
+          data.status === "blocked" ||
+          data.status === "held"
+        ) {
+          // terminal state — clear quietly, no user notification needed
+          clearShoutoutStash();
+        }
+        // else "pending" — leave stash; we'll re-check next focus
+      } catch {
+        // network down — try again on next focus
+      }
+    };
+    void check();
+    const onFocus = (): void => {
+      void check();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -80,17 +142,23 @@ export function RequestForm({
         status?: string;
         message?: string;
         error?: string;
+        shoutoutId?: string;
       };
       if (res.ok && data.ok && data.status === "queued") {
         setStatusTone("success");
-        setStatusMessage(data.message ?? "Shoutout queued — Lena will read it next.");
-        setSendLabel("✓ In the queue");
+        setStatusMessage(data.message ?? "Got it. It's on its way to air.");
+        setSendLabel("✓ Sent");
         setFormKey((k) => k + 1);
+        setRecoveryMessage(null);
+        if (data.shoutoutId) writeShoutoutStash(data.shoutoutId);
       } else if (res.ok && data.status === "held") {
         setStatusTone("pending");
-        setStatusMessage(data.message ?? "Waiting on a moderator.");
+        setStatusMessage(
+          data.message ?? "Got it. A moderator's giving it a quick look.",
+        );
         setSendLabel("✓ Received");
         setFormKey((k) => k + 1);
+        setRecoveryMessage(null);
       } else if (data.status === "blocked") {
         setStatusTone("error");
         setStatusMessage(data.message ?? "That one can't go on air.");
@@ -114,6 +182,42 @@ export function RequestForm({
 
   return (
     <>
+      {recoveryMessage ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            border: "1px solid var(--line)",
+            borderRadius: 10,
+            background: "color-mix(in oklab, var(--line) 30%, transparent)",
+            fontSize: 13,
+            color: "var(--fg-mute)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <span>{recoveryMessage}</span>
+          <button
+            type="button"
+            onClick={() => setRecoveryMessage(null)}
+            style={{
+              border: 0,
+              background: "transparent",
+              color: "var(--fg-mute)",
+              cursor: "pointer",
+              fontSize: 18,
+              lineHeight: 1,
+              padding: "0 4px",
+            }}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       <div className="req-types" role="tablist">
         <button
           className={`req-type ${tab === "song" ? "active" : ""}`}
