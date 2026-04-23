@@ -184,6 +184,11 @@ body {
   }
   html {
     @apply font-sans;
+    /* Always reserve scrollbar-track space. Without this, the scrollbar
+       appears when content gets tall enough to overflow, the viewport
+       narrows by ~15px, and every `mx-auto` centered element (including
+       the persistent nav) shifts horizontally. Stable gutter = no jump. */
+    scrollbar-gutter: stable;
   }
 }
 
