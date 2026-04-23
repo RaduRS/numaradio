@@ -347,6 +347,9 @@ test("onVoicePushed during the pre-push wait cancels the chatter push", async ()
 test("generateAsset includes currentShow + recentArtists + slotsSinceOpening in the prompt", async () => {
   let capturedUser: string | null = null;
   const { deps } = fakeDeps({
+    // Pin randomGate below the 0.15 threshold so the show-name throttle
+    // deterministically includes currentShow for this test.
+    randomGate: () => 0.0,
     generateScript: async (p: { system: string; user: string }) => {
       capturedUser = p.user;
       return "A line.";
@@ -370,6 +373,25 @@ test("generateAsset includes currentShow + recentArtists + slotsSinceOpening in 
     "currently-announcing artist (Numa Radio) must not duplicate in the recentArtists list");
   // slotsSinceOpening for slot 0 is 0
   assert.match(capturedUser!, /Position in the 20-slot rotation: 0/);
+});
+
+test("generateAsset omits currentShow when the 15% throttle gate rolls above threshold", async () => {
+  let capturedUser: string | null = null;
+  const { deps } = fakeDeps({
+    // Pin randomGate above 0.15 so the throttle omits currentShow.
+    randomGate: () => 0.5,
+    generateScript: async (p: { system: string; user: string }) => {
+      capturedUser = p.user;
+      return "A line.";
+    },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  orch.onMusicTrackStart("Russell Ross");
+  orch.onMusicTrackStart("Russell Ross");
+  await orch.runChatter();
+  assert.ok(capturedUser);
+  assert.doesNotMatch(capturedUser!, /Current show:/,
+    "show-name should be withheld when the random gate rolls above 0.15");
 });
 
 test("generateAsset falls back to filler when back_announce fires without a resolved current track", async () => {

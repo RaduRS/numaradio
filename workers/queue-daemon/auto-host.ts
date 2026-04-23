@@ -120,6 +120,8 @@ export interface AutoHostDeps {
   sleep?: (ms: number) => Promise<void>;
   /** Injectable clock for testing; defaults to Date.now. */
   now?: () => number;
+  /** Injectable [0,1) random source for testing; defaults to Math.random. */
+  randomGate?: () => number;
 }
 
 const RETRY_DELAY_MS = 2_000;
@@ -271,7 +273,16 @@ export class AutoHostOrchestrator {
     // All variants get the optional context channel (show / recent artists /
     // slot position) so Lena can weave station-aware texture when it fits.
     const now = (this.deps.now ?? Date.now)();
-    const currentShow = showForHour(new Date(now).getHours()).name;
+    // Throttle show-name context to 15% of breaks. MiniMax anchors on
+    // whatever's in the Context block — passing `currentShow` on every call
+    // produces a "Prime Hours in here" opener every ~6 min, which gets
+    // grating over a multi-hour listening session. 15% means roughly one
+    // show-name reference per ~40 min of airtime — frequent enough to
+    // establish station identity, rare enough to not feel canned.
+    const includeShow = (this.deps.randomGate ?? Math.random)() < 0.15;
+    const currentShow = includeShow
+      ? showForHour(new Date(now).getHours()).name
+      : undefined;
     // For back_announce, drop the first ring entry — it's the artist of the
     // currently-playing track, already named in the "by X" clause of the
     // prompt. Including it again pushes MiniMax toward false "second X in a
@@ -285,7 +296,7 @@ export class AutoHostOrchestrator {
       ...(type === "back_announce" && current
         ? { title: current.title, artist: current.artist }
         : {}),
-      currentShow,
+      ...(currentShow ? { currentShow } : {}),
       ...(recentArtists.length > 0 ? { recentArtists } : {}),
       slotsSinceOpening: slot,
     };
