@@ -31,7 +31,7 @@ function cleanModelOutput(raw: string): string {
     .filter((l) => l.length > 0)
     .join(" ")
     .trim();
-  return cleaned.replace(/^["'`](.+)["'`]$/s, "$1").trim();
+  return cleaned.replace(/^["'`](.+)["'`]$/, "$1").trim();
 }
 
 function isSuspicious(text: string): boolean {
