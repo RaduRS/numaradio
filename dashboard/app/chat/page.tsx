@@ -242,18 +242,17 @@ function TypingRow() {
         <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[--warm]/80">
           Lena&rsquo;s producer
         </span>
-        <span className="font-sans text-[13px] italic text-fg-dim">
-          thinking
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-[--warm] [animation-delay:0ms]" />
-          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-[--warm] [animation-delay:150ms]" />
-          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-[--warm] [animation-delay:300ms]" />
+        <span
+          aria-hidden
+          className="inline-flex items-end gap-[3px] pb-[2px]"
+          role="status"
+          aria-label="Lena’s producer is thinking"
+        >
+          <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:0ms]" />
+          <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:180ms]" />
+          <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:360ms]" />
         </span>
       </div>
-      <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.22em] text-fg-mute/70">
-        first replies can take ~10–30 s while her console boots
-      </p>
     </div>
   );
 }

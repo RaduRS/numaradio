@@ -69,10 +69,15 @@ export function ChatTurn({ turn, onResolveConfirm }: Props) {
           {time}
         </span>
         {turn.streaming && (
-          <span className="inline-flex items-center gap-0.5 text-fg-mute">
-            <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-[--warm]" />
-            <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-[--warm] [animation-delay:150ms]" />
-            <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-[--warm] [animation-delay:300ms]" />
+          <span
+            aria-hidden
+            className="inline-flex items-end gap-[3px] pb-[2px]"
+            role="status"
+            aria-label="streaming"
+          >
+            <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:0ms]" />
+            <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:180ms]" />
+            <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:360ms]" />
           </span>
         )}
       </div>
