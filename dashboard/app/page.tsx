@@ -45,6 +45,12 @@ export default function OperatorDashboard() {
           </span>
           <nav className="flex items-center gap-4">
             <Link
+              href="/chat"
+              className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
+            >
+              Talkback →
+            </Link>
+            <Link
               href="/shoutouts"
               className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
             >

@@ -1,6 +1,128 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-22 (night — Lena auto-chatter LIVE)
+Last updated: 2026-04-23 (Dashboard Talkback — code ready, needs deploy)
+
+## Dashboard Talkback (NanoClaw chat) — CODE READY, NEEDS DEPLOY (2026-04-23)
+
+New full-page chat at `dashboard.numaradio.com/chat` that talks to the
+same NanoClaw agent you reach over Telegram, with **parity + dashboard
+ops** as agent tools (push tracks, approve/reject held shoutouts,
+restart services, toggle auto-chatter, tail logs, query now-playing).
+
+**Architecture in one line:** browser → Next.js SSE proxy on :3001 →
+new NanoClaw HttpChannel on loopback :4001 → agent container → curls
+new `dashboard/app/api/internal/tools/*` routes for actions.
+
+- **Spec:** `docs/superpowers/specs/2026-04-23-dashboard-nanoclaw-chat-design.md`
+- **Briefing (ships in this repo):** `nanoclaw-groups/dashboard_main/CLAUDE.md`
+  — copied into NanoClaw's `groups/dashboard_main/` on deploy.
+- **Agent identity:** "Lena's producer" (not Lena herself — Lena is the
+  on-air voice). New group `dashboard_main` with separate history +
+  briefing; global memory shared with `telegram_main`.
+
+**What's code-complete:**
+- NanoClaw:
+  - `src/channels/http.ts` — HttpChannel implementing Channel interface.
+    POST /chat/send, GET /chat/stream (SSE), GET /chat/history,
+    POST /chat/inject, GET /chat/health. Binds 127.0.0.1:4001 only.
+    Auto-registers `dashboard:main` group on connect; falls back to
+    direct DB write if `ChannelOpts.registerGroup` isn't wired.
+  - `src/channels/http-tags.ts` + tests — parses `<action/>` and
+    `<confirm>…</confirm>` inline tags into SSE events. 11 tests.
+  - `src/db.ts` — new `getChatHistory()` export returning bot + user
+    messages for scrollback (existing `getMessagesSince` filters bots).
+  - `src/channels/registry.ts` — `ChannelOpts` gained optional
+    `registerGroup`; `src/index.ts` passes it through.
+  - `src/channels/index.ts` — barrel registers `./http.js`.
+  - All 317 existing NanoClaw tests green, `npm run build` clean.
+- Dashboard (Next.js):
+  - New page `app/chat/page.tsx` — "Talkback" console, operator msgs
+    right-aligned monospace with `> ` prompt, producer msgs with warm
+    rule on the left, progressive-disclosure action chips, yellow-light
+    confirm cards. Uses `useChatStream` hook for SSE + history.
+  - 9 new internal tool routes under
+    `app/api/internal/tools/{nowplaying,library-search,library-push,
+    shoutout-list-held,shoutout-approve,shoutout-reject,
+    service-restart,autochatter-toggle,logs-tail}` — all guarded by
+    `INTERNAL_API_SECRET`.
+  - 4 new chat proxy routes under `app/api/chat/{send,stream,history,
+    confirm/[confirmId]}` — forward loopback to HttpChannel.
+  - `lib/internal-auth.ts` — shared timing-safe auth helper.
+  - `lib/chat-proxy.ts` — NanoClaw URL + DASHBOARD_GROUP_JID constant.
+  - `components/chat/{chat-turn,action-chips,confirm-card,chat-composer}.tsx`
+  - `hooks/use-chat-stream.ts` — SSE parser + reconnect + history.
+  - `app/page.tsx` header now links to `/chat` ("Talkback →").
+  - `npm run build` clean; `npm test` all 38 existing tests green.
+
+### Deploy steps (when you're back)
+
+1. **Ship the NanoClaw channel.** From `/home/marku/nanoclaw`:
+   ```bash
+   cd /home/marku/nanoclaw
+   npm run build
+   # copy the dashboard briefing into the NanoClaw groups dir
+   install -d groups/dashboard_main
+   install -m 0644 /home/marku/saas/numaradio/nanoclaw-groups/dashboard_main/CLAUDE.md \
+     groups/dashboard_main/CLAUDE.md
+   # add env
+   grep -q '^DASHBOARD_CHANNEL_PORT=' .env || echo 'DASHBOARD_CHANNEL_PORT=4001' >> .env
+   grep -q '^INTERNAL_API_SECRET=' .env || \
+     sudo grep ^INTERNAL_API_SECRET= /etc/numa/env | sudo tee -a .env >/dev/null
+   # restart
+   systemctl --user restart nanoclaw
+   # smoke
+   curl -sI http://127.0.0.1:4001/chat/health -H "x-internal-secret: $(grep ^INTERNAL_API_SECRET= .env | cut -d= -f2)"
+   ```
+   If the channel binds cleanly, `/chat/health` returns 200.
+2. **Ship the dashboard.** From `/home/marku/saas/numaradio`:
+   ```bash
+   cd dashboard
+   # env: NANOCLAW_CHAT_URL defaults to http://127.0.0.1:4001 — only set
+   # this if NanoClaw moved. INTERNAL_API_SECRET is already in .env.local.
+   npm run deploy      # build + password-free restart via sudoers
+   ```
+3. **Smoke test.** Visit `https://dashboard.numaradio.com/chat`, send
+   "what's playing?". The pill should flash red ("On air") while Lena's
+   producer replies. If it times out, check
+   `journalctl --user -u nanoclaw -f` and
+   `sudo journalctl -u numa-dashboard -f`.
+
+### Redeploy after a code change
+
+- **Dashboard only:** `cd dashboard && npm run deploy`.
+- **NanoClaw only:** `cd /home/marku/nanoclaw && npm run build &&
+  systemctl --user restart nanoclaw`.
+- **Briefing only** (fine-tune Lena's voice / add tools): edit
+  `nanoclaw-groups/dashboard_main/CLAUDE.md` in this repo, re-copy into
+  `/home/marku/nanoclaw/groups/dashboard_main/CLAUDE.md`. No restart
+  needed; container reads it fresh each turn.
+
+### Operator mental model
+
+- The chat is **one persistent conversation** — close the tab, come back
+  tomorrow, scrollback is intact.
+- **Green-light** actions (push, search, approve, nowplaying, shoutout,
+  auto-chatter toggle, logs-tail) run unilaterally — chips appear in
+  the transcript for audit.
+- **Yellow-light** actions (service.restart, shoutout.reject) render an
+  inline Confirm / Cancel card. The composer is locked until resolved.
+  Confirm → the dashboard itself executes the tool (audit: your CF Access
+  email ends up in the log line). Cancel → agent sees a `[cancelled]`
+  system line.
+- The agent is **MiniMax-M2.7** via NanoClaw's credential proxy — same
+  brain as Telegram.
+- **Don't ask her to restart `numa-dashboard`** (she's briefed to refuse
+  — it would cut her own connection).
+
+### Known deferrals (v1.1+)
+
+- True token-streaming (v1 sends the whole reply as one chunk).
+- Multi-tab presence / "who else is watching" indicators.
+- "Stop generation" button.
+- Proactive agent-initiated nudges ("held queue has 5 items") — add via
+  the scheduler when we want it.
+
+---
 
 ## Lena auto-chatter — LIVE (2026-04-22)
 
