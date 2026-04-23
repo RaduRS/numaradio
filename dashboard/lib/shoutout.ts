@@ -77,6 +77,13 @@ export interface GenerateShoutoutResult {
   sourceUrl: string;
   queueItemId: string;
   durationHintSeconds?: number;
+  /**
+   * The final text Deepgram actually spoke — post-humanize, post-radioHost
+   * transform. Callers persisting an audit row should store this as
+   * broadcastText so the operator log reflects what listeners actually
+   * heard, not the pre-rewrite listener input.
+   */
+  spokenText: string;
 }
 
 export class ShoutoutError extends Error {
@@ -124,6 +131,7 @@ export async function generateShoutout(
   }
 
   let mp3: Buffer;
+  let radioText: string;
   try {
     // 1. Humanize: MiniMax rewrites the flat text into warm radio-host
     //    cadence. Falls back to the original on any error so this step
@@ -131,7 +139,7 @@ export async function generateShoutout(
     // 2. radioHostTransform: mechanical polish on whatever we have now
     //    (short phrase splits, contractions, quote emphasis).
     const humanized = await humanizeScript(plain);
-    const radioText = radioHostTransform(humanized);
+    radioText = radioHostTransform(humanized);
     mp3 = await synthesizeMp3(radioText, apiKey);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "synthesis failed";
@@ -241,5 +249,6 @@ export async function generateShoutout(
     trackId,
     sourceUrl,
     queueItemId: push.queueItemId,
+    spokenText: radioText,
   };
 }

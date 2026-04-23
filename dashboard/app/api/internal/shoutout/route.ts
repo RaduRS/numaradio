@@ -104,7 +104,10 @@ export async function POST(req: Request): Promise<NextResponse> {
            "broadcastText" = $3,
            "updatedAt" = NOW()
      WHERE id = $1`,
-    [shoutoutRowId, result.queueItemId, text.slice(0, 500)],
+    // Store what Lena ACTUALLY said on air (post-humanize + radio-host
+    // transform), not the raw listener input. The on-air log surfaces
+    // broadcastText, and it should reflect what listeners heard.
+    [shoutoutRowId, result.queueItemId, result.spokenText.slice(0, 500)],
   );
 
   console.info(
