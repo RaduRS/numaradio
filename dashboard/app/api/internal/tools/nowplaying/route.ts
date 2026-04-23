@@ -12,20 +12,20 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
   const pool = getDbPool();
   const { rows } = await pool.query<{
-    trackId: string;
-    title: string;
+    trackId: string | null;
+    title: string | null;
     artist: string | null;
     artworkUrl: string | null;
-    startedAt: string;
+    startedAt: string | null;
   }>(
-    `SELECT np."trackId"      AS "trackId",
-            t.title             AS title,
-            t."artistDisplay"   AS artist,
-            art."publicUrl"     AS "artworkUrl",
-            np."startedAt"      AS "startedAt"
+    `SELECT np."currentTrackId"  AS "trackId",
+            t.title              AS title,
+            t."artistDisplay"    AS artist,
+            art."publicUrl"      AS "artworkUrl",
+            np."startedAt"       AS "startedAt"
        FROM "NowPlaying" np
        JOIN "Station" s     ON s.id = np."stationId"
-       JOIN "Track" t       ON t.id = np."trackId"
+       LEFT JOIN "Track" t  ON t.id = np."currentTrackId"
        LEFT JOIN LATERAL (
          SELECT "publicUrl" FROM "TrackAsset"
          WHERE "trackId" = t.id AND "assetType" = 'artwork_primary'

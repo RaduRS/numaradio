@@ -21,7 +21,9 @@ and tell them it's queued.
 
 From inside your container, you can reach the dashboard at
 `http://host.docker.internal:3001`. All internal tool routes are guarded
-by `$INTERNAL_API_SECRET` from your env — always include it. Operator
+by a shared secret that lives in your group folder at
+`/workspace/group/.auth` — every tool call includes
+`-H "x-internal-secret: $(cat /workspace/group/.auth)"`. Operator
 identity comes through in the message senderName; pass it along so the
 audit log captures who asked.
 
@@ -31,7 +33,7 @@ audit log captures who asked.
 
 ```bash
 curl -sS http://host.docker.internal:3001/api/internal/tools/nowplaying \
-  -H "x-internal-secret: $INTERNAL_API_SECRET"
+  -H "x-internal-secret: $(cat /workspace/group/.auth)"
 ```
 
 Returns `{ ok, nowPlaying: { title, artist, artworkUrl, startedAt } }`.
@@ -40,7 +42,7 @@ Returns `{ ok, nowPlaying: { title, artist, artworkUrl, startedAt } }`.
 
 ```bash
 curl -sS -X POST http://host.docker.internal:3001/api/internal/tools/library-search \
-  -H "x-internal-secret: $INTERNAL_API_SECRET" \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)" \
   -H "Content-Type: application/json" \
   -d '{"query":"russell ross","limit":5}'
 ```
@@ -51,7 +53,7 @@ Returns `{ ok, tracks: [{id, title, artist, durationSeconds}] }`.
 
 ```bash
 curl -sS -X POST http://host.docker.internal:3001/api/internal/tools/library-push \
-  -H "x-internal-secret: $INTERNAL_API_SECRET" \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)" \
   -H "Content-Type: application/json" \
   -d '{"trackId":"trk_...","reason":"operator chat: push next","operator":"dashboard:<email>"}'
 ```
@@ -70,14 +72,14 @@ curl -sS -X POST http://host.docker.internal:3001/api/generate/shoutout \
 
 ```bash
 curl -sS http://host.docker.internal:3001/api/internal/tools/shoutout-list-held \
-  -H "x-internal-secret: $INTERNAL_API_SECRET"
+  -H "x-internal-secret: $(cat /workspace/group/.auth)"
 ```
 
 #### Approve a held shoutout
 
 ```bash
 curl -sS -X POST http://host.docker.internal:3001/api/internal/tools/shoutout-approve \
-  -H "x-internal-secret: $INTERNAL_API_SECRET" \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)" \
   -H "Content-Type: application/json" \
   -d '{"id":"sho_...","operator":"dashboard:<email>"}'
 ```
@@ -86,7 +88,7 @@ curl -sS -X POST http://host.docker.internal:3001/api/internal/tools/shoutout-ap
 
 ```bash
 curl -sS -X POST http://host.docker.internal:3001/api/internal/tools/autochatter-toggle \
-  -H "x-internal-secret: $INTERNAL_API_SECRET" \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)" \
   -H "Content-Type: application/json" \
   -d '{"enabled":true}'
 ```
@@ -95,7 +97,7 @@ curl -sS -X POST http://host.docker.internal:3001/api/internal/tools/autochatter
 
 ```bash
 curl -sS "http://host.docker.internal:3001/api/internal/tools/logs-tail?service=numa-liquidsoap&lines=80" \
-  -H "x-internal-secret: $INTERNAL_API_SECRET"
+  -H "x-internal-secret: $(cat /workspace/group/.auth)"
 ```
 
 Allowed services: `numa-liquidsoap`, `numa-queue-daemon`, `numa-song-worker`,

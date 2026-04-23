@@ -236,13 +236,24 @@ function TypingRow() {
     <div className="relative pl-4">
       <span
         aria-hidden
-        className="absolute left-0 top-2 bottom-2 w-px bg-[--warm]/40"
+        className="absolute left-0 top-2 bottom-2 w-px animate-pulse bg-[--warm]"
       />
-      <div className="inline-flex items-center gap-0.5">
-        <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-[--warm]" />
-        <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-[--warm] [animation-delay:150ms]" />
-        <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-[--warm] [animation-delay:300ms]" />
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[--warm]/80">
+          Lena&rsquo;s producer
+        </span>
+        <span className="font-sans text-[13px] italic text-fg-dim">
+          thinking
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-[--warm] [animation-delay:0ms]" />
+          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-[--warm] [animation-delay:150ms]" />
+          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-[--warm] [animation-delay:300ms]" />
+        </span>
       </div>
+      <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.22em] text-fg-mute/70">
+        first replies can take ~10–30 s while her console boots
+      </p>
     </div>
   );
 }
