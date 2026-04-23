@@ -76,8 +76,8 @@ test("promptFor(filler) needs no context and has no track references", () => {
 test("all variants share the same word count target in system prompt", () => {
   for (const type of ["back_announce", "shoutout_cta", "song_cta", "filler"] as ChatterType[]) {
     const p = promptFor(type, { title: "X", artist: "Y" });
-    assert.match(p.system, /20[–-]30 words/i,
-      `system prompt for ${type} should specify word count`);
+    assert.match(p.system, /35[–-]50 words/i,
+      `system prompt for ${type} should specify the new 35–50 word budget`);
   }
 });
 
@@ -175,4 +175,32 @@ test("promptFor Context block only lists fields that are present", () => {
   assert.match(p.user, /Current show: Morning Room/);
   assert.doesNotMatch(p.user, /Last 3 artists aired/);
   assert.doesNotMatch(p.user, /Position in the 20-slot rotation/);
+});
+
+test("BASE_SYSTEM actively encourages DJ-riff texture (not just anti-poetry)", () => {
+  const p = promptFor("filler", {});
+  // Sentinel phrase from the new "Actively encourage" section.
+  assert.match(p.system, /non-music riff/i);
+});
+
+test("each variant ships at least 6 example shapes", () => {
+  const types: ChatterType[] = ["back_announce", "shoutout_cta", "song_cta", "filler"];
+  for (const type of types) {
+    const p = promptFor(type, { title: "X", artist: "Y" });
+    // Examples are rendered as quoted lines; count the opening quote characters
+    // at line starts in the "Good example shapes" section.
+    const match = p.user.match(/Good example shapes[\s\S]*?(?=\n\n|$)/);
+    assert.ok(match, `${type} should have a Good example shapes section`);
+    const shapeLines = match![0].split("\n").filter((l) => l.trim().startsWith("- "));
+    assert.ok(
+      shapeLines.length >= 6,
+      `${type} has only ${shapeLines.length} example shapes, need ≥ 6`,
+    );
+  }
+});
+
+test("anti-poetry guardrails remain (wandering piano lines stays banned)", () => {
+  const p = promptFor("back_announce", { title: "X", artist: "Y" });
+  assert.match(p.system, /wandering piano lines/i);
+  assert.match(p.system, /dawn peeking/i);
 });
