@@ -88,7 +88,9 @@ export function SongTab() {
 
   // Hydrate pending state from localStorage on mount so a tab-switch or
   // page reload during the ~3 min wait doesn't wipe the "Lena's working
-  // on it" card and tempt the user to submit a duplicate.
+  // on it" card and tempt the user to submit a duplicate. setState in an
+  // effect is the idiomatic pattern here — localStorage can't be read on
+  // the server, so a useState initializer would cause hydration mismatch.
   useEffect(() => {
     const stash = readSongStash();
     if (!stash) return;
@@ -96,6 +98,7 @@ export function SongTab() {
       clearSongStash();
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration from browser-only storage
     setPending({ requestId: stash.requestId });
   }, []);
 
