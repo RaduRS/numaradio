@@ -19,6 +19,7 @@ export class AutoHostStateMachine {
   #tracksSinceVoice = 0;
   #slotCounter = 0;
   #inFlight = false;
+  #recentArtists: string[] = [];
 
   get tracksSinceVoice(): number {
     return this.#tracksSinceVoice;
@@ -28,11 +29,24 @@ export class AutoHostStateMachine {
     return this.#slotCounter;
   }
 
-  onMusicTrackStart(): TrackStartAction {
+  /** Last 3 aired artists, newest-first. Cleared on daemon restart. */
+  get recentArtists(): readonly string[] {
+    return this.#recentArtists;
+  }
+
+  /**
+   * @param artist  Optional artist name of the track that just started.
+   *                Empty strings and undefined are ignored (unresolved lookups).
+   */
+  onMusicTrackStart(artist?: string): TrackStartAction {
     // We count the track even while a prior chatter is still generating —
     // if that chatter later succeeds it will reset the counter; if it fails
     // we're already one step closer to the next opportunity.
     this.#tracksSinceVoice += 1;
+    if (artist && artist.length > 0) {
+      this.#recentArtists.unshift(artist);
+      if (this.#recentArtists.length > 3) this.#recentArtists.length = 3;
+    }
     if (this.#inFlight) return "idle";
     if (this.#tracksSinceVoice >= 2) return "trigger";
     return "idle";

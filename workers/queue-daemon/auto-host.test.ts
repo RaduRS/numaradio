@@ -91,6 +91,39 @@ test("state fields are readable but not writable from outside", () => {
   assert.equal(sm.tracksSinceVoice, 1);
 });
 
+test("recentArtists ring starts empty", () => {
+  const sm = new AutoHostStateMachine();
+  assert.deepEqual(sm.recentArtists, []);
+});
+
+test("onMusicTrackStart pushes artist onto recentArtists, newest-first", () => {
+  const sm = new AutoHostStateMachine();
+  sm.onMusicTrackStart("Alice");
+  sm.onMusicTrackStart("Bob");
+  assert.deepEqual(sm.recentArtists, ["Bob", "Alice"]);
+});
+
+test("recentArtists caps at 3 entries", () => {
+  const sm = new AutoHostStateMachine();
+  sm.onMusicTrackStart("A");
+  sm.onMusicTrackStart("B");
+  sm.onMusicTrackStart("C");
+  sm.onMusicTrackStart("D");
+  assert.deepEqual(sm.recentArtists, ["D", "C", "B"]);
+});
+
+test("onMusicTrackStart without artist arg does not push to recentArtists", () => {
+  const sm = new AutoHostStateMachine();
+  sm.onMusicTrackStart();
+  assert.deepEqual(sm.recentArtists, []);
+});
+
+test("onMusicTrackStart with empty-string artist does not push", () => {
+  const sm = new AutoHostStateMachine();
+  sm.onMusicTrackStart("");
+  assert.deepEqual(sm.recentArtists, []);
+});
+
 import { AutoHostOrchestrator } from "./auto-host.ts";
 
 interface RecordedFailure { reason: string; detail?: string }
