@@ -63,6 +63,11 @@ export async function generateChatterScript(
     body: JSON.stringify({
       model,
       max_tokens: MAX_TOKENS,
+      // Creative-riff bias. Default-unset on MiniMax-M2.7 produced identical
+      // skeletons in live output (2026-04-22). 1.0 is the standard creative
+      // default; room to bump to 1.1 if outputs still feel same-y, or drop
+      // to 0.8 if poetry creeps back in.
+      temperature: 1.0,
       system: prompts.system,
       messages: [{ role: "user", content: prompts.user }],
     }),

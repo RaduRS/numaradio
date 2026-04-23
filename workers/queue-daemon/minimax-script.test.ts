@@ -62,3 +62,21 @@ test("generateChatterScript rejects obvious AI-assistant leaks", async () => {
     /suspicious/i,
   );
 });
+
+test("generateChatterScript sends temperature: 1.0 in the request body", async () => {
+  let capturedBody: string | null = null;
+  const fake: typeof fetch = (async (_url: string, init?: RequestInit) => {
+    capturedBody = typeof init?.body === "string" ? init.body : null;
+    return new Response(
+      JSON.stringify({ content: [{ type: "text", text: "hi." }] }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+  await generateChatterScript(
+    { system: "sys", user: "usr" },
+    { apiKey: "k", fetcher: fake },
+  );
+  assert.ok(capturedBody, "fetch should have been called");
+  const parsed = JSON.parse(capturedBody!);
+  assert.equal(parsed.temperature, 1.0);
+});
