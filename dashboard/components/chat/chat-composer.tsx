@@ -34,7 +34,9 @@ export function ChatComposer({ disabled, placeholder, onSend }: Props) {
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    // Enter sends. Shift+Enter inserts a newline.
+    // Cmd/Ctrl+Enter is also accepted for muscle-memory compatibility.
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void submit();
     }
@@ -46,7 +48,7 @@ export function ChatComposer({ disabled, placeholder, onSend }: Props) {
         e.preventDefault();
         void submit();
       }}
-      className="relative border-t border-line bg-bg-1/70 px-4 pt-3 pb-4 backdrop-blur-sm"
+      className="relative mt-2 rounded-xl border border-line bg-bg-1/80 px-4 py-3 backdrop-blur-sm"
     >
       <div className="flex items-start gap-3">
         <span
@@ -79,7 +81,7 @@ export function ChatComposer({ disabled, placeholder, onSend }: Props) {
         </button>
       </div>
       <div className="mt-1.5 flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.22em] text-fg-mute/70">
-        <span>⌘ / ⌃ + Enter to send</span>
+        <span>Enter to send · Shift+Enter for newline</span>
         {disabled && <span className="text-[--warn]">awaiting confirm…</span>}
       </div>
     </form>

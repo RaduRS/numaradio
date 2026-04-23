@@ -2,6 +2,7 @@
 import type { ChatConfirm, ChatTurn as TurnT } from "@/lib/chat-types";
 import { ActionChips } from "./action-chips";
 import { ConfirmCard } from "./confirm-card";
+import { InlineMarkdown } from "./inline-markdown";
 
 interface Props {
   turn: TurnT;
@@ -76,9 +77,10 @@ export function ChatTurn({ turn, onResolveConfirm }: Props) {
         )}
       </div>
       {turn.text && (
-        <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-fg">
-          {turn.text}
-        </p>
+        <InlineMarkdown
+          text={turn.text}
+          className="mt-1 text-[15px] leading-relaxed text-fg"
+        />
       )}
       {turn.actions && turn.actions.length > 0 && (
         <ActionChips actions={turn.actions} />

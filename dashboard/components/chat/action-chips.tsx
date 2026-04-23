@@ -7,15 +7,14 @@ interface Props {
 }
 
 /**
- * Progressive disclosure: collapsed shows a single-line summary;
- * expanded shows one chip per action with result status; a further
- * expand on a chip reveals args JSON + full result summary.
+ * Compact pills. Collapsed (default): one summary line with count.
+ * Expanded: one pill per action — `name · result` — and nothing else.
+ * No JSON args expansion. This is a chat transcript, not a debugger;
+ * if the operator needs args, the dashboard logs have them.
  */
 export function ActionChips({ actions }: Props) {
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   if (!actions || actions.length === 0) return null;
-  const okCount = actions.filter((a) => a.resultOk !== false).length;
   const hasErr = actions.some((a) => a.resultOk === false);
 
   return (
@@ -23,7 +22,7 @@ export function ActionChips({ actions }: Props) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="group inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-fg-mute hover:text-fg transition-colors"
+        className="group inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-fg-mute transition-colors hover:text-fg"
       >
         <span
           aria-hidden
@@ -36,58 +35,44 @@ export function ActionChips({ actions }: Props) {
         </span>
         <span
           aria-hidden
-          className={`ml-1 inline-block h-1 w-1 rounded-full ${
+          className={`ml-0.5 inline-block h-1 w-1 rounded-full ${
             hasErr ? "bg-[--bad]" : "bg-accent"
           }`}
         />
-        <span className="text-fg-mute/70">
-          {okCount}/{actions.length}
-        </span>
       </button>
 
       {open && (
-        <ul className="mt-2 space-y-1 border-l border-line pl-3">
+        <ul className="mt-2 flex flex-wrap gap-1.5">
           {actions.map((a) => {
             const ok = a.resultOk !== false;
-            const isOpen = expanded[a.id];
             return (
-              <li key={a.id} className="text-[11px]">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpanded((e) => ({ ...e, [a.id]: !e[a.id] }))
-                  }
-                  className="flex w-full items-start gap-2 text-left"
+              <li key={a.id}>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] ${
+                    ok
+                      ? "border-line-strong bg-bg-2 text-fg-dim"
+                      : "border-[--bad]/50 bg-[--bad]/[0.08] text-[--bad]"
+                  }`}
+                  title={a.resultSummary}
                 >
                   <span
                     aria-hidden
-                    className={`mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                    className={`inline-block h-1 w-1 shrink-0 rounded-full ${
                       ok ? "bg-accent" : "bg-[--bad]"
                     }`}
                   />
-                  <span className="flex-1">
-                    <span className="font-mono text-fg-dim">{a.name}</span>
-                    {a.resultSummary && (
-                      <span className="font-sans text-fg-dim/80">
-                        {" · "}
-                        <span className="italic">{a.resultSummary}</span>
+                  <span className="font-mono text-fg-dim">{a.name}</span>
+                  {a.resultSummary && (
+                    <>
+                      <span className="text-fg-mute/50">·</span>
+                      <span className="font-sans italic">
+                        {a.resultSummary.length > 48
+                          ? a.resultSummary.slice(0, 47) + "…"
+                          : a.resultSummary}
                       </span>
-                    )}
-                  </span>
-                  <span
-                    aria-hidden
-                    className={`font-mono text-[9px] text-fg-mute transition-transform ${
-                      isOpen ? "rotate-90" : ""
-                    }`}
-                  >
-                    ▸
-                  </span>
-                </button>
-                {isOpen && (
-                  <pre className="mt-1 ml-3.5 overflow-x-auto rounded border border-line bg-bg-1 p-2 font-mono text-[10px] text-fg-dim">
-                    {JSON.stringify(a.args ?? {}, null, 2)}
-                  </pre>
-                )}
+                    </>
+                  )}
+                </span>
               </li>
             );
           })}

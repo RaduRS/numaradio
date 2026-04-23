@@ -65,7 +65,7 @@ export default function ChatPage() {
   const composerDisabled = sending || pendingConfirm !== null;
 
   return (
-    <main className="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col px-6">
+    <main className="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col px-6 pb-6">
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="pt-8 pb-4">
         <div className="flex items-center justify-between">
@@ -118,7 +118,7 @@ export default function ChatPage() {
       {/* ── Transcript ─────────────────────────────────────────── */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]"
+        className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="flex flex-col gap-6 py-6">
           {turns.length === 0 && connection === "live" && (

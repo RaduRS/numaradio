@@ -6,6 +6,7 @@ import type {
   ChatTurn,
   ConnectionState,
 } from "@/lib/chat-types";
+import { parseAgentReplyClient } from "@/lib/chat-tags";
 
 interface UseChatStreamResult {
   turns: ChatTurn[];
@@ -383,13 +384,30 @@ export function useChatStream(): UseChatStreamResult {
         if (cancelled) return;
         if (json.ok && json.turns) {
           setTurns(
-            json.turns.map<ChatTurn>((t) => ({
-              id: t.id,
-              role: t.role === "assistant" ? "assistant" : "user",
-              text: t.content,
-              timestamp: t.timestamp,
-              streaming: false,
-            })),
+            json.turns.map<ChatTurn>((t) => {
+              const role = t.role === "assistant" ? "assistant" : "user";
+              // Historical assistant turns were stored with <action/> and
+              // <internal> tags inline. Parse them on the client so chips
+              // render consistently with live turns.
+              if (role === "assistant") {
+                const parsed = parseAgentReplyClient(t.content);
+                return {
+                  id: t.id,
+                  role,
+                  text: parsed.plain,
+                  timestamp: t.timestamp,
+                  streaming: false,
+                  actions: parsed.actions,
+                };
+              }
+              return {
+                id: t.id,
+                role,
+                text: t.content,
+                timestamp: t.timestamp,
+                streaming: false,
+              };
+            }),
           );
         }
       } catch {
