@@ -75,9 +75,9 @@ export function ChatTurn({ turn, onResolveConfirm }: Props) {
             role="status"
             aria-label="streaming"
           >
-            <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:0ms]" />
-            <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:180ms]" />
-            <span className="numa-typing-dot inline-block h-[5px] w-[5px] rounded-full bg-[--warm] [animation-delay:360ms]" />
+            <span className="numa-typing-dot inline-block h-[6px] w-[6px] rounded-full bg-accent shadow-[0_0_6px_var(--accent-glow)] [animation-delay:0ms]" />
+            <span className="numa-typing-dot inline-block h-[6px] w-[6px] rounded-full bg-accent shadow-[0_0_6px_var(--accent-glow)] [animation-delay:180ms]" />
+            <span className="numa-typing-dot inline-block h-[6px] w-[6px] rounded-full bg-accent shadow-[0_0_6px_var(--accent-glow)] [animation-delay:360ms]" />
           </span>
         )}
       </div>

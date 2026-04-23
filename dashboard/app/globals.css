@@ -189,18 +189,19 @@ body {
 
 /* Typing indicator — three dots that wave in sequence.
    Used on the Talkback / chat page while the agent is thinking.
-   Keyframes are subtle on purpose: scale + opacity shift, no bounce. */
+   Always visible at baseline (never fades out entirely) so the dots
+   are readable even at small sizes and on muted backgrounds. */
 @keyframes numa-typing-dot {
   0%, 60%, 100% {
-    transform: translateY(0) scale(0.75);
-    opacity: 0.35;
+    transform: translateY(0) scale(0.85);
+    opacity: 0.5;
   }
   30% {
-    transform: translateY(-2px) scale(1);
+    transform: translateY(-3px) scale(1);
     opacity: 1;
   }
 }
 
 .numa-typing-dot {
-  animation: numa-typing-dot 1.2s ease-in-out infinite;
+  animation: numa-typing-dot 1.1s ease-in-out infinite;
 }
