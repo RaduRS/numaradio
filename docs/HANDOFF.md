@@ -1,6 +1,135 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-23 (Lena auto-chatter voice tuning — LIVE)
+Last updated: 2026-04-23 night (booth UX + shoutout lifecycle + NanoClaw IPC fix — all LIVE)
+
+## Booth UX + shoutout lifecycle + NanoClaw IPC fix — LIVE (2026-04-23 night)
+
+Three connected pieces shipped tonight. Each independently deployable
+but they share the theme: make Lena feel like a person, and stop
+shoutouts from leaving litter behind.
+
+### 1. Listener booth submit UX
+
+- **Shoutout submit is now optimistic.** `app/api/booth/submit/route.ts`
+  returns ~2 s after moderation passes; the dashboard internal
+  shoutout call (radio-host rewrite → Deepgram → B2 → queue push) runs
+  in `after()`. Was 20-40 s of spinner before.
+- **Silent-failure recovery:** new `GET /api/booth/shoutout/[id]/status`
+  reads `Shoutout.deliveryStatus`. Client stashes the ID in
+  `localStorage` (`numa.shoutout.last`) and on focus pings the status
+  endpoint — surfaces a one-time "Heads up — your last shoutout didn't
+  make it on air" if the background pipeline failed.
+- **Song pending state persists across tab-switches** via
+  `numa.song.pending` localStorage key (helpers in
+  `lib/booth-stash.ts` with 6 unit tests). 404 from the status endpoint
+  unsticks the rotator instead of leaving it spinning forever.
+- **Voice change.** Stage-specific headings ("Composing… / Painting
+  the cover…") replaced with a 3-line quiet-confidence rotator in a
+  styled `.req-pending` card (accent-tinted border + pulsing dot using
+  the existing `pulseDot` keyframe + `IN THE BOOTH` mono-caps kicker).
+  CSS in `app/styles/_design-overrides.css`.
+- **Field-level form validation.** Both forms (shoutout + song) now
+  validate on submit, paint required-field borders red with a pulsing
+  red dot inline error message, and clear errors as the user types.
+  Removed the song form's `disabled` button gate so users can click
+  and discover what's missing instead of a dead-looking button.
+
+**Spec:** `docs/superpowers/specs/2026-04-23-submit-feedback-lena-human-design.md`
+
+### 2. Shoutout lifecycle — auto-delete after airing
+
+Aired shoutouts used to accumulate forever as Track + TrackAsset +
+QueueItem + PlayHistory rows + B2 MP3s, cluttering the dashboard
+library and growing storage. Now:
+
+- **`/api/internal/shoutout-ended` deletes the transient track**
+  (Track + TrackAsset + QueueItem + PlayHistory + B2 audio) in a
+  transaction immediately after Liquidsoap signals the overlay
+  finished. The `Shoutout` audit row survives — only the audio is
+  ephemeral.
+- **Defense in depth:** `lib/delete-aired-shoutout.ts` refuses to act
+  unless `sourceType='external_import' AND airingPolicy='request_only'`.
+  Music tracks can't be nuked by a misrouted call.
+- **Dashboard library:** `+ Shoutouts` filter button gone. Shoutouts
+  are always hidden — they'll be deleted seconds after airing anyway.
+- **Re-runnable purge:** `scripts/purge-orphan-shoutouts.ts` (with
+  `--dry-run`). Cleared 52 pre-existing orphans on initial run. Use
+  this if `shoutout-ended` ever misses one.
+- **No retention/sweep job for `Shoutout` rows.** Decided they're
+  small (text only, ~200 bytes) and the displays already cap at "last
+  N" (`/api/station/shoutouts/recent` LIMIT 10, dashboard /shoutouts
+  Recent LIMIT 20). 24h retention was too aggressive vs the
+  moderation-audit value.
+- **Shoutout wall sized:** desktop shows 10 (5 per column), mobile
+  shows 6 (CSS `:nth-child(n+4)` hides overflow at <=1100px).
+
+### 3. NanoClaw IPC bug fix — held-notify reaches agent context
+
+**The bug:** dashboard's held-notify wrote to `<group>/messages/`,
+which NanoClaw's IPC watcher (`src/ipc.ts`) treated as
+Telegram-outbound only — `sendMessage` then `unlink`, no SQLite write.
+When the operator replied "no" on Telegram, the agent's freshly-spawned
+container session pulled context from `getMessagesSince()` (SQLite),
+which had no record of the held-shoutout prompt. Agent replied
+conversationally ("Everything OK? 😄") and the reject curl never fired.
+Shoutout sat in `moderationStatus='held'` forever.
+
+**The fix (NanoClaw `64118ad` + `62ae4c7`):** `src/ipc.ts` now
+**stores in SQLite first, then sends to Telegram**. New optional
+`persistInContext` flag (default true when target chat is a registered
+agent group, false for pure-broadcast). Idempotent on re-process via
+`INSERT OR REPLACE` keyed on `ipc-<filename-stem>`. 8 new unit tests.
+
+**Dashboard side (numaradio `21af532`):** held-notify now passes
+`persistInContext: true` + `senderName: "Dashboard"` explicitly so
+intent is unambiguous regardless of NanoClaw's default.
+
+**Verify on prod:** submit a shoutout with `fuck` from numaradio.com →
+Telegram DMs you the held-shoutout prompt → reply `no` → agent should
+now reply "Blocked." within ~10 s and the dashboard's held card
+disappears within ~8 s.
+
+### Vercel build gotcha (resolved, but worth knowing)
+
+`scripts/preview-chatter.ts` imports from `../workers/queue-daemon/
+chatter-prompts.ts`. `workers/` is `.vercelignore`'d but `scripts/`
+wasn't, so on Vercel the import target disappeared and tsc died with
+"Cannot find module … or its corresponding type declarations." Fixed
+by adding `scripts` and `nanoclaw-groups` to `.vercelignore` (commit
+`e73c710`). Local `next build` doesn't reproduce this — all dirs
+physically exist on disk, so tsc resolves the import even though
+tsconfig excludes `workers/`. **Going forward:** any new
+`scripts/*.ts` that imports from `workers/`, `dashboard/`, etc. is
+fine — the whole `scripts/` dir is gone from Vercel's view.
+
+### Deploy state
+
+- numaradio `main` at `e73c710`. Vercel auto-deployed.
+- nanoclaw `main` at `62ae4c7`. `systemctl --user restart nanoclaw`
+  done; cached agent containers killed.
+- Dashboard rebuilt + restarted on Orion via `cd dashboard && npm run
+  deploy`.
+- 52 orphan shoutouts purged from Neon + B2.
+- One stuck held shoutout (`cmobx8oov0005jr04vvt49jzn`) cleared via
+  the internal API as a one-off — would have been auto-handled if the
+  fix had shipped before that incident.
+
+### Where to pick up tomorrow
+
+- Verify the NanoClaw held-notify fix on prod (test recipe above).
+  If anything misbehaves, container logs are the first stop:
+  `docker logs --tail 100 $(docker ps --format '{{.Names}}' | grep nanoclaw-telegram-main)`
+- The booth UX has only been smoke-tested via `next build` + unit
+  tests; no in-browser click-through. Worth a 30-second tour:
+  numaradio.com → submit a shoutout (should confirm in ~2s), submit
+  a song (pending card should survive a tab switch and show the
+  rotator in Lena's voice), try submitting either with required
+  fields empty (fields should highlight red).
+- If the auto-delete callback ever misses one, you'll see it in the
+  dashboard library briefly (since the filter is just a UI hide) —
+  re-run `npx tsx scripts/purge-orphan-shoutouts.ts`.
+
+---
 
 ## Lena auto-chatter voice tuning — LIVE (2026-04-23)
 
