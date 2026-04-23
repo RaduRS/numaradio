@@ -7,10 +7,11 @@ import { radioHostTransform } from "@/lib/radio-host";
 import { humanizeScript } from "@/lib/humanize";
 
 const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
-// Andromeda — softer, closer to a whisper-ish late-night-radio register.
-// Thalia was too "storyteller performance" per Markus, Asteria too
-// corporate; Andromeda should land between the two with less projection.
-const MODEL_PRIMARY = "aura-2-andromeda-en";
+// Luna — friendly, upbeat, casual. Voice history: Thalia read too
+// "storyteller performance", Asteria too corporate, Andromeda too soft
+// (read "dead in the water" on Prime Hours). Luna should hit the
+// engaged-DJ register the station's actually going for.
+const MODEL_PRIMARY = "aura-2-luna-en";
 const MODEL_FALLBACK = "aura-asteria-en";
 export const SHOUTOUT_MAX_CHARS = 2000;
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
