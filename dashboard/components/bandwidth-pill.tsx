@@ -6,8 +6,19 @@ interface Props {
   isStale: boolean;
 }
 
-function gib(bytes: number): string {
-  return (bytes / 1024 ** 3).toFixed(1);
+const ONE_GIB = 1024 ** 3;
+const ONE_MIB = 1024 ** 2;
+
+function formatBytes(bytes: number): { value: string; unit: "MB" | "GB" } {
+  // Show MB below 1 GiB (typical for a quiet early-morning hour on a small
+  // station), flip to GB once we're into serious egress territory.
+  if (bytes < ONE_GIB) {
+    const mb = bytes / ONE_MIB;
+    // Under 100 MB show one decimal; above, round to integer — the
+    // precision beyond that is meaningless.
+    return { value: mb < 100 ? mb.toFixed(1) : Math.round(mb).toString(), unit: "MB" };
+  }
+  return { value: (bytes / ONE_GIB).toFixed(1), unit: "GB" };
 }
 
 function barColorClass(frac: number): string {
@@ -34,8 +45,15 @@ export function BandwidthPill({ data, isStale }: Props) {
   }
 
   const pct = Math.round(data.fractionUsed * 100);
-  const usedGib = gib(data.bytesToday);
-  const capGib = gib(data.capBytes);
+  const used = formatBytes(data.bytesToday);
+  const cap = formatBytes(data.capBytes);
+  // Render "used / cap" naturally — if both are in the same unit we
+  // elide the first unit, otherwise keep both so it always reads right
+  // (e.g. "240 MB / 10 GB", "1.3 / 10 GB").
+  const display =
+    used.unit === cap.unit
+      ? `${used.value} / ${cap.value} ${cap.unit}`
+      : `${used.value} ${used.unit} / ${cap.value} ${cap.unit}`;
 
   return (
     <div
@@ -49,7 +67,7 @@ export function BandwidthPill({ data, isStale }: Props) {
           B2 est. today
         </span>
         <span className="font-mono text-xs">
-          {usedGib} / {capGib} GB · {pct}%
+          {display} · {pct}%
         </span>
       </div>
       <div className="h-1 w-full overflow-hidden rounded bg-[var(--line)]">
