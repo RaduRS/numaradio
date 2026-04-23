@@ -16,6 +16,12 @@
   pointer-events: auto;
 }
 
+/* Hide scrollbars inside the expanded player on every scrollable pane
+   (left booth column, right feed, just-played list, mobile body) while
+   keeping wheel / touch / keyboard scrolling fully functional. */
+.ep-shell *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.ep-shell * { scrollbar-width: none; -ms-overflow-style: none; }
+
 .ep-shell {
   position: absolute;
   inset: 2vh 2vw;
