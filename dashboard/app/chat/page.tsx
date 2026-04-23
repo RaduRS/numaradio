@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { ChatTurn } from "@/components/chat/chat-turn";
@@ -66,34 +65,17 @@ export default function ChatPage() {
   const composerDisabled = sending || pendingConfirm !== null;
 
   return (
-    <main className="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col px-6 pb-6">
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="pt-8 pb-4">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-display text-2xl font-extrabold uppercase tracking-wide"
-            style={{ fontStretch: "125%" }}
-          >
-            Numa<span className="text-accent">·</span>Radio
-          </Link>
-          <nav className="flex items-center gap-4 font-mono text-xs uppercase tracking-[0.2em]">
-            <Link href="/" className="text-fg-mute hover:text-fg">
-              ← back
-            </Link>
-            <Link href="/library" className="text-fg-mute hover:text-fg">
-              library
-            </Link>
-            <Link href="/shoutouts" className="text-fg-mute hover:text-fg">
-              shoutouts
-            </Link>
-          </nav>
-        </div>
-
-        <div className="mt-6 flex items-baseline justify-between gap-6 border-b border-line pb-3">
+    // h-[calc(100dvh-3.5rem)] — fills viewport below the persistent
+    // 3.5rem (h-14) dashboard nav. Chat owns everything below that.
+    // max-w-6xl matches the rest of the dashboard; an inner column
+    // narrows further for readability below.
+    <main className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-6xl flex-col px-6 pb-6">
+      {/* ── Page sub-header ───────────────────────────────────── */}
+      <header className="pt-6 pb-4">
+        <div className="flex items-baseline justify-between gap-6 border-b border-line pb-3">
           <div>
             <h1
-              className="font-display text-[40px] font-extrabold uppercase leading-none text-fg"
+              className="font-display text-3xl font-extrabold uppercase leading-none text-fg"
               style={{ fontStretch: "115%" }}
             >
               Talkback

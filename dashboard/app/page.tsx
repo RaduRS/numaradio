@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { usePolling } from "@/hooks/use-polling";
 import { StatusPills } from "@/components/status-pills";
 import { ServicesCard } from "@/components/services-card";
@@ -34,36 +33,14 @@ export default function OperatorDashboard() {
       : null;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-10 flex flex-col gap-8">
+    <main className="mx-auto w-full max-w-6xl px-6 py-8 flex flex-col gap-8">
       <header className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <span
-            className="font-display text-2xl font-extrabold uppercase tracking-wide"
-            style={{ fontStretch: "125%" }}
-          >
-            Numa<span className="text-accent">·</span>Radio
-          </span>
-          <nav className="flex items-center gap-4">
-            <Link
-              href="/chat"
-              className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
-            >
-              Talkback →
-            </Link>
-            <Link
-              href="/shoutouts"
-              className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
-            >
-              Shoutouts →
-            </Link>
-            <Link
-              href="/library"
-              className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
-            >
-              Library →
-            </Link>
-          </nav>
-        </div>
+        <h1
+          className="font-display text-3xl font-extrabold uppercase tracking-wide text-fg"
+          style={{ fontStretch: "115%" }}
+        >
+          Console
+        </h1>
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
           Operator · polling every 5s {isStale ? "· ⚠ stale, retrying" : ""}
         </span>

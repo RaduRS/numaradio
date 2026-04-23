@@ -209,26 +209,17 @@ export default function LibraryPage() {
   }, [tracks]);
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10 flex flex-col gap-6">
+    <main className="mx-auto w-full max-w-6xl px-6 py-8 flex flex-col gap-6">
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-display text-2xl font-extrabold uppercase tracking-wide"
-            style={{ fontStretch: "125%" }}
-          >
-            Numa<span className="text-accent">·</span>Radio
-          </Link>
-          <Link
-            href="/"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
-          >
-            ← Dashboard
-          </Link>
-        </div>
+        <h1
+          className="font-display text-3xl font-extrabold uppercase tracking-wide text-fg"
+          style={{ fontStretch: "115%" }}
+        >
+          Library
+        </h1>
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
-          Library · {tracks.length} tracks · {filtered.length} shown · {musicPushes.length} recent pushes
+          {tracks.length} tracks · {filtered.length} shown · {musicPushes.length} recent pushes
           {tracksPoll.isStale ? " · ⚠ stale" : ""}
         </span>
       </header>

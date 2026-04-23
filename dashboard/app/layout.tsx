@@ -3,6 +3,7 @@ import { Archivo, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { DashboardNav } from "@/components/dashboard-nav";
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -37,7 +38,8 @@ export default function RootLayout({
       className={cn("h-full font-sans", archivo.variable, interTight.variable, jetbrainsMono.variable)}
     >
       <body className="min-h-full flex flex-col">
-        {children}
+        <DashboardNav />
+        <div className="flex flex-1 flex-col">{children}</div>
         <Toaster theme="dark" position="bottom-right" />
       </body>
     </html>

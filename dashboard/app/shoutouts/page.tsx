@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { usePolling } from "@/hooks/use-polling";
@@ -283,24 +282,15 @@ export default function ShoutoutsPage() {
   const totalFailed = events.filter((e) => e.kind === "failure").length;
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-6">
+    <main className="mx-auto w-full max-w-6xl px-6 py-8 flex flex-col gap-6">
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-display text-2xl font-extrabold uppercase tracking-wide"
-            style={{ fontStretch: "125%" }}
-          >
-            Numa<span className="text-accent">·</span>Radio
-          </Link>
-          <Link
-            href="/"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute hover:text-fg"
-          >
-            ← Dashboard
-          </Link>
-        </div>
+        <h1
+          className="font-display text-3xl font-extrabold uppercase tracking-wide text-fg"
+          style={{ fontStretch: "115%" }}
+        >
+          Shoutouts
+        </h1>
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
           Shoutouts · {held.length} held · {totalAired} on-air events · {totalFailed} failures
           {isStale ? " · ⚠ stale, retrying" : ""}
