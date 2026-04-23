@@ -305,7 +305,10 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
   // Music-track boundary → count it for auto-chatter (fires for both
   // rotation and priority-queue tracks). Fire-and-forget, non-blocking
   // so the existing priority-queue bookkeeping below isn't delayed.
-  const action = autoHost.onMusicTrackStart();
+  // Pass artist through so auto-host can track the recent-artists ring
+  // used for "second X in a row" style DJ riffs. body.artist is optional;
+  // the orchestrator ignores empty/undefined.
+  const action = autoHost.onMusicTrackStart(body.artist);
   if (action === "trigger") {
     autoHost.runChatter().catch((err) =>
       console.error("[auto-chatter] runChatter threw:", err),
