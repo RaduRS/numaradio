@@ -270,22 +270,23 @@ export function SongTab() {
 
   if (pending) {
     return (
-      <div className="req-input-group">
-        <div
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 20,
-            minHeight: 28,
-            transition: "opacity 0.4s ease",
-          }}
-          key={pendingLineIdx}
-        >
-          {PENDING_LINES[pendingLineIdx]}
+      <div className="req-pending">
+        <div className="rp-head">
+          <span className="rp-dot" aria-hidden />
+          <span className="rp-kicker">In the booth</span>
+        </div>
+        <div className="rp-rotator">
+          {PENDING_LINES.map((line, i) => (
+            <div
+              key={i}
+              className={`rp-line ${i === pendingLineIdx ? "active" : ""}`}
+            >
+              {line}
+            </div>
+          ))}
         </div>
         {status?.finalArtistName ? (
-          <div style={{ color: "var(--fg-mute)", fontSize: 13 }}>
-            For {status.finalArtistName}
-          </div>
+          <div className="rp-credit">by {status.finalArtistName}</div>
         ) : null}
       </div>
     );
