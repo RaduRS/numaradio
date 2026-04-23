@@ -22,7 +22,10 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
-const LIMIT = 6;
+// Desktop shows 10 (5 per column of the two-column wall); mobile hides the
+// last 4 via CSS (:nth-child(n+4) on .shout-col) so only the freshest 6
+// remain visible below the form.
+const LIMIT = 10;
 
 const HEADERS = {
   "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",

@@ -252,3 +252,14 @@
   box-shadow: 0 0 6px var(--red-live);
   flex-shrink: 0;
 }
+
+/* ─── Shoutout wall: mobile shows 6 (hide 4th+ per column) ─────── */
+/* Desktop renders 10 cards across two columns (5 + 5). At the same
+ * 1100px breakpoint where .req-wall collapses to a single column, we
+ * drop the 4th and 5th card of each .shout-col so only the most recent
+ * 6 remain (3 + 3). The two columns stack below the form on mobile. */
+@media (max-width: 1100px) {
+  .shout-col > .shout-card:nth-child(n + 4) {
+    display: none;
+  }
+}
