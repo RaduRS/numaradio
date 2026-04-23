@@ -33,7 +33,7 @@ export default function OperatorDashboard() {
       : null;
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-8 flex flex-col gap-8">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-6 sm:gap-8 sm:px-6 sm:py-8">
       <header className="flex flex-col gap-1">
         <h1
           className="font-display text-3xl font-extrabold uppercase tracking-wide text-fg"

@@ -83,7 +83,7 @@ export function HeldShoutoutsCard({ held, onAction, hideWhenEmpty = false }: Pro
             {held.map((s) => (
               <li
                 key={s.id}
-                className="flex items-start gap-4 py-4 first:pt-0 last:pb-0"
+                className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-4"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1">
@@ -94,26 +94,27 @@ export function HeldShoutoutsCard({ held, onAction, hideWhenEmpty = false }: Pro
                       {fmtRelative(s.createdAt)}
                     </span>
                   </div>
-                  <p className="text-sm">
+                  <p className="text-sm break-words">
                     &ldquo;{s.cleanText ?? s.rawText}&rdquo;
                   </p>
                   {s.cleanText && s.cleanText !== s.rawText && (
-                    <p className="mt-1 text-xs text-fg-mute">
+                    <p className="mt-1 text-xs text-fg-mute break-words">
                       original: {s.rawText}
                     </p>
                   )}
                   {s.moderationReason && (
-                    <p className="mt-1 text-xs text-fg-mute">
+                    <p className="mt-1 text-xs text-fg-mute break-words">
                       reason: {s.moderationReason}
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 sm:shrink-0">
                   <Button
                     size="sm"
                     variant="default"
                     disabled={busyId === s.id}
                     onClick={() => act(s.id, "approve")}
+                    className="flex-1 sm:flex-initial"
                   >
                     {busyId === s.id ? "…" : "Approve"}
                   </Button>
@@ -122,6 +123,7 @@ export function HeldShoutoutsCard({ held, onAction, hideWhenEmpty = false }: Pro
                     variant="outline"
                     disabled={busyId === s.id}
                     onClick={() => act(s.id, "reject")}
+                    className="flex-1 sm:flex-initial"
                   >
                     Reject
                   </Button>

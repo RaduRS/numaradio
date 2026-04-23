@@ -284,7 +284,7 @@ export default function ShoutoutsPage() {
   const totalFailed = events.filter((e) => e.kind === "failure").length;
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-8 flex flex-col gap-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-5 sm:gap-6 sm:px-6 sm:py-8">
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
         <h1
@@ -312,11 +312,11 @@ export default function ShoutoutsPage() {
             <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute">
               Auto-chatter
             </div>
-            <div className="text-sm truncate">
+            <div className="truncate text-sm">
               {autoHostOn
                 ? "Lena speaks between every 2 tracks"
                 : "Off — only manual shoutouts and listener songs"}
-              <span className="ml-2 font-mono text-[10px] text-fg-mute">
+              <span className="ml-2 hidden font-mono text-[10px] text-fg-mute sm:inline">
                 (~30s for changes to take effect)
               </span>
             </div>

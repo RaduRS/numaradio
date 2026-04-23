@@ -65,13 +65,27 @@ export function ServiceRow({ svc, onActionComplete }: Props) {
         : "border-[var(--bad)] text-[var(--bad)]";
 
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line last:border-0">
-      <div className="flex flex-col">
-        <span className="font-mono text-sm">{svc.name}</span>
-        <span className="text-xs text-fg-mute">uptime {fmtUptime(svc.uptimeSec)}</span>
+    <div className="flex flex-col gap-2 border-b border-line px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      {/* Row 1 (mobile) / left cluster (desktop): name + uptime, with the
+          state badge flipping to the trailing edge on narrow widths so
+          the operator can see status without scrolling controls. */}
+      <div className="flex min-w-0 items-center justify-between gap-3 sm:flex-1">
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate font-mono text-sm">{svc.name}</span>
+          <span className="text-xs text-fg-mute">
+            uptime {fmtUptime(svc.uptimeSec)}
+          </span>
+        </div>
+        <Badge variant="outline" className={`shrink-0 sm:hidden ${stateColor}`}>
+          {svc.state}
+        </Badge>
       </div>
+      {/* Row 2 (mobile) / right cluster (desktop): state badge + controls */}
       <div className="flex items-center gap-2">
-        <Badge variant="outline" className={stateColor}>
+        <Badge
+          variant="outline"
+          className={`hidden sm:inline-flex ${stateColor}`}
+        >
           {svc.state}
         </Badge>
         <Button
@@ -79,6 +93,7 @@ export function ServiceRow({ svc, onActionComplete }: Props) {
           variant="secondary"
           disabled={!!pending || svc.state === "active"}
           onClick={() => run("start")}
+          className="flex-1 sm:flex-initial"
         >
           {pending === "start" ? "…" : "Start"}
         </Button>
@@ -87,6 +102,7 @@ export function ServiceRow({ svc, onActionComplete }: Props) {
           variant="secondary"
           disabled={!!pending || svc.state === "inactive" || svc.state === "failed"}
           onClick={() => run("stop")}
+          className="flex-1 sm:flex-initial"
         >
           {pending === "stop" ? "…" : "Stop"}
         </Button>
@@ -94,7 +110,7 @@ export function ServiceRow({ svc, onActionComplete }: Props) {
           <DialogTrigger
             disabled={!!pending}
             render={
-              <Button size="sm" variant="secondary">
+              <Button size="sm" variant="secondary" className="flex-1 sm:flex-initial">
                 {pending === "restart" ? "…" : "Restart"}
               </Button>
             }

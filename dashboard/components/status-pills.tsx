@@ -97,12 +97,12 @@ function MetricTile({ label, value, sub, accent }: MetricTileProps) {
         ? value.toLocaleString()
         : value;
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-1)] px-5 py-4">
+    <div className="flex flex-col gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-1)] px-4 py-3.5 sm:px-5 sm:py-4">
       <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute">
         {label}
       </span>
       <span
-        className={`font-display text-5xl font-extrabold leading-none tracking-tight ${
+        className={`font-display text-4xl font-extrabold leading-none tracking-tight sm:text-5xl ${
           accent ? "text-accent" : "text-fg"
         }`}
         style={{ fontStretch: "125%" }}

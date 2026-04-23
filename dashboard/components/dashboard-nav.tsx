@@ -34,10 +34,10 @@ export function DashboardNav() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-6 px-6">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
         <Link
           href="/"
-          className="font-display text-xl font-extrabold uppercase tracking-wide text-fg transition-opacity hover:opacity-80"
+          className="font-display text-lg font-extrabold uppercase tracking-wide text-fg transition-opacity hover:opacity-80 sm:text-xl"
           style={{ fontStretch: "125%" }}
           aria-label="Numa Radio — dashboard home"
         >
@@ -46,7 +46,7 @@ export function DashboardNav() {
 
         <nav
           aria-label="Primary"
-          className="flex items-center gap-1 sm:gap-2"
+          className="flex items-center gap-0.5 overflow-x-auto sm:gap-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {TABS.map((tab) => {
             const active = tab.match(pathname);
@@ -54,7 +54,7 @@ export function DashboardNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`relative px-2.5 py-2 font-mono text-[11px] uppercase tracking-[0.22em] transition-colors ${
+                className={`relative shrink-0 px-2 py-2 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors sm:px-2.5 sm:text-[11px] sm:tracking-[0.22em] ${
                   active ? "text-fg" : "text-fg-mute hover:text-fg-dim"
                 }`}
                 aria-current={active ? "page" : undefined}
@@ -63,7 +63,7 @@ export function DashboardNav() {
                 {active && (
                   <span
                     aria-hidden
-                    className="absolute inset-x-2.5 -bottom-px h-[2px] rounded-full bg-accent shadow-[0_0_10px_var(--accent-glow)]"
+                    className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-accent shadow-[0_0_10px_var(--accent-glow)] sm:inset-x-2.5"
                   />
                 )}
               </Link>

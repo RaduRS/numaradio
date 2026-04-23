@@ -69,13 +69,13 @@ export default function ChatPage() {
     // 3.5rem (h-14) dashboard nav. Chat owns everything below that.
     // max-w-6xl matches the rest of the dashboard; an inner column
     // narrows further for readability below.
-    <main className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-6xl flex-col px-6 pb-6">
+    <main className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-6xl flex-col px-4 pb-4 sm:px-6 sm:pb-6">
       {/* ── Page sub-header ───────────────────────────────────── */}
-      <header className="pt-6 pb-4">
-        <div className="flex items-baseline justify-between gap-6 border-b border-line pb-3">
+      <header className="pt-4 pb-3 sm:pt-6 sm:pb-4">
+        <div className="flex flex-col gap-3 border-b border-line pb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
           <div>
             <h1
-              className="font-display text-3xl font-extrabold uppercase leading-none text-fg"
+              className="font-display text-2xl font-extrabold uppercase leading-none text-fg sm:text-3xl"
               style={{ fontStretch: "115%" }}
             >
               Talkback
@@ -84,7 +84,7 @@ export default function ChatPage() {
               Direct line · Lena&rsquo;s producer
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-col gap-1.5 sm:items-end">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -107,7 +107,7 @@ export default function ChatPage() {
               <ConnectionPill state={connection} typing={typing} />
             </div>
             {onAir && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute">
+              <span className="truncate font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute">
                 On air ·{" "}
                 <span className="text-fg-dim normal-case tracking-normal font-sans">
                   {onAir}

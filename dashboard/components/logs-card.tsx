@@ -49,11 +49,11 @@ export function LogsCard() {
 
   return (
     <Card className="bg-bg-1 border-line">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
           Logs
         </CardTitle>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {SERVICE_NAMES.map((name) => (
             <Button
               key={name}

@@ -209,7 +209,7 @@ export default function LibraryPage() {
   }, [tracks]);
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-8 flex flex-col gap-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-5 sm:gap-6 sm:px-6 sm:py-8">
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
         <h1
@@ -225,13 +225,13 @@ export default function LibraryPage() {
       </header>
 
       {/* ── Sticky control bar: search + filter chips ──────── */}
-      <div className="sticky top-0 z-10 -mx-6 px-6 py-3 bg-bg/95 backdrop-blur border-b border-line flex items-center gap-3 flex-wrap">
+      <div className="sticky top-14 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-bg/95 backdrop-blur border-b border-line flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search title or artist…"
-          className="flex-1 min-w-[200px] bg-transparent border border-line rounded-md px-3 py-2 text-sm font-mono outline-none focus:border-accent"
+          className="w-full sm:flex-1 sm:min-w-[200px] bg-transparent border border-line rounded-md px-3 py-2 text-sm font-mono outline-none focus:border-accent"
         />
         <div className="flex items-center gap-1 flex-wrap">
           {STATUS_FILTERS.map((f) => (
@@ -280,7 +280,97 @@ export default function LibraryPage() {
                 No tracks match. {tracks.length === 0 && "Library is empty."}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Mobile card list — below md only. Same data as the
+                  desktop table, but vertical rhythm with touch-friendly
+                  hit targets. Artwork left, title/meta middle, Play Next
+                  right. */}
+              <ul className="divide-y divide-line md:hidden">
+                {pageTracks.map((t) => {
+                  const disabled = !t.audioStreamUrl || pendingId === t.id;
+                  return (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-3 px-3 py-3"
+                    >
+                      {t.artworkUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={t.artworkUrl}
+                          alt=""
+                          className="h-12 w-12 shrink-0 rounded-md bg-bg-1 object-cover shadow-sm shadow-black/40"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 shrink-0 rounded-md border border-line bg-bg" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">
+                          {t.title}
+                        </div>
+                        <div className="truncate text-xs text-fg-mute">
+                          {t.artist ?? "—"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-fg-mute">
+                          <span className="tabular-nums">
+                            {fmtDuration(t.durationSeconds)}
+                          </span>
+                          {t.genre && (
+                            <>
+                              <span aria-hidden>·</span>
+                              <span className="truncate normal-case tracking-normal">
+                                {t.genre}
+                              </span>
+                            </>
+                          )}
+                          <span aria-hidden>·</span>
+                          <Badge
+                            variant="outline"
+                            className={statusBadgeClass(t.trackStatus)}
+                          >
+                            {t.trackStatus}
+                          </Badge>
+                          {(t.votesUp > 0 || t.votesDown > 0) && (
+                            <span className="tabular-nums">
+                              <span
+                                className={
+                                  t.votesUp > 0 ? "text-accent" : ""
+                                }
+                              >
+                                ▲{t.votesUp}
+                              </span>{" "}
+                              <span
+                                className={
+                                  t.votesDown > 0
+                                    ? "text-[var(--bad)]"
+                                    : ""
+                                }
+                              >
+                                ▼{t.votesDown}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={disabled}
+                        onClick={() => pushTrack(t)}
+                        className="shrink-0"
+                        title={
+                          !t.audioStreamUrl
+                            ? "No audio asset"
+                            : "Push to priority queue"
+                        }
+                      >
+                        {pendingId === t.id ? "…" : "Play"}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {/* Desktop table — md and up. */}
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-bg-1 z-[1] border-b border-line">
                     <tr className="text-fg-mute font-mono text-[10px] uppercase tracking-[0.2em]">
@@ -351,6 +441,7 @@ export default function LibraryPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
             {/* Pagination footer — only shown when we have more than one page. */}
             {filtered.length > PAGE_SIZE && (
