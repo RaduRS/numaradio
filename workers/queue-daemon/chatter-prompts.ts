@@ -75,8 +75,9 @@ function renderContextBlock(ctx: PromptContext): string {
     lines.push(`- Current show: ${ctx.currentShow}${desc}`);
   }
   if (ctx.recentArtists && ctx.recentArtists.length > 0) {
+    const n = ctx.recentArtists.length;
     lines.push(
-      `- Last 3 artists aired (newest first): ${ctx.recentArtists.join(", ")}`,
+      `- Last ${n} ${n === 1 ? "artist" : "artists"} aired (newest first): ${ctx.recentArtists.join(", ")}`,
     );
   }
   if (typeof ctx.slotsSinceOpening === "number") {

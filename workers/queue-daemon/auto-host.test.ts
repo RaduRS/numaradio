@@ -357,14 +357,39 @@ test("generateAsset includes currentShow + recentArtists + slotsSinceOpening in 
   orch.onMusicTrackStart("Russell Ross");
   orch.onMusicTrackStart("Russell Ross");
   orch.onMusicTrackStart("Numa Radio");
-  // Now runChatter — slot 0 = back_announce.
+  // Now runChatter — slot 0 = back_announce. For back_announce we slice
+  // ring[0] (the currently-announcing artist, already named in the "by X"
+  // clause), so the Context block should list only the 2 artists BEFORE
+  // "Numa Radio": Russell Ross, Russell Ross.
   await orch.runChatter();
   assert.ok(capturedUser, "generateScript should have been called");
   assert.match(capturedUser!, /Context \(optional/);
   assert.match(capturedUser!, /Current show: (Night Shift|Morning Room|Daylight Channel|Prime Hours)/);
-  assert.match(capturedUser!, /Last 3 artists aired.*Numa Radio, Russell Ross, Russell Ross/);
+  assert.match(capturedUser!, /Last 2 artists aired.*Russell Ross, Russell Ross/);
+  assert.doesNotMatch(capturedUser!, /Numa Radio, Russell Ross, Russell Ross/,
+    "currently-announcing artist (Numa Radio) must not duplicate in the recentArtists list");
   // slotsSinceOpening for slot 0 is 0
   assert.match(capturedUser!, /Position in the 20-slot rotation: 0/);
+});
+
+test("generateAsset falls back to filler when back_announce fires without a resolved current track", async () => {
+  let capturedPrompts: { system: string; user: string } | null = null;
+  const { deps, pushes } = fakeDeps({
+    resolveCurrentTrack: async () => null,
+    generateScript: async (p) => { capturedPrompts = p; return "A line."; },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  // slot 0 would normally be back_announce, but with no current track the
+  // orchestrator should substitute filler to avoid airing "that one" / "the
+  // artist" placeholders.
+  await orch.runChatter();
+  assert.equal(pushes.length, 1);
+  assert.ok(capturedPrompts, "generateScript should have been called");
+  // Filler prompt's signature phrase — back_announce's "track that just
+  // ended was" must NOT appear.
+  assert.doesNotMatch(capturedPrompts!.user, /track that just ended/i);
+  assert.doesNotMatch(capturedPrompts!.user, /that one|the artist/,
+    "placeholder fallback strings must not reach the outgoing prompt");
 });
 
 test("orchestrator.onMusicTrackStart forwards artist to the state machine", () => {

@@ -260,16 +260,26 @@ export class AutoHostOrchestrator {
     current: CurrentTrackInfo | null,
   ): Promise<ReadyAsset | null> {
     const slot = this.state.slotCounter % 20;
-    const type = slotTypeFor(slot);
+    const rotationType = slotTypeFor(slot);
+    // If back_announce lands but we can't resolve the current track, fall
+    // back to filler — the "that one" / "the artist" default-substitution in
+    // promptFor would otherwise air literally ("That was 'that one' by the
+    // artist. Good one."), which is worse than a generic station-ID line.
+    const type: ChatterType =
+      rotationType === "back_announce" && !current ? "filler" : rotationType;
 
-    // Back_announce uses the currently-playing track as context — by the
-    // time Lena finishes speaking, this track has just ended. All other
-    // variants get the optional context channel (show / recent artists /
+    // All variants get the optional context channel (show / recent artists /
     // slot position) so Lena can weave station-aware texture when it fits.
     const now = (this.deps.now ?? Date.now)();
     const currentShow = showForHour(new Date(now).getHours()).name;
-    const recentArtists = [...this.state.recentArtists];
-    const slotsSinceOpening = this.state.slotCounter % 20;
+    // For back_announce, drop the first ring entry — it's the artist of the
+    // currently-playing track, already named in the "by X" clause of the
+    // prompt. Including it again pushes MiniMax toward false "second X in a
+    // row" framing even when only one X-track played.
+    const recentArtists =
+      type === "back_announce"
+        ? [...this.state.recentArtists].slice(1)
+        : [...this.state.recentArtists];
 
     const context: PromptContext = {
       ...(type === "back_announce" && current
@@ -277,7 +287,7 @@ export class AutoHostOrchestrator {
         : {}),
       currentShow,
       ...(recentArtists.length > 0 ? { recentArtists } : {}),
-      slotsSinceOpening,
+      slotsSinceOpening: slot,
     };
 
     const prompts = promptFor(type, context);
