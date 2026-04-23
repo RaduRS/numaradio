@@ -75,6 +75,39 @@ curl -sS http://host.docker.internal:3001/api/internal/tools/shoutout-list-held 
   -H "x-internal-secret: $(cat /workspace/group/.auth)"
 ```
 
+#### Recent shoutouts (aired + failed + held + blocked)
+
+Use this when the operator asks "what shoutouts went out today / this
+hour", "what's the shoutout history", or wants to review the on-air
+log for voice events.
+
+```bash
+curl -sS "http://host.docker.internal:3001/api/internal/tools/shoutout-list-recent?limit=20" \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)"
+```
+
+Returns `{ ok, recent: [{ id, rawText, broadcastText, deliveryStatus,
+moderationStatus, requesterName, createdAt, ... }] }`. `deliveryStatus`
+is one of `aired`, `pending`, `failed`, `blocked`.
+
+#### Queue-daemon activity (chatter, announces, track pushes, failures)
+
+Shoutouts only cover voice events from the Shoutout table. Auto-chatter
+events, music announces, and track pushes live in the queue daemon's
+ring buffers. Ask this when the operator wants the full on-air log
+(not just shoutouts) — it's the same source the /shoutouts page's
+On-Air Log card merges with shoutout rows.
+
+```bash
+curl -sS http://host.docker.internal:3001/api/internal/tools/daemon-activity \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)"
+```
+
+Returns `{ ok, lastPushes: [...], lastFailures: [...] }`. Push entries
+carry `at`, `trackId`, `script` (for chatter) etc. Failure entries carry
+`at`, `reason`, `detail`. To produce the full on-air picture, fetch
+both this and `shoutout-list-recent` and merge by timestamp.
+
 #### Approve a held shoutout
 
 ```bash
