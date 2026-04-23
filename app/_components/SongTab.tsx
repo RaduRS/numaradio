@@ -83,6 +83,8 @@ export function SongTab() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
   const [pendingLineIdx, setPendingLineIdx] = useState(0);
+  const [promptError, setPromptError] = useState<string | null>(null);
+  const [artistError, setArtistError] = useState<string | null>(null);
 
   // Hydrate pending state from localStorage on mount so a tab-switch or
   // page reload during the ~3 min wait doesn't wipe the "Lena's working
@@ -165,8 +167,43 @@ export function SongTab() {
 
   async function submit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
-    setSubmitting(true);
     setSubmitError(null);
+
+    const trimmedPrompt = prompt.trim();
+    const trimmedArtist = artistName.trim();
+    const formEl = e.currentTarget;
+
+    let firstInvalid: HTMLElement | null = null;
+    if (trimmedPrompt.length < PROMPT_MIN) {
+      setPromptError(
+        trimmedPrompt.length === 0
+          ? "Describe the song so Lena knows what to make."
+          : `A little longer — at least ${PROMPT_MIN} characters.`,
+      );
+      firstInvalid =
+        firstInvalid ??
+        formEl.querySelector<HTMLTextAreaElement>('textarea[name="song-prompt"]');
+    } else {
+      setPromptError(null);
+    }
+    if (trimmedArtist.length < ARTIST_MIN) {
+      setArtistError(
+        trimmedArtist.length === 0
+          ? "Add an artist name so Lena can credit you on air."
+          : `A little longer — at least ${ARTIST_MIN} characters.`,
+      );
+      firstInvalid =
+        firstInvalid ??
+        formEl.querySelector<HTMLInputElement>('input[name="song-artist"]');
+    } else {
+      setArtistError(null);
+    }
+    if (firstInvalid) {
+      firstInvalid.focus();
+      return;
+    }
+
+    setSubmitting(true);
     try {
       const res = await fetch("/api/booth/song", {
         method: "POST",
@@ -292,36 +329,59 @@ export function SongTab() {
     );
   }
 
-  const submitDisabled =
-    submitting ||
-    prompt.trim().length < PROMPT_MIN ||
-    artistName.trim().length < ARTIST_MIN;
-
   const aheadCount =
     queueStats ? queueStats.queueDepth + (queueStats.inProgress ? 1 : 0) : null;
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} noValidate>
       <div className="req-input-group">
         <textarea
-          className="req-input req-textarea"
+          name="song-prompt"
+          className={`req-input req-textarea${promptError ? " invalid" : ""}`}
           placeholder="Describe the song — mood, genre, tempo / BPM, key, vibe"
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => {
+            setPrompt(e.target.value);
+            if (promptError) setPromptError(null);
+          }}
           maxLength={PROMPT_MAX}
-          minLength={PROMPT_MIN}
           rows={3}
           required
+          aria-invalid={promptError ? "true" : undefined}
+          aria-describedby={promptError ? "song-prompt-error" : undefined}
         />
+        {promptError ? (
+          <div
+            id="song-prompt-error"
+            className="req-field-error"
+            role="alert"
+          >
+            {promptError}
+          </div>
+        ) : null}
         <input
-          className="req-input"
+          name="song-artist"
+          className={`req-input${artistError ? " invalid" : ""}`}
           placeholder="Your artist name (shown as credit)"
           value={artistName}
-          onChange={(e) => setArtistName(e.target.value)}
+          onChange={(e) => {
+            setArtistName(e.target.value);
+            if (artistError) setArtistError(null);
+          }}
           maxLength={ARTIST_MAX}
-          minLength={ARTIST_MIN}
           required
+          aria-invalid={artistError ? "true" : undefined}
+          aria-describedby={artistError ? "song-artist-error" : undefined}
         />
+        {artistError ? (
+          <div
+            id="song-artist-error"
+            className="req-field-error"
+            role="alert"
+          >
+            {artistError}
+          </div>
+        ) : null}
         <label className="req-check">
           <input
             type="checkbox"
@@ -335,7 +395,7 @@ export function SongTab() {
       <button
         type="submit"
         className="btn btn-primary req-send"
-        disabled={submitDisabled}
+        disabled={submitting}
         aria-busy={submitting}
       >
         <span>{submitting ? "Submitting…" : "Create song"}</span>

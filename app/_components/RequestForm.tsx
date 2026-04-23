@@ -44,6 +44,7 @@ export function RequestForm({
   const [statusTone, setStatusTone] = useState<StatusTone>("none");
   const [formKey, setFormKey] = useState(0);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const [messageError, setMessageError] = useState<string | null>(null);
 
   useEffect(() => {
     const id = setInterval(
@@ -111,22 +112,31 @@ export function RequestForm({
     e.preventDefault();
     setStatusMessage("");
     setStatusTone("none");
+    setMessageError(null);
 
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const who = String(form.get("who") ?? "").trim();
     const requesterName = String(form.get("requesterName") ?? "").trim();
     const message = String(form.get("message") ?? "").trim();
 
-    const parts: string[] = [];
-    if (who) parts.push(`This one's going out to ${who}.`);
-    if (message) parts.push(message);
-    const text = parts.join(" ").trim();
-
-    if (text.length < 4) {
-      setStatusTone("error");
-      setStatusMessage("Add a short message for Lena to read.");
+    if (message.length < 4) {
+      setMessageError(
+        message.length === 0
+          ? "Add a short message for Lena to read."
+          : "A little longer — at least a few words.",
+      );
+      const field = formEl.querySelector<HTMLTextAreaElement>(
+        'textarea[name="message"]',
+      );
+      field?.focus();
       return;
     }
+
+    const parts: string[] = [];
+    if (who) parts.push(`This one's going out to ${who}.`);
+    parts.push(message);
+    const text = parts.join(" ").trim();
 
     setSending(true);
     setSendLabel("Sending…");
@@ -241,17 +251,31 @@ export function RequestForm({
       {tab === "song" ? (
         <SongTab />
       ) : (
-        <form onSubmit={submit} key={formKey}>
+        <form onSubmit={submit} key={formKey} noValidate>
           <div className="req-input-group">
             <input name="who" className="req-input" placeholder="Who it's for…" maxLength={60} />
             <input name="requesterName" className="req-input" placeholder="Your name or city" maxLength={60} />
             <textarea
               name="message"
-              className="req-input req-textarea"
+              className={`req-input req-textarea${messageError ? " invalid" : ""}`}
               placeholder="Your message — keep it short so we get through more."
               maxLength={220}
               required
+              aria-invalid={messageError ? "true" : undefined}
+              aria-describedby={messageError ? "shoutout-message-error" : undefined}
+              onChange={() => {
+                if (messageError) setMessageError(null);
+              }}
             />
+            {messageError ? (
+              <div
+                id="shoutout-message-error"
+                className="req-field-error"
+                role="alert"
+              >
+                {messageError}
+              </div>
+            ) : null}
           </div>
           <button type="submit" className="btn btn-primary req-send" disabled={sending} aria-busy={sending}>
             <span>{sendLabel}</span>
