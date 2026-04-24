@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CopyIcon,
   FacebookIcon,
-  MailIcon,
   RedditIcon,
   ShareIcon,
-  TelegramIcon,
   WhatsAppIcon,
   XIcon,
 } from "./Icons";
 import { useNowPlaying } from "./useNowPlaying";
 
 const SHARE_URL = "https://numaradio.com";
+const MENU_WIDTH = 180;
+const MENU_GAP = 6;
 
 type Target = {
   key: string;
@@ -38,13 +39,6 @@ const TARGETS: Target[] = [
       `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`,
   },
   {
-    key: "telegram",
-    label: "Telegram",
-    icon: TelegramIcon,
-    href: (text, url) =>
-      `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
-  },
-  {
     key: "facebook",
     label: "Facebook",
     icon: FacebookIcon,
@@ -58,34 +52,59 @@ const TARGETS: Target[] = [
     href: (text, url) =>
       `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`,
   },
-  {
-    key: "email",
-    label: "Email",
-    icon: MailIcon,
-    href: (text, url) =>
-      `mailto:?subject=${encodeURIComponent("Numa Radio")}&body=${encodeURIComponent(`${text}\n\n${url}`)}`,
-  },
 ];
 
 export function ShareControls() {
   const np = useNowPlaying();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Position the menu relative to the button in viewport coords. Flips above
+  // the button when there isn't room below, and clamps into the viewport.
+  const reposition = () => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const menuH = menuRef.current?.offsetHeight ?? 240;
+    const below = window.innerHeight - r.bottom;
+    const openUp = below < menuH + MENU_GAP + 8 && r.top > menuH + MENU_GAP + 8;
+    const top = openUp ? r.top - menuH - MENU_GAP : r.bottom + MENU_GAP;
+    let left = r.left;
+    if (left + MENU_WIDTH > window.innerWidth - 8) {
+      left = window.innerWidth - MENU_WIDTH - 8;
+    }
+    if (left < 8) left = 8;
+    setPos({ top, left });
+  };
+
+  useLayoutEffect(() => {
+    if (open) reposition();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
+    const onScroll = () => reposition();
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
     };
   }, [open]);
 
@@ -105,22 +124,14 @@ export function ShareControls() {
     }
   };
 
-  return (
-    <div className="now-shares" ref={rootRef}>
-      <button
-        className="share-pill"
-        aria-label="Share"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <ShareIcon className="" />
-        {copied ? "Copied!" : "Share"}
-      </button>
-
-      {open && (
-        <div className="share-menu" role="menu">
+  const menu = open && pos && typeof document !== "undefined"
+    ? createPortal(
+        <div
+          ref={menuRef}
+          className="share-menu"
+          role="menu"
+          style={{ top: pos.top, left: pos.left, width: MENU_WIDTH }}
+        >
           {TARGETS.map((t) => {
             const Icon = t.icon;
             return (
@@ -150,8 +161,26 @@ export function ShareControls() {
             <CopyIcon className="" size={14} />
             <span>Copy link</span>
           </button>
-        </div>
-      )}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <div className="now-shares">
+      <button
+        ref={btnRef}
+        className="share-pill"
+        aria-label="Share"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ShareIcon className="" />
+        {copied ? "Copied!" : "Share"}
+      </button>
+      {menu}
     </div>
   );
 }

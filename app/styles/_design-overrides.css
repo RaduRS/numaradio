@@ -38,17 +38,14 @@
   flex-shrink: 0;
 }
 
-/* Custom share popover menu */
+/* Custom share popover menu — rendered in a portal so it escapes any
+   overflow:hidden ancestors (player-card, expanded player, etc.). */
 .now-shares {
-  position: relative;
   display: inline-flex;
 }
 .share-menu {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 168px;
+  position: fixed;
+  z-index: 9999;
   padding: 6px;
   display: flex;
   flex-direction: column;
