@@ -4,120 +4,19 @@
 // uses startedAt + durationSeconds to compute a local elapsed/progress
 // display without polling per-second.
 
-import { prisma } from "@/lib/db";
+import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
 
 export const dynamic = "force-dynamic";
 
-const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
-
-type ShoutoutPayload =
-  | { active: false }
-  | { active: true; startedAt: string; expectedEndAt: string };
-
-type Response = {
-  isPlaying: boolean;
-  trackId?: string;
-  title?: string;
-  artistDisplay?: string;
-  durationSeconds?: number;
-  startedAt?: string;
-  artworkUrl?: string;
-  shoutout: ShoutoutPayload;
-};
-
 const HEADERS = {
   "Cache-Control": "public, s-maxage=2, stale-while-revalidate=10",
+  "Content-Type": "application/json",
 };
 
 export async function GET() {
-  const station = await prisma.station.findUnique({
-    where: { slug: STATION_SLUG },
-    select: { id: true },
-  });
-  if (!station) {
-    return new globalThis.Response(
-      JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
-      { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
-    );
-  }
-
-  const np = await prisma.nowPlaying.findUnique({
-    where: { stationId: station.id },
-  });
-  if (!np?.currentTrackId || !np.startedAt) {
-    return new globalThis.Response(
-      JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
-      { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
-    );
-  }
-
-  // Freshness check — Liquidsoap should push a new track-started for every
-  // track. If the current row's expectedEndAt is in the past with no update,
-  // Liquidsoap is either down or hasn't moved on yet; either way we don't
-  // want the website lying about progress.
-  const STALE_GRACE_SECONDS = 30;
-  if (np.expectedEndAt) {
-    const expiredMs = Date.now() - np.expectedEndAt.getTime();
-    if (expiredMs > STALE_GRACE_SECONDS * 1000) {
-      return new globalThis.Response(
-        JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
-        { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
-      );
-    }
-  }
-
-  const track = await prisma.track.findUnique({
-    where: { id: np.currentTrackId },
-    select: {
-      id: true,
-      title: true,
-      artistDisplay: true,
-      durationSeconds: true,
-      assets: {
-        where: { assetType: "artwork_primary" },
-        take: 1,
-        select: { publicUrl: true },
-      },
-    },
-  });
-  if (!track) {
-    return new globalThis.Response(
-      JSON.stringify({ isPlaying: false, shoutout: { active: false } } satisfies Response),
-      { status: 200, headers: { ...HEADERS, "Content-Type": "application/json" } },
-    );
-  }
-
-  // Shoutout overlay status — lets the Hero render a "• Lena on air" pill
-  // without lying about what's in the title/artwork. See broadcast/route.ts
-  // for the equivalent assembly.
-  const ns = await prisma.nowSpeaking.findUnique({
-    where: { stationId: station.id },
-  });
-  let shoutout: ShoutoutPayload = { active: false };
-  if (ns?.expectedEndAt) {
-    const expiredMs = Date.now() - ns.expectedEndAt.getTime();
-    if (expiredMs <= STALE_GRACE_SECONDS * 1000) {
-      shoutout = {
-        active: true,
-        startedAt: ns.startedAt.toISOString(),
-        expectedEndAt: ns.expectedEndAt.toISOString(),
-      };
-    }
-  }
-
-  const payload: Response = {
-    isPlaying: true,
-    trackId: track.id,
-    title: track.title,
-    artistDisplay: track.artistDisplay ?? undefined,
-    durationSeconds: track.durationSeconds ?? undefined,
-    startedAt: np.startedAt.toISOString(),
-    artworkUrl: track.assets[0]?.publicUrl,
-    shoutout,
-  };
-
+  const payload = await getNowPlayingSnapshot();
   return new globalThis.Response(JSON.stringify(payload), {
     status: 200,
-    headers: { ...HEADERS, "Content-Type": "application/json" },
+    headers: HEADERS,
   });
 }

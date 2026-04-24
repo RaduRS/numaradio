@@ -43,6 +43,20 @@ type Subscriber = (data: NowPlaying) => void;
 
 const subscribers = new Set<Subscriber>();
 let cachedData: NowPlaying = EMPTY;
+
+/**
+ * Seed the singleton's cache from an SSR snapshot. Layout calls this on
+ * first mount so the hero, mini player, and expanded player all paint
+ * with track info on the very first render — no ~500ms flash of "— by —".
+ * Subsequent client-side polls replace the cache normally.
+ */
+export function seedNowPlayingCache(data: NowPlaying): void {
+  // Only seed if we haven't started polling yet. If a poll has already
+  // landed, the cache has fresher data than the SSR snapshot.
+  if (cachedData === EMPTY) {
+    cachedData = data;
+  }
+}
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let abortCtrl: AbortController | null = null;
 

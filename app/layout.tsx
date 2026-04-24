@@ -6,6 +6,8 @@ import { PlayerProvider } from "./_components/PlayerProvider";
 import { MiniPlayer } from "./_components/MiniPlayer";
 import { ExpandedPlayer } from "./_components/ExpandedPlayer";
 import { PresenceHeartbeat } from "./_components/PresenceHeartbeat";
+import { NowPlayingSeeder } from "./_components/NowPlayingSeeder";
+import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -68,9 +70,17 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Server-fetch the current track so the first paint has artwork/title
+  // already populated. Falls back to offline state on DB error.
+  let initialNowPlaying;
+  try {
+    initialNowPlaying = await getNowPlayingSnapshot();
+  } catch {
+    initialNowPlaying = { isPlaying: false, shoutout: { active: false } as const };
+  }
   return (
     <html
       lang="en"
@@ -83,8 +93,20 @@ export default function RootLayout({
             browsers. */}
         <link rel="preconnect" href="https://api.numaradio.com" crossOrigin="" />
         <link rel="dns-prefetch" href="https://api.numaradio.com" />
+        {/* Preload the current artwork so it's in HTTP cache by the time
+            MiniPlayer / Broadcast / ExpandedPlayer set it as background-image.
+            Closes the "no image on first load" gap. */}
+        {initialNowPlaying.artworkUrl ? (
+          <link
+            rel="preload"
+            as="image"
+            href={initialNowPlaying.artworkUrl}
+            fetchPriority="high"
+          />
+        ) : null}
       </head>
       <body className="min-h-full flex flex-col">
+        <NowPlayingSeeder initial={initialNowPlaying} />
         {/* One PlayerProvider for the whole app — keeps the <audio> element
             alive across client-side navigations so playback doesn't cut
             out when the user moves between /, /about, /submit, etc.
