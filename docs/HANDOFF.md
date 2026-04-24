@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-24 afternoon
+Last updated: 2026-04-24 evening
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
@@ -9,30 +9,53 @@ this, then fall back to the archive if a reference here points there.
 
 ---
 
-## Marketing videos — PHASE 1 SHIPPED (2026-04-24)
+## Marketing videos — LAUNCH SET SHIPPED (2026-04-24)
 
-New sibling repo `~/saas/numaradio-videos` renders vertical videos for
-TikTok / YouTube Shorts. Phase 1 delivers the scaffold, four primitives
-(`PulsingDot`, `EqBars`, `BrandTitle`, `MusicBed`), the music-bed
-curation pipeline, and the first composition — `ListenNow`, a 15-second
-"The Station That Never Sleeps" brand piece in Archivo Black over
-scan-lined / grain-textured black, with a broadcast-timecode beat +
-scrolling marquee referencing numaradio's `.marquee` brand vocabulary.
+Sibling repo `~/saas/numaradio-videos` produces vertical videos for
+TikTok / YouTube Shorts. Phases 1 + 2 complete — full 5-piece launch
+set rendered, user-approved, and sitting in
+`C:\Users\marku\Desktop\numaradio-launch-videos\`:
 
-**Verify:**
+- `listen-now.mp4` (15s) — brand piece, "The Station That Never Sleeps"
+- `shoutout-flagship.mp4` (15s) — magic loop: type a message, hear
+  Lena read it on air live
+- `meet-lena.mp4` (53s) — character piece with canonical Flux Pro
+  portrait, "MEET YOUR HOST" hook, four-show montage, closer
+- `song-request-demo.mp4` (30s) — describe a mood, watch Lena make
+  a track, 16-second money beat of the real generated song
+- `day-in-numa.mp4` (30s) — four-show day montage (00:00 → 06:00 →
+  12:00 → 18:00) with per-show voice clips and music ducking
 
-    cd ~/saas/numaradio-videos && npm run render ListenNow
+Voice: Helena (`aura-2-helena-en`) approved as the primary model.
+Music beds: three curated from the Numa catalog, bed-01 extended to
+35s for DayInNuma coverage. One-off MiniMax+Flux track "Nightwarm"
+committed to the videos repo (3min source, money beat starts at 47s).
 
-Produces `out/listen-now.mp4` (~2.2 MB, 15s, 1080×1920@30fps, ~15s render
-time). Open via `cp out/listen-now.mp4 /mnt/c/Users/marku/Desktop/` and
-double-click.
+**Verify any piece:**
 
-Spec: `docs/superpowers/specs/2026-04-24-marketing-videos-design.md`
-Plan: `docs/superpowers/plans/2026-04-24-marketing-videos-phase1.md`
+    cd ~/saas/numaradio-videos && npm run render <CompositionId>
+    # IDs: ListenNow, ShoutoutFlagship, MeetLena, SongRequestDemo, DayInNuma
 
-**Next:** Phase 2 (Lena voice/portrait pipelines + 4 more compositions)
-planned once Phase 1 is reviewed. Phase 3 (templated daily/weekly
-series + `npm run video:shoutout`) after that.
+**Specs / plans** (in this repo, `docs/superpowers/`):
+- `specs/2026-04-24-marketing-videos-design.md` — overall
+- `specs/2026-04-24-lena-canonical-portrait-design.md` — Stage 2a
+- `specs/2026-04-24-shoutout-flagship-design.md` — Stage 2b
+- `specs/2026-04-24-meet-lena-design.md` — Stage 2c.1
+- `specs/2026-04-24-song-request-demo-day-in-numa-design.md` — Stage 2c.2
+
+**Primitives inventory** (12 total, all in videos repo):
+ScanLines, FilmGrain, LiveChip (top:140), EyebrowStrip (top:140),
+Wordmark, Waveform, PulsingDot, EqBars, TypedText, MusicBed,
+LenaPortrait, ShowPanel. Plus SFX: `keyboard-typing.mp3`, `submarine-ping.mp3`.
+
+**Next:** Phase 3 — Prisma data pickers + templated daily/weekly
+series. ShoutoutOfTheDay template reuses ShoutoutFlagship primitives
+with a real DB pick; SongOfTheWeek reuses SongRequestDemo with a
+listener-generated track pick. Adds `npm run video:shoutout` / `:song`
+ops wrappers so a future session can render daily content in one
+command. Also worth extracting at Phase 3 time: `PayoffSection`
+primitive (identical 5× across current comps) and `musicDuckEnvelope`
+utility (written 3× already).
 
 ---
 
