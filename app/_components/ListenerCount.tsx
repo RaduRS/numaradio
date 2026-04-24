@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-const POLL_MS = 10_000;
+// The ambient floor only changes at 6-min bucket boundaries; real listener
+// joins aren't urgent to reflect on the hero. 60s is plenty.
+const POLL_MS = 60_000;
 
 type Payload = {
   listeners: number;
