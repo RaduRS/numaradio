@@ -85,7 +85,7 @@ export class AutoHostStateMachine {
 }
 
 import { slotTypeFor, promptFor, type ChatterType, type PromptContext } from "./chatter-prompts.ts";
-import { showForHour } from "../../lib/schedule.ts";
+import { showForHour, timeOfDayFor, formatLocalTime } from "../../lib/schedule.ts";
 
 export interface CurrentTrackInfo {
   title: string;
@@ -279,9 +279,10 @@ export class AutoHostOrchestrator {
     // grating over a multi-hour listening session. 15% means roughly one
     // show-name reference per ~40 min of airtime — frequent enough to
     // establish station identity, rare enough to not feel canned.
+    const nowDate = new Date(now);
     const includeShow = (this.deps.randomGate ?? Math.random)() < 0.15;
     const currentShow = includeShow
-      ? showForHour(new Date(now).getHours()).name
+      ? showForHour(nowDate.getHours()).name
       : undefined;
     // For back_announce, drop the first ring entry — it's the artist of the
     // currently-playing track, already named in the "by X" clause of the
@@ -299,6 +300,11 @@ export class AutoHostOrchestrator {
       ...(currentShow ? { currentShow } : {}),
       ...(recentArtists.length > 0 ? { recentArtists } : {}),
       slotsSinceOpening: slot,
+      // Always pass wall-clock context. Without it MiniMax pattern-matches
+      // example shapes like "tonight" regardless of the actual hour — that's
+      // how a shoutout_cta fired at 08:40 ended up saying "tonight" on air.
+      localTime: formatLocalTime(nowDate),
+      timeOfDay: timeOfDayFor(nowDate.getHours()),
     };
 
     const prompts = promptFor(type, context);

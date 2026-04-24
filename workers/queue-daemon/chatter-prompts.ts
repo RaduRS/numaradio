@@ -1,4 +1,4 @@
-import { SHOW_SCHEDULE, type ShowBlock } from "../../lib/schedule.ts";
+import { SHOW_SCHEDULE, type ShowBlock, type TimeOfDay } from "../../lib/schedule.ts";
 
 export type ChatterType =
   | "back_announce"
@@ -35,6 +35,10 @@ export interface PromptContext {
   recentArtists?: string[];
   /** Current slotCounter % 20. Enables mild "few songs in" / "cruising" flavor. */
   slotsSinceOpening?: number;
+  /** Local wall-clock time as HH:MM (24h). Enables "this morning" / "tonight" phrasing. */
+  localTime?: string;
+  /** DJ-plain time-of-day bucket — "morning" / "afternoon" / "evening" / "night" / "late night". */
+  timeOfDay?: TimeOfDay;
 }
 
 export interface AnnouncementContext {
@@ -62,13 +66,19 @@ DO NOT:
 - Stack adjectives about the track itself. "Soft, wandering, gentle, warm" is four too many.
 - Use atmospheric/mood language applied to the song ("dreamy", "late-night", "intimate", "cozy", "settling in").
 - Mention AI, tech, generation, MiniMax, Deepgram, or how songs are made.
-- Invent listener names, specific places, weather, emotions, or time of day the system didn't tell you about. (If a Context block below names a show or artist, you may use it.)
+- Invent listener names, specific places, weather, or emotions the system didn't tell you about. (If a Context block below names a show, artist, or local time, you MAY weave it in — match the time-of-day word to the Local time given, and don't invent one if it isn't provided.)
 - Write ALL CAPS, stage directions, emojis, markdown, or quotes around the output.
 
 If you catch yourself reaching for poetic description, stop and cut it. If you catch yourself writing the same skeleton as the examples, break the skeleton. Real DJ, real variety.`;
 
 function renderContextBlock(ctx: PromptContext): string {
   const lines: string[] = [];
+  if (ctx.localTime) {
+    const bucket = ctx.timeOfDay ? ` (${ctx.timeOfDay})` : "";
+    lines.push(`- Local time: ${ctx.localTime}${bucket}`);
+  } else if (ctx.timeOfDay) {
+    lines.push(`- Time of day: ${ctx.timeOfDay}`);
+  }
   if (ctx.currentShow) {
     const slot = SHOW_SCHEDULE.find((s) => s.name === ctx.currentShow);
     const desc = slot ? ` — ${slot.description}` : "";
@@ -86,7 +96,7 @@ function renderContextBlock(ctx: PromptContext): string {
   if (lines.length === 0) return "";
   return `
 
-Context (optional, weave in only if natural — skip if it doesn't fit. You do NOT have to use any of these):
+Context (optional, weave in only if natural — skip if it doesn't fit. You do NOT have to use any of these. If Local time is given, any time-of-day phrasing MUST match it; otherwise don't reach for one):
 ${lines.join("\n")}`;
 }
 
@@ -99,13 +109,13 @@ export function promptFor(type: ChatterType, ctx: PromptContext): PromptPair {
         system: BASE_SYSTEM,
         user: `The track that just ended was "${title}" by ${artist}. Write Lena's back-announce: name the title and artist, then weave in ONE of: a tiny specific reaction, a light non-music riff, a show-vibe callout, or a simple handoff. Do NOT describe the music. Do NOT name the next song. Do NOT write poetry.
 
-Good example shapes (write a fresh one — do NOT copy verbatim; vary the skeleton across calls):
-- "That was 'Neon Fever' by Russell Ross. Good one. Stay close, more ahead."
-- "Hook on that chorus, stuck with me. 'Neon Fever' from Russell Ross. You're on Numa Radio."
-- "Hope the evening's treating you alright. That was 'Neon Fever' by Russell Ross. More coming up."
-- "Second Russell Ross back to back — he's holding the hour for us. 'Neon Fever' was the one. Stay close."
-- "Prime Hours in here, request wall's been busy. That was 'Sunset' by Russell Ross. We'll keep it rolling."
-- "That was 'Ocean Eyes' by Russell Ross, real earworm. Sticking with the vibe for a bit, more ahead."
+Good example shapes (write a fresh one — do NOT copy verbatim; vary the skeleton across calls; use a time-of-day word ONLY if Local time is given, and match it — the [bracketed tags] are metadata, never speak them aloud):
+- "That was 'Neon Fever' by Russell Ross. Good one. Stay close, more ahead." [time-neutral]
+- "Hook on that chorus, stuck with me. 'Neon Fever' from Russell Ross. You're on Numa Radio." [time-neutral]
+- "Hope the evening's treating you alright. That was 'Neon Fever' by Russell Ross. More coming up." [use when evening]
+- "Second Russell Ross back to back — he's holding the hour for us. 'Neon Fever' was the one. Stay close." [time-neutral]
+- "Hope your morning's off to a decent one. That was 'Sunset' by Russell Ross. We'll keep it rolling." [use when morning]
+- "That was 'Ocean Eyes' by Russell Ross, real earworm. Sticking with the vibe for a bit, more ahead." [time-neutral]
 
 Bad examples (do NOT write anything like these):
 - "a soft, wandering piano line that felt like dawn peeking through curtains"
@@ -119,13 +129,13 @@ Bad examples (do NOT write anything like these):
         system: BASE_SYSTEM,
         user: `Write a call-to-action nudging listeners to send a shoutout. Say they can drop one at numaradio.com under Requests, and Lena reads them on air between songs. Casual — like a DJ mentioning it once, not a sales pitch. One beat of riff around it is welcome.
 
-Good example shapes (write a fresh one — do NOT copy verbatim; vary the skeleton):
+Good example shapes (write a fresh one — do NOT copy verbatim; vary the skeleton; use the time-of-day word ONLY if Local time is given, and match it):
 - "Got something to say? Head to numaradio.com, Requests tab, drop me a shoutout. I read them here between tracks."
-- "Anyone want a shoutout on air tonight? numaradio.com, Requests tab. Write what you want, I'll catch it."
-- "Plenty of room for shoutouts tonight — numaradio.com, Requests. Tell me what's on your mind, I'll read it out."
-- "If there's someone you're listening with, send them a shoutout. numaradio.com, Requests tab, I'll do the rest."
-- "Quiet hour in the inbox. If you want a shoutout, numaradio.com, Requests. I'll read it out right here."
-- "Shoutouts are open. numaradio.com, Requests tab, drop a line — I'll read it between songs. No filters beyond the obvious."${renderContextBlock(ctx)}`,
+- "Anyone want a shoutout on air this morning? numaradio.com, Requests tab. Write what you want, I'll catch it." [use when Local time says morning]
+- "Plenty of room for shoutouts this afternoon — numaradio.com, Requests. Tell me what's on your mind, I'll read it out." [use when afternoon]
+- "Shoutouts open tonight. numaradio.com, Requests tab, drop a line — I'll read it between songs." [use when evening or night]
+- "Quiet hour in the inbox. If you want a shoutout, numaradio.com, Requests. I'll read it out right here." [time-neutral — safe anytime]
+- "If there's someone you're listening with, send them a shoutout. numaradio.com, Requests tab, I'll do the rest." [time-neutral]${renderContextBlock(ctx)}`,
       };
     case "song_cta":
       return {
@@ -145,13 +155,13 @@ Good example shapes (write a fresh one — do NOT copy verbatim; vary the skelet
         system: BASE_SYSTEM,
         user: `Write a generic station-ID line for Numa Radio. No specific songs, artists, or site features. Just a DJ saying hi to listeners in plain words. A single beat of riff (show name, time-of-day vibe) is welcome if a Context block is provided below.
 
-Good example shapes (write a fresh one — do NOT copy verbatim; vary the skeleton):
-- "You're with Lena on Numa Radio. Good to have you here."
-- "Numa Radio, always on. Thanks for riding with me tonight."
-- "You're listening to Numa Radio. More music coming up, stay close."
-- "This is Numa Radio, I'm Lena. Glad you're tuned in."
-- "Morning Room on Numa Radio. Lena here, warming up with you."
-- "Numa Radio, I'm Lena — hope you're having a decent one. More ahead."${renderContextBlock(ctx)}`,
+Good example shapes (write a fresh one — do NOT copy verbatim; vary the skeleton; use a time-of-day word ONLY if Local time is given, and match it):
+- "You're with Lena on Numa Radio. Good to have you here." [time-neutral]
+- "Numa Radio, always on. Thanks for riding with me this morning." [use when morning]
+- "Numa Radio this afternoon, I'm Lena. More ahead." [use when afternoon]
+- "Numa Radio, always on. Thanks for riding with me tonight." [use when evening or night]
+- "You're listening to Numa Radio. More music coming up, stay close." [time-neutral]
+- "Numa Radio, I'm Lena — hope you're having a decent one. More ahead." [time-neutral]${renderContextBlock(ctx)}`,
       };
     case "listener_song_announce":
       throw new Error(

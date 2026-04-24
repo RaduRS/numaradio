@@ -1,11 +1,52 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-23 night
+Last updated: 2026-04-24 morning
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
 deployed, and the evergreen conventions. When picking up work: read
 this, then fall back to the archive if a reference here points there.
+
+---
+
+## Lena time-of-day context — CODE READY, NEEDS DAEMON RESTART (2026-04-24)
+
+Fixes auto-chatter saying "tonight" at 08:40 AM. Root cause: few-shot
+examples in `workers/queue-daemon/chatter-prompts.ts` had "tonight"
+baked in, and the prompt carried no wall-clock signal, so MiniMax
+pattern-matched the examples regardless of actual hour.
+
+- `lib/schedule.ts` — new `TimeOfDay` type + `timeOfDayFor(h)` +
+  `formatLocalTime(d)` helpers (bucket: 0-4 late night, 5-11 morning,
+  12-16 afternoon, 17-20 evening, 21-23 night).
+- `workers/queue-daemon/chatter-prompts.ts` — `PromptContext` gains
+  `localTime` + `timeOfDay`, rendered as `- Local time: 08:40
+  (morning)`. BASE_SYSTEM rule rewritten: time-of-day phrasing allowed
+  **only if Local time is given**, must match it. Examples in
+  `back_announce`, `shoutout_cta`, `filler` now mix
+  morning/afternoon/evening/time-neutral with `[use when morning]`
+  metadata tags and an explicit "never speak the brackets aloud"
+  instruction. `song_cta` kept neutral — time doesn't fit the
+  song-generation pitch.
+- `workers/queue-daemon/auto-host.ts:296-308` — always passes
+  `localTime` + `timeOfDay` from `deps.now` into every break,
+  unthrottled (unlike `currentShow`'s 15% gate).
+- `scripts/preview-chatter.ts` — samples now carry time context so
+  dev preview matches prod.
+- Tests: +4 in `chatter-prompts.test.ts`, +1 in `auto-host.test.ts`
+  (pins time to the exact 08:40 scenario that fired "tonight" on
+  air). 60/60 chatter tests, 109/109 worker tests, `next build`
+  clean.
+
+**Deploy:** `cd /home/marku/saas/numaradio && git pull && sudo
+systemctl restart numa-queue-daemon` on Orion. Prompt-only change, no
+binary moves.
+
+**Watch after restart:** first few auto-chatter breaks. If "tonight"
+still leaks at 08:40 AM, the few-shot rewrite wasn't strong enough
+and we tighten further. Preview a batch without going live:
+`npx tsx scripts/preview-chatter.ts` (burns ~8 MiniMax calls, prints
+samples with word counts).
 
 ---
 

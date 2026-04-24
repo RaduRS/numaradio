@@ -3,15 +3,18 @@
 import "../lib/load-env.ts";
 import { promptFor, type ChatterType } from "../workers/queue-daemon/chatter-prompts.ts";
 import { generateChatterScript } from "../workers/queue-daemon/minimax-script.ts";
-import { showForHour } from "../lib/schedule.ts";
+import { showForHour, timeOfDayFor, formatLocalTime } from "../lib/schedule.ts";
 
 interface Sample {
   type: ChatterType;
   context: Parameters<typeof promptFor>[1];
 }
 
-const HOUR = new Date().getHours();
+const NOW = new Date();
+const HOUR = NOW.getHours();
 const SHOW = showForHour(HOUR).name;
+const LOCAL_TIME = formatLocalTime(NOW);
+const TIME_OF_DAY = timeOfDayFor(HOUR);
 
 const SAMPLES: Sample[] = [
   // 2× back_announce — one with context, one minimal
@@ -23,21 +26,47 @@ const SAMPLES: Sample[] = [
       currentShow: SHOW,
       recentArtists: ["Russell Ross", "Numa Radio", "Russell Ross"],
       slotsSinceOpening: 4,
+      localTime: LOCAL_TIME,
+      timeOfDay: TIME_OF_DAY,
     },
   },
   {
     type: "back_announce",
-    context: { title: "Ocean Eyes", artist: "Russell Ross" },
+    context: {
+      title: "Ocean Eyes",
+      artist: "Russell Ross",
+      localTime: LOCAL_TIME,
+      timeOfDay: TIME_OF_DAY,
+    },
   },
   // 2× shoutout_cta
-  { type: "shoutout_cta", context: { currentShow: SHOW, slotsSinceOpening: 9 } },
-  { type: "shoutout_cta", context: {} },
+  {
+    type: "shoutout_cta",
+    context: {
+      currentShow: SHOW,
+      slotsSinceOpening: 9,
+      localTime: LOCAL_TIME,
+      timeOfDay: TIME_OF_DAY,
+    },
+  },
+  { type: "shoutout_cta", context: { localTime: LOCAL_TIME, timeOfDay: TIME_OF_DAY } },
   // 2× song_cta
-  { type: "song_cta", context: { currentShow: SHOW, slotsSinceOpening: 11 } },
-  { type: "song_cta", context: {} },
+  {
+    type: "song_cta",
+    context: {
+      currentShow: SHOW,
+      slotsSinceOpening: 11,
+      localTime: LOCAL_TIME,
+      timeOfDay: TIME_OF_DAY,
+    },
+  },
+  { type: "song_cta", context: { localTime: LOCAL_TIME, timeOfDay: TIME_OF_DAY } },
   // 2× filler
-  { type: "filler", context: { currentShow: SHOW } },
-  { type: "filler", context: {} },
+  {
+    type: "filler",
+    context: { currentShow: SHOW, localTime: LOCAL_TIME, timeOfDay: TIME_OF_DAY },
+  },
+  { type: "filler", context: { localTime: LOCAL_TIME, timeOfDay: TIME_OF_DAY } },
 ];
 
 async function main() {

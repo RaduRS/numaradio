@@ -59,3 +59,28 @@ export function showForHour(h: number): ShowSlot {
   const match = SHOW_SCHEDULE.find((s) => h >= s.startHour && h < s.endHour);
   return match ?? SHOW_SCHEDULE[0];
 }
+
+export type TimeOfDay =
+  | "late night"
+  | "morning"
+  | "afternoon"
+  | "evening"
+  | "night";
+
+// DJ-plain buckets for a 24-hour clock. Narrower than the 4-block show
+// schedule because the vocabulary Lena reaches for ("this morning",
+// "tonight") doesn't line up 1:1 with programming boundaries.
+export function timeOfDayFor(h: number): TimeOfDay {
+  if (h < 5) return "late night";
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  if (h < 21) return "evening";
+  return "night";
+}
+
+/** Local clock as HH:MM (24h), for embedding in prompts. */
+export function formatLocalTime(d: Date): string {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}

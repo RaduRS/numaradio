@@ -420,3 +420,24 @@ test("orchestrator.onMusicTrackStart forwards artist to the state machine", () =
   orch.onMusicTrackStart("Test Artist");
   assert.deepEqual(orch.state.recentArtists, ["Test Artist"]);
 });
+
+test("generateAsset always passes localTime + timeOfDay derived from deps.now", async () => {
+  let capturedUser: string | null = null;
+  // 2026-04-24 08:40 local. Intentionally a morning time — this is the exact
+  // scenario that fired "tonight" on air before the time-context fix.
+  const fixedEpoch = new Date(2026, 3, 24, 8, 40, 0).getTime();
+  const { deps } = fakeDeps({
+    now: () => fixedEpoch,
+    // Pin the show-name gate above 0.15 so currentShow is withheld — keeps
+    // this test focused on the time-context assertion.
+    randomGate: () => 0.5,
+    generateScript: async (p: { system: string; user: string }) => {
+      capturedUser = p.user;
+      return "A line.";
+    },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.ok(capturedUser, "generateScript should have been called");
+  assert.match(capturedUser!, /Local time: 08:40 \(morning\)/);
+});

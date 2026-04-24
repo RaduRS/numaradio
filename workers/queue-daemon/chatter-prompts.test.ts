@@ -204,3 +204,34 @@ test("anti-poetry guardrails remain (wandering piano lines stays banned)", () =>
   assert.match(p.system, /wandering piano lines/i);
   assert.match(p.system, /dawn peeking/i);
 });
+
+test("promptFor Context block renders localTime + timeOfDay when provided", () => {
+  const p = promptFor("shoutout_cta", {
+    localTime: "08:40",
+    timeOfDay: "morning",
+  });
+  assert.match(p.user, /Local time: 08:40 \(morning\)/);
+});
+
+test("promptFor Context block renders timeOfDay alone when only bucket is given", () => {
+  const p = promptFor("filler", { timeOfDay: "evening" });
+  assert.match(p.user, /Time of day: evening/);
+  assert.doesNotMatch(p.user, /Local time:/);
+});
+
+test("BASE_SYSTEM permits context-provided time but forbids invented time", () => {
+  const p = promptFor("filler", {});
+  // The new rule: time-of-day IS allowed if the Context block gave one.
+  assert.match(p.system, /match the time-of-day word to the Local time given/i);
+  // And still forbidden to invent one.
+  assert.match(p.system, /don't invent one if it isn't provided/i);
+});
+
+test("shoutout_cta examples are no longer all time-locked to 'tonight'", () => {
+  const p = promptFor("shoutout_cta", {});
+  // The old prompts had "tonight" twice in six examples with no morning/afternoon
+  // counterparts — the model pattern-matched and said "tonight" at 8:40 AM.
+  // New prompts mix morning/afternoon/tonight/neutral so the model adapts.
+  assert.match(p.user, /this morning/i);
+  assert.match(p.user, /this afternoon/i);
+});
