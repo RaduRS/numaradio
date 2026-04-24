@@ -188,8 +188,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current;
     if (!audio) return;
     audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
+    // Keep `src` attached so the MediaSession (iOS lock screen, Android
+    // notification, Bluetooth/car head unit) stays registered. If we null
+    // src here the OS drops our audio element entirely and pressing play
+    // from the lock screen / car has nothing to resume. On the next play()
+    // we always reassign src + call load() anyway, which forces a fresh
+    // live-stream connection — the stale-buffer concern is handled there.
     setStatus("idle");
   }, [clearRetry]);
 
@@ -241,14 +245,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setStatus((prev) => (prev === "playing" ? "playing" : "loading"));
     };
     const onPause = () => {
-      if (!audio.src) {
+      // User-initiated pause clears wantPlaybackRef BEFORE calling
+      // audio.pause(). If intent is still true, it was the browser that
+      // paused us — network blip, stream drop, OS interruption — and we
+      // should reconnect.
+      if (!wantPlaybackRef.current) {
         setStatus("idle");
         return;
       }
-      // src still set but audio paused — not user-initiated (our pause()
-      // clears src first). Browser auto-paused us, almost always because
-      // the upstream connection dropped. Retry.
-      handleInterruption("pause-with-src");
+      handleInterruption("pause-with-intent");
     };
     const onError = () => handleInterruption("error");
     const onStalled = () => handleInterruption("stalled");
