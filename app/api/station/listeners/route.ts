@@ -4,10 +4,11 @@
 // pain or Icecast URL leakage. Returns:
 //   { listeners: number, withFloor: number, isLive: boolean }
 //
-// Note on the name: `withFloor` is kept for backwards compatibility with the
-// ListenerCount component. Semantically it's now "real listeners + BOOST" —
-// the ambient number is added, not capped — so the count always moves when
-// a real listener joins, while still presenting a non-dead station on day 0.
+// `withFloor` = real listeners + ambient floor. The floor is a deterministic
+// pseudo-random value that drifts with time-of-day (sine peaking at 20:00
+// UTC) and jumps to a fresh number every 6 min inside a [12, 45] band. All
+// clients hitting the API within the same 6-min window see the same value —
+// so the frontend doesn't look frozen, but also doesn't flicker.
 //
 // Requires the cloudflared tunnel on the mini-server to expose the Icecast
 // status JSON publicly. Add this ingress entry above the /stream rule:
@@ -16,10 +17,12 @@
 //     path: /status-json.xsl
 //     service: http://localhost:8000
 //
-// If unreachable, this route falls back to {listeners: 0, withFloor: BOOST}.
+// If Icecast is unreachable we still return a plausible floor so the hero
+// doesn't read as a dead station.
+
+import { ambientFloor } from "@/lib/ambient-floor";
 
 const STATUS_URL = "https://api.numaradio.com/status-json.xsl";
-const BOOST = 15; // ambient listeners added on top of the real count
 const CACHE_SECONDS = 5;
 
 type IcecastSource = {
@@ -54,11 +57,12 @@ export async function GET() {
     const stream =
       list.find((s) => s.listenurl?.endsWith("/stream")) ?? list[0];
     const listeners = Math.max(0, stream?.listeners ?? 0);
+    const floor = ambientFloor(Date.now());
 
     return Response.json(
       {
         listeners,
-        withFloor: BOOST + listeners,
+        withFloor: floor + listeners,
         isLive: list.length > 0,
       },
       {
@@ -69,7 +73,7 @@ export async function GET() {
     );
   } catch {
     return Response.json(
-      { listeners: 0, withFloor: BOOST, isLive: false },
+      { listeners: 0, withFloor: ambientFloor(Date.now()), isLive: false },
       {
         headers: {
           "Cache-Control": `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=30`,
