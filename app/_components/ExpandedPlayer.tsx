@@ -22,6 +22,10 @@ export function ExpandedPlayer() {
   const [mounted, setMounted] = useState(false);
   const [exiting, setExiting] = useState(false);
   const exitTimerRef = useRef<number | null>(null);
+  // Remember which element had focus when the dialog opened, so the user
+  // lands back on it when the dialog closes (screen-reader users otherwise
+  // lose their position in the page).
+  const triggerElementRef = useRef<HTMLElement | null>(null);
 
   // Wrap collapse so the shell can reverse-animate back to the source rect
   // before unmounting.
@@ -39,8 +43,26 @@ export function ExpandedPlayer() {
       collapse();
       setExiting(false);
       exitTimerRef.current = null;
+      const trigger = triggerElementRef.current;
+      triggerElementRef.current = null;
+      if (trigger && document.contains(trigger)) {
+        trigger.focus({ preventScroll: true });
+      }
     }, ANIM_MS);
   }
+
+  // Capture the activeElement on open, before the chevron pulls focus. This
+  // runs in the effect phase of the first render where isExpanded is true,
+  // which is before the [mounted] effect fires chevRef.focus() on the next
+  // frame.
+  useEffect(() => {
+    if (isExpanded) {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        triggerElementRef.current = active;
+      }
+    }
+  }, [isExpanded]);
 
   useEffect(() => {
     return () => {

@@ -242,30 +242,45 @@ export function RequestForm({
           </button>
         </div>
       ) : null}
-      <div className="req-types" role="tablist">
+      <div className="req-types" role="tablist" aria-label="Request type">
         <button
+          id="req-tab-song"
           className={`req-type ${tab === "song" ? "active" : ""}`}
           onClick={() => setTab("song")}
           role="tab"
           aria-selected={tab === "song"}
+          aria-controls="req-panel-song"
+          tabIndex={tab === "song" ? 0 : -1}
         >
           <span className="rt-ico"><SparklesIcon className="" /></span>
           <span className="rt-label">Song request</span>
         </button>
         <button
+          id="req-tab-shout"
           className={`req-type ${tab === "shout" ? "active" : ""}`}
           onClick={() => setTab("shout")}
           role="tab"
           aria-selected={tab === "shout"}
+          aria-controls="req-panel-shout"
+          tabIndex={tab === "shout" ? 0 : -1}
         >
           <span className="rt-ico"><MegaphoneIcon className="" /></span>
           <span className="rt-label">Shoutout</span>
         </button>
       </div>
       {tab === "song" ? (
-        <SongTab />
+        <div role="tabpanel" id="req-panel-song" aria-labelledby="req-tab-song">
+          <SongTab />
+        </div>
       ) : (
-        <form onSubmit={submit} key={formKey} noValidate>
+        <form
+          onSubmit={submit}
+          key={formKey}
+          noValidate
+          role="tabpanel"
+          id="req-panel-shout"
+          aria-labelledby="req-tab-shout"
+        >
           <div className="req-input-group">
             <input
               name="who"

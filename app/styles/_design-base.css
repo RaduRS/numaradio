@@ -295,3 +295,28 @@ section { position: relative; }
 
 .eq-lg { height: 28px; gap: 3px; }
 .eq-lg span { width: 3px; border-radius: 2px; }
+
+/* ============ REDUCED MOTION ============ */
+
+/* Honor OS-level "Reduce Motion" preference — continuous loops (EQ bars,
+   ticker marquees, pulse dots, slow glows, waveforms) can trigger
+   vestibular symptoms. WCAG 2.3.3 (AAA) / 2.3.2 (AA). Pause them rather
+   than disabling wholesale so the first frame still communicates the
+   "live" state visually. */
+@media (prefers-reduced-motion: reduce) {
+  .eq span,
+  .ticker-track,
+  .pulse-dot,
+  [class*="pulse"] {
+    animation-play-state: paused !important;
+  }
+  /* Non-critical keyframe animations: drop them to a static state. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

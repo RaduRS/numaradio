@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Album artwork">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B0C0E"/>
+      <stop offset="0.6" stop-color="#11262A"/>
+      <stop offset="1" stop-color="#1E4D56"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="58%" r="45%">
+      <stop offset="0" stop-color="#4fd1c5" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#4fd1c5" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#bg)"/>
+  <circle cx="200" cy="230" r="160" fill="url(#glow)"/>
+  <g transform="translate(200 205)" stroke="rgba(255,255,255,0.18)" fill="none" stroke-width="1.2">
+    <circle r="50"/>
+    <circle r="80"/>
+    <circle r="110"/>
+    <circle r="4" fill="rgba(255,255,255,0.45)" stroke="none"/>
+  </g>
+  <text x="200" y="340" text-anchor="middle" font-family="'Archivo', 'Inter Tight', system-ui, sans-serif" font-size="22" font-weight="600" fill="rgba(255,255,255,0.9)" letter-spacing="0.02em">OCEAN EYES</text>
+  <text x="200" y="365" text-anchor="middle" font-family="'Inter Tight', system-ui, sans-serif" font-size="13" font-weight="400" fill="rgba(255,255,255,0.5)" letter-spacing="0.04em">RUSSELL ROSS</text>
+</svg>

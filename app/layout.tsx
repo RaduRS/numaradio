@@ -9,6 +9,51 @@ import { PresenceHeartbeat } from "./_components/PresenceHeartbeat";
 import { NowPlayingSeeder } from "./_components/NowPlayingSeeder";
 import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
 
+// Schema.org graph describing the station. Rendered as an inline
+// <script type="application/ld+json"> in <head> so SSR-only crawlers
+// see it on first byte (an `afterInteractive` Script wouldn't show up
+// until hydration runs, which most crawlers don't do). Following the
+// Next.js 16 JSON-LD guide — a native <script> tag is the right vehicle
+// for non-executable structured data.
+const jsonLdGraph = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://numaradio.com/#website",
+      url: "https://numaradio.com",
+      name: "Numa Radio",
+      description:
+        "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
+      inLanguage: "en",
+      publisher: { "@id": "https://numaradio.com/#org" },
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://numaradio.com/#org",
+      name: "Numa Radio",
+      url: "https://numaradio.com",
+      logo: "https://numaradio.com/apple-icon",
+    },
+    {
+      "@type": "BroadcastService",
+      "@id": "https://numaradio.com/#broadcast",
+      name: "Numa Radio",
+      broadcastDisplayName: "Numa Radio",
+      url: "https://numaradio.com",
+      description:
+        "Always-on AI radio hosted by Lena — fresh tracks, live energy, listener requests.",
+      inLanguage: "en",
+      broadcaster: { "@id": "https://numaradio.com/#org" },
+      hasBroadcastChannel: {
+        "@type": "BroadcastChannel",
+        broadcastServiceTier: "Free",
+        inBroadcastLineup: "https://api.numaradio.com/stream",
+      },
+    },
+  ],
+};
+
 const archivo = Archivo({
   variable: "--font-archivo",
   subsets: ["latin"],
@@ -104,6 +149,17 @@ export default async function RootLayout({
             fetchPriority="high"
           />
         ) : null}
+        {/* Inline in <head> (not via next/script) so the structured
+            data is in the initial SSR HTML. `<` escape defends
+            against a payload smuggling a `</script>` if the data
+            ever picks up user input. */}
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(jsonLdGraph).replace(/</g, "\\u003c"),
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <NowPlayingSeeder initial={initialNowPlaying} />
@@ -117,50 +173,6 @@ export default async function RootLayout({
           <ExpandedPlayer />
         </PlayerProvider>
         <PresenceHeartbeat />
-        <Script
-          id="ld-json"
-          type="application/ld+json"
-          strategy="afterInteractive"
-        >
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@graph": [
-              {
-                "@type": "WebSite",
-                "@id": "https://numaradio.com/#website",
-                url: "https://numaradio.com",
-                name: "Numa Radio",
-                description:
-                  "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
-                inLanguage: "en",
-                publisher: { "@id": "https://numaradio.com/#org" },
-              },
-              {
-                "@type": "Organization",
-                "@id": "https://numaradio.com/#org",
-                name: "Numa Radio",
-                url: "https://numaradio.com",
-                logo: "https://numaradio.com/apple-icon",
-              },
-              {
-                "@type": "BroadcastService",
-                "@id": "https://numaradio.com/#broadcast",
-                name: "Numa Radio",
-                broadcastDisplayName: "Numa Radio",
-                url: "https://numaradio.com",
-                description:
-                  "Always-on AI radio hosted by Lena — fresh tracks, live energy, listener requests.",
-                inLanguage: "en",
-                broadcaster: { "@id": "https://numaradio.com/#org" },
-                hasBroadcastChannel: {
-                  "@type": "BroadcastChannel",
-                  broadcastServiceTier: "Free",
-                  inBroadcastLineup: "https://api.numaradio.com/stream",
-                },
-              },
-            ],
-          })}
-        </Script>
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }`}
         </Script>
