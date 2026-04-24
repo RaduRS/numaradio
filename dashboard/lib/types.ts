@@ -1,5 +1,26 @@
 import type { ServiceName } from "./service-names";
 
+/**
+ * Ring-buffer shape emitted by `workers/queue-daemon/index.ts` on
+ * `/api/library/recent-pushes`. Fields are optional because the
+ * buffer's schema predates some of them.
+ */
+export interface DaemonPush {
+  at?: string;
+  trackId?: string;
+  url?: string;
+  script?: string;
+}
+export interface DaemonFailure {
+  at?: string;
+  reason?: string;
+  detail?: string;
+}
+export interface DaemonStatusResponse {
+  lastPushes: DaemonPush[];
+  lastFailures: DaemonFailure[];
+}
+
 export interface StatusSnapshot {
   ts: string;
   stream: {

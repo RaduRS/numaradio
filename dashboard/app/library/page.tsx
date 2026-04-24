@@ -6,33 +6,19 @@ import { usePolling } from "@/hooks/use-polling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
+import type {
+  DaemonFailure,
+  DaemonPush,
+  DaemonStatusResponse,
+} from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────
 
 interface TracksResponse {
   tracks: LibraryTrack[];
   error?: string;
-}
-
-// Matches the daemon's ring-buffer shape as actually emitted by
-// workers/queue-daemon/index.ts: { at, trackId, url, script? } for
-// pushes and { at, reason, detail? } for failures. The fields are
-// optional because the buffer's schema predates some of them.
-interface DaemonPush {
-  at?: string;
-  trackId?: string;
-  url?: string;
-  script?: string;
-}
-interface DaemonFailure {
-  at?: string;
-  reason?: string;
-  detail?: string;
-}
-interface DaemonStatusResponse {
-  lastPushes: DaemonPush[];
-  lastFailures: DaemonFailure[];
 }
 
 type StatusFilter = "all" | "ready" | "draft" | "failed" | "other";
@@ -45,18 +31,6 @@ function fmtDuration(sec: number | null): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function fmtRelativeTime(iso: string | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (sec < 5) return "just now";
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  return d.toISOString().slice(0, 16).replace("T", " ");
 }
 
 function statusBadgeClass(status: string): string {
@@ -230,13 +204,16 @@ export default function LibraryPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search title or artist…"
+          aria-label="Search tracks by title or artist"
           className="w-full sm:flex-1 sm:min-w-[200px] bg-transparent border border-line rounded-md px-3 py-2 text-sm font-mono outline-none focus:border-accent"
         />
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap" role="group" aria-label="Status filter">
           {STATUS_FILTERS.map((f) => (
             <button
               key={f}
+              type="button"
               onClick={() => setStatusFilter(f)}
+              aria-pressed={statusFilter === f}
               className={`font-mono text-[11px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full border transition ${
                 statusFilter === f
                   ? "border-accent text-accent bg-[var(--accent-soft)]"
@@ -488,7 +465,7 @@ export default function LibraryPage() {
                         </span>
                       </div>
                       <span className="font-mono text-[10px] text-fg-mute shrink-0 pt-0.5">
-                        {fmtRelativeTime(p.at)}
+                        {fmtRelative(p.at)}
                       </span>
                     </li>
                   ))}
@@ -522,7 +499,7 @@ export default function LibraryPage() {
                           ✗ {f.reason}
                         </span>
                         <span className="font-mono text-[10px] text-fg-mute shrink-0">
-                          {fmtRelativeTime(f.at)}
+                          {fmtRelative(f.at)}
                         </span>
                       </div>
                       {f.detail && (

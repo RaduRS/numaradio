@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { fmtRelative } from "@/lib/fmt";
 import type { ShoutoutRow } from "@/lib/shoutouts";
 
 interface Props {
@@ -16,23 +17,6 @@ interface Props {
    * state is also informative).
    */
   hideWhenEmpty?: boolean;
-}
-
-function fmtRelative(iso: string): string {
-  const d = new Date(iso);
-  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (sec < 5) return "just now";
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 600) return `${Math.floor(sec / 60)}m ago`;
-  const today = new Date();
-  const sameDay =
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate();
-  const hhmm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (sameDay) return hhmm;
-  const mmmdd = d.toLocaleDateString([], { month: "short", day: "numeric" });
-  return `${mmmdd} ${hhmm}`;
 }
 
 export function HeldShoutoutsCard({ held, onAction, hideWhenEmpty = false }: Props) {

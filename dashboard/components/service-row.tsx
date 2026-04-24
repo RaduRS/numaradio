@@ -39,11 +39,16 @@ export function ServiceRow({ svc, onActionComplete }: Props) {
       const res = await fetch(`/api/services/${svc.name}/${action}`, { method: "POST" });
       const json = (await res.json()) as { ok: boolean; error?: string; state?: string; durationMs?: number };
       if (res.ok && json.ok) {
-        toast.success(
-          `${action}ed ${svc.name}${json.state ? ` (${json.state}` : ""}${
-            json.durationMs ? ` in ${(json.durationMs / 1000).toFixed(1)}s)` : ")"
-          }`,
-        );
+        // Build the parenthetical from a filter-boolean array so the
+        // closing `)` is always paired with its opening `(`. The old
+        // template literal dropped the close when `state` was present
+        // but `durationMs` was absent.
+        const parts = [
+          json.state ?? null,
+          json.durationMs != null ? `${(json.durationMs / 1000).toFixed(1)}s` : null,
+        ].filter((p): p is string => p !== null);
+        const detail = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+        toast.success(`${action}ed ${svc.name}${detail}`);
         onActionComplete();
       } else {
         toast.error(`Failed to ${action} ${svc.name}`, { description: json.error ?? "unknown error" });

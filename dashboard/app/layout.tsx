@@ -35,7 +35,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full font-sans", archivo.variable, interTight.variable, jetbrainsMono.variable)}
+      // `dark` activates shadcn's `dark:` Tailwind variants. Without it
+      // those variants are dead code and the palette relies purely on
+      // the `:root` CSS variable overrides in globals.css.
+      className={cn("h-full font-sans dark", archivo.variable, interTight.variable, jetbrainsMono.variable)}
     >
       <body className="min-h-full flex flex-col">
         <DashboardNav />

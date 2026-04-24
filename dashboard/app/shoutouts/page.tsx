@@ -1,11 +1,13 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { usePolling } from "@/hooks/use-polling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { fmtRelative } from "@/lib/fmt";
 import type { ShoutoutRow } from "@/lib/shoutouts";
+import type { DaemonStatusResponse } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -15,25 +17,6 @@ interface ListResponse {
   // header counter reflects the moderation queue size.
   held: ShoutoutRow[];
   recent: ShoutoutRow[];
-}
-
-// Matches what `workers/queue-daemon/index.ts` pushes into its
-// lastPushes / lastFailures ring buffers. Fields are optional because
-// the buffer's schema predates some of them.
-interface DaemonPush {
-  at?: string;
-  trackId?: string;
-  url?: string;
-  script?: string;
-}
-interface DaemonFailure {
-  at?: string;
-  reason?: string;
-  detail?: string;
-}
-interface DaemonStatusResponse {
-  lastPushes: DaemonPush[];
-  lastFailures: DaemonFailure[];
 }
 
 type LogEventKind = "shoutout" | "chatter" | "announce" | "failure";
@@ -69,23 +52,6 @@ interface FailureEvent extends LogEventBase {
 type LogEvent = ShoutoutEvent | ChatterEvent | AnnounceEvent | FailureEvent;
 
 // ─── Utilities ─────────────────────────────────────────────────────
-
-function fmtRelative(iso: string): string {
-  const d = new Date(iso);
-  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (sec < 5) return "just now";
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 600) return `${Math.floor(sec / 60)}m ago`;
-  const today = new Date();
-  const sameDay =
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate();
-  const hhmm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (sameDay) return hhmm;
-  const mmmdd = d.toLocaleDateString([], { month: "short", day: "numeric" });
-  return `${mmmdd} ${hhmm}`;
-}
 
 function deliveryBadgeClass(status: string): string {
   if (status === "aired") return "border-accent text-accent bg-[var(--accent-soft)]";
@@ -130,6 +96,8 @@ interface AutoHostState {
   forcedUntil: string | null;
 }
 
+const MODES = ["auto", "forced_on", "forced_off"] as const;
+
 function formatRevertCountdown(forcedUntilIso: string | null, nowMs: number): string {
   if (!forcedUntilIso) return "reverting…";
   const ms = new Date(forcedUntilIso).getTime() - nowMs;
@@ -154,11 +122,22 @@ export default function ShoutoutsPage() {
   const [composing, setComposing] = useState(false);
   const [autoHost, setAutoHost] = useState<AutoHostState | null>(null);
   const [autoHostPending, setAutoHostPending] = useState(false);
-  const [listenerCount, setListenerCount] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [logFilter, setLogFilter] = useState<LogFilter>("all");
+  const modeButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Fetch initial auto-host state.
+  // Raw Icecast listener count (not the +15 boosted public value) for
+  // the "Auto — currently On (7 listeners)" display. usePolling gives
+  // us visibility-pause when the tab is backgrounded for free.
+  const listenersPoll = usePolling<{ listeners?: number | null }>(
+    "/api/station/listeners",
+    15_000,
+  );
+  const listenerCount = listenersPoll.data?.listeners ?? null;
+
+  // Fetch initial auto-host state. Fall back to { mode: "auto", ... }
+  // on any failure so the control strip doesn't stick at "Loading…"
+  // forever with all buttons disabled.
   useEffect(() => {
     let cancel = false;
     async function load() {
@@ -169,31 +148,21 @@ export default function ShoutoutsPage() {
           mode?: AutoHostMode;
           forcedUntil?: string | null;
         };
-        if (!cancel && d.ok && d.mode) {
+        if (cancel) return;
+        if (d.ok && d.mode) {
           setAutoHost({ mode: d.mode, forcedUntil: d.forcedUntil ?? null });
+        } else {
+          setAutoHost({ mode: "auto", forcedUntil: null });
+          toast.warning("Auto-chatter state unknown — defaulted to Auto.");
         }
-      } catch { /* ignore */ }
+      } catch {
+        if (cancel) return;
+        setAutoHost({ mode: "auto", forcedUntil: null });
+        toast.warning("Couldn't load auto-chatter state — defaulted to Auto.");
+      }
     }
     void load();
     return () => { cancel = true; };
-  }, []);
-
-  // Poll real listener count (raw Icecast, not +15 boosted) for the
-  // "Auto — currently On (7 listeners)" display.
-  useEffect(() => {
-    let cancel = false;
-    async function load() {
-      try {
-        const r = await fetch("/api/station/listeners");
-        const d = (await r.json()) as { listeners?: number | null };
-        if (!cancel && typeof d.listeners === "number") {
-          setListenerCount(d.listeners);
-        }
-      } catch { /* ignore */ }
-    }
-    void load();
-    const id = setInterval(load, 15_000);
-    return () => { cancel = true; clearInterval(id); };
   }, []);
 
   // Tick every second while a forced state has a countdown, so the
@@ -212,17 +181,37 @@ export default function ShoutoutsPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode: next }),
       });
-      const d = (await r.json()) as {
+      const d = (await r.json().catch(() => ({}))) as {
         ok?: boolean;
         mode?: AutoHostMode;
         forcedUntil?: string | null;
+        error?: string;
       };
-      if (d.ok && d.mode) {
-        setAutoHost({ mode: d.mode, forcedUntil: d.forcedUntil ?? null });
+      if (!r.ok || !d.ok || !d.mode) {
+        toast.error(d.error ?? "Failed to update auto-chatter mode.");
+        return;
       }
+      setAutoHost({ mode: d.mode, forcedUntil: d.forcedUntil ?? null });
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Network error updating auto-chatter mode.",
+      );
     } finally {
       setAutoHostPending(false);
     }
+  }
+
+  function onModeKey(e: React.KeyboardEvent<HTMLButtonElement>, idx: number) {
+    if (autoHost === null || autoHostPending) return;
+    let nextIdx = idx;
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") nextIdx = (idx - 1 + MODES.length) % MODES.length;
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") nextIdx = (idx + 1) % MODES.length;
+    else if (e.key === "Home") nextIdx = 0;
+    else if (e.key === "End") nextIdx = MODES.length - 1;
+    else return;
+    e.preventDefault();
+    modeButtonsRef.current[nextIdx]?.focus();
+    void setAutoHostMode(MODES[nextIdx]);
   }
 
   async function compose() {
@@ -397,17 +386,20 @@ export default function ShoutoutsPage() {
           role="radiogroup"
           aria-label="Auto-chatter mode"
         >
-          {(["auto", "forced_on", "forced_off"] as const).map((m) => {
+          {MODES.map((m, i) => {
             const selected = autoHost?.mode === m;
             const label = m === "auto" ? "Auto" : m === "forced_on" ? "Forced On" : "Forced Off";
             return (
               <button
+                ref={(el) => { modeButtonsRef.current[i] = el; }}
                 key={m}
                 type="button"
                 role="radio"
                 aria-checked={selected}
+                tabIndex={selected || (autoHost === null && i === 0) ? 0 : -1}
                 disabled={autoHost === null || autoHostPending}
                 onClick={() => setAutoHostMode(m)}
+                onKeyDown={(e) => onModeKey(e, i)}
                 className={`px-3 py-1.5 transition ${
                   selected
                     ? "bg-[var(--accent-soft)] text-accent"
@@ -437,6 +429,7 @@ export default function ShoutoutsPage() {
             placeholder='e.g. "This one goes out to Mihai — happy birthday, champ. Back to the music."'
             maxLength={COMPOSE_MAX}
             rows={3}
+            aria-label="Script for Lena"
             className="w-full resize-y rounded-md border border-[var(--line)] bg-transparent p-3 text-sm font-sans focus:outline-none focus:border-accent"
             disabled={composing}
             onKeyDown={(e) => {
@@ -468,7 +461,7 @@ export default function ShoutoutsPage() {
                 <CardTitle className="font-mono text-xs uppercase tracking-[0.2em] text-fg-mute">
                   On-Air Log
                 </CardTitle>
-                <div className="flex items-center gap-1 flex-wrap">
+                <div className="flex items-center gap-1 flex-wrap" role="group" aria-label="Event filter">
                   {(["all", "shoutouts", "chatter", "announce", "failures"] as LogFilter[]).map((f) => {
                     const count =
                       f === "all" ? events.length :
@@ -480,7 +473,9 @@ export default function ShoutoutsPage() {
                     return (
                       <button
                         key={f}
+                        type="button"
                         onClick={() => setLogFilter(f)}
+                        aria-pressed={active}
                         className={`font-mono text-[10px] uppercase tracking-[0.15em] px-2 py-1 rounded-full border transition ${
                           active
                             ? "border-accent text-accent bg-[var(--accent-soft)]"
