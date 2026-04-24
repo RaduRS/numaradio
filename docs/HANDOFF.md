@@ -1,11 +1,38 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-24 morning
+Last updated: 2026-04-24 afternoon
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
 deployed, and the evergreen conventions. When picking up work: read
 this, then fall back to the archive if a reference here points there.
+
+---
+
+## Marketing videos — PHASE 1 SHIPPED (2026-04-24)
+
+New sibling repo `~/saas/numaradio-videos` renders vertical videos for
+TikTok / YouTube Shorts. Phase 1 delivers the scaffold, four primitives
+(`PulsingDot`, `EqBars`, `BrandTitle`, `MusicBed`), the music-bed
+curation pipeline, and the first composition — `ListenNow`, a 15-second
+"The Station That Never Sleeps" brand piece in Archivo Black over
+scan-lined / grain-textured black, with a broadcast-timecode beat +
+scrolling marquee referencing numaradio's `.marquee` brand vocabulary.
+
+**Verify:**
+
+    cd ~/saas/numaradio-videos && npm run render ListenNow
+
+Produces `out/listen-now.mp4` (~2.2 MB, 15s, 1080×1920@30fps, ~15s render
+time). Open via `cp out/listen-now.mp4 /mnt/c/Users/marku/Desktop/` and
+double-click.
+
+Spec: `docs/superpowers/specs/2026-04-24-marketing-videos-design.md`
+Plan: `docs/superpowers/plans/2026-04-24-marketing-videos-phase1.md`
+
+**Next:** Phase 2 (Lena voice/portrait pipelines + 4 more compositions)
+planned once Phase 1 is reviewed. Phase 3 (templated daily/weekly
+series + `npm run video:shoutout`) after that.
 
 ---
 
