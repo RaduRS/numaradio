@@ -1,25 +1,15 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { getDbPool } from "@/lib/db";
+import { internalAuthOk } from "@/lib/internal-auth";
 import { rejectShoutout } from "@/lib/shoutouts-ops";
 
 export const dynamic = "force-dynamic";
-
-function authOk(req: Request): boolean {
-  const expected = process.env.INTERNAL_API_SECRET;
-  if (!expected) return false;
-  const got = req.headers.get("x-internal-secret") ?? "";
-  const a = Buffer.from(got);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
 
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  if (!authOk(req)) {
+  if (!internalAuthOk(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;

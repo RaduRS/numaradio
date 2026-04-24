@@ -17,6 +17,7 @@
 //   trackId → extracted from sourceUrl → title+artist lookup.
 
 import { prisma } from "@/lib/db";
+import { internalAuthOk } from "@/lib/internal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +33,7 @@ function extractTrackId(url: string): string | null {
 }
 
 export async function POST(req: Request) {
-  const secret = req.headers.get("x-internal-secret");
-  const expected = process.env.INTERNAL_API_SECRET;
-  if (!expected || secret !== expected) {
+  if (!internalAuthOk(req)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 

@@ -10,14 +10,13 @@
 
 import { NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
+import { internalAuthOk } from "@/lib/internal-auth";
 import { generateShoutout, ShoutoutError } from "@/lib/shoutout";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request): Promise<NextResponse> {
-  const secret = req.headers.get("x-internal-secret");
-  const expected = process.env.INTERNAL_API_SECRET;
-  if (!expected || secret !== expected) {
+  if (!internalAuthOk(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

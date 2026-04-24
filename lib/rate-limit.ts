@@ -16,16 +16,36 @@ export function hashIp(ip: string): string {
 
 /**
  * Best-effort client IP from Vercel / proxy headers.
- * Falls back to "unknown" so rate-limit counts still apply globally if headers
- * are missing (worst case: one shared bucket for all "unknown" callers).
+ *
+ * Prefer headers that the platform writes from scratch and clients can't
+ * inject into. A raw `x-forwarded-for` first-value read lets anyone spoof
+ * their rate-limit bucket by prepending a fake IP — don't do that.
+ *
+ * Order:
+ *   1. cf-connecting-ip     — Cloudflare-set; CF strips any client-sent copy
+ *   2. x-real-ip            — Vercel-set single value (connecting IP)
+ *   3. x-vercel-forwarded-for — Vercel-platform header, not user-settable
+ *   4. x-forwarded-for      — last-resort, take LAST hop (each proxy appends
+ *                             on the right; a prepended fake stays to the
+ *                             left of the real entry)
+ *   5. "unknown"            — everyone shares a bucket
  */
 export function clientIpFromRequest(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf) return cf.trim();
+
   const real = req.headers.get("x-real-ip");
   if (real) return real.trim();
+
   const vercel = req.headers.get("x-vercel-forwarded-for");
   if (vercel) return vercel.split(",")[0].trim();
+
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+
   return "unknown";
 }
 
