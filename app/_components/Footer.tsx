@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { ListenerCount } from "./ListenerCount";
+import { InstagramIcon, TikTokIcon, YouTubeIcon } from "./Icons";
+
+const SOCIALS = [
+  { label: "Instagram", href: "https://www.instagram.com/numa.radio/", Icon: InstagramIcon },
+  { label: "TikTok", href: "https://www.tiktok.com/@numaradio", Icon: TikTokIcon },
+  { label: "YouTube", href: "https://www.youtube.com/@numaradio", Icon: YouTubeIcon },
+];
 
 export function Footer() {
   return (
@@ -25,6 +32,20 @@ export function Footer() {
               late nights, listener requests, and a deep respect for the one
               good song you haven&apos;t heard yet.
             </p>
+            <div className="footer-socials">
+              {SOCIALS.map(({ label, href, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="f-social"
+                >
+                  <Icon />
+                </a>
+              ))}
+            </div>
           </div>
           <div className="footer-col">
             <div className="label">The Station</div>

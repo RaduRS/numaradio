@@ -117,6 +117,11 @@
   border-color: var(--accent);
   background: rgba(79, 209, 197, 0.05);
 }
+.footer-socials {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
 
 .shout-share {
   display: inline-flex;

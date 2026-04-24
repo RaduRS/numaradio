@@ -27,8 +27,10 @@ import {
   SiMastodon,
   SiReddit,
   SiTelegram,
+  SiTiktok,
   SiWhatsapp,
   SiX,
+  SiYoutube,
 } from "@icons-pack/react-simple-icons";
 
 type IconProps = { className?: string; size?: number };
@@ -109,6 +111,14 @@ export function MailIcon({ className = "", size }: IconProps) {
 
 export function InstagramIcon({ className = "", size }: IconProps) {
   return <SiInstagram className={className} size={size} />;
+}
+
+export function TikTokIcon({ className = "", size }: IconProps) {
+  return <SiTiktok className={className} size={size} />;
+}
+
+export function YouTubeIcon({ className = "", size }: IconProps) {
+  return <SiYoutube className={className} size={size} />;
 }
 
 export function MastodonIcon({ className = "", size }: IconProps) {
