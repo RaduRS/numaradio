@@ -21,6 +21,11 @@
    keeping wheel / touch / keyboard scrolling fully functional. */
 .ep-shell *::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .ep-shell * { scrollbar-width: none; -ms-overflow-style: none; }
+/* Scroll chaining inside the expanded player shouldn't trigger the page's
+   pull-to-refresh or bounce-scroll through to content behind the modal. */
+.ep-shell, .ep-mobile-body, .ep-booth, .ep-booth-art {
+  overscroll-behavior: contain;
+}
 
 .ep-shell {
   position: absolute;

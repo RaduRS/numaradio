@@ -33,6 +33,11 @@ export const metadata: Metadata = {
     "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
   applicationName: "Numa Radio",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/logo-mark.png", sizes: "512x512", type: "image/png" }],
+    apple: [{ url: "/logo-mark.png", sizes: "512x512", type: "image/png" }],
+    shortcut: [{ url: "/logo-mark.png", sizes: "512x512", type: "image/png" }],
+  },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",

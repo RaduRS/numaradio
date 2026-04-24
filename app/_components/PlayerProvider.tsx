@@ -198,6 +198,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [clearRetry]);
 
   const toggle = useCallback(() => {
+    // Subtle tactile confirmation that a press registered. Android honours
+    // this; iOS ignores navigator.vibrate (fine — it fails silently).
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      try { navigator.vibrate(10); } catch { /* ignore */ }
+    }
     if (status === "playing" || status === "loading") pause();
     else play();
   }, [status, play, pause]);
