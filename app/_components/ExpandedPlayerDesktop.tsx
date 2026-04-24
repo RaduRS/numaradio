@@ -2,6 +2,7 @@
 
 import { usePlayer } from "./PlayerProvider";
 import { useBroadcast } from "./useBroadcast";
+import { useNowPlaying } from "./useNowPlaying";
 import { PauseIcon, PlayIcon, LoadingIcon } from "./Icons";
 import { ShareControls } from "./ShareControls";
 import { VolumeControl } from "./VolumeControl";
@@ -18,8 +19,17 @@ function initials(title: string | undefined): string {
 export function ExpandedPlayerDesktop() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
   const { nowPlaying } = useBroadcast();
+  // Prefer useNowPlaying for the track card — its singleton cache is kept
+  // warm by MediaSessionSync at layout level, so artwork/title/artist are
+  // available instantly on first open. useBroadcast may take ~500ms to
+  // populate; we only need it for the feed/upNext/shoutout extras.
+  const np = useNowPlaying();
 
-  const live = nowPlaying.isPlaying ? nowPlaying : null;
+  const live = np.isPlaying
+    ? np
+    : nowPlaying.isPlaying
+      ? nowPlaying
+      : null;
   const cover = live?.artworkUrl;
   const title = live?.title ?? "—";
   const artist = live?.artistDisplay ?? "—";

@@ -1,6 +1,16 @@
 "use client";
+// Module-level singleton for /api/station/now-playing.
+//
+// MediaSessionSync (always mounted inside PlayerProvider) calls useNowPlaying
+// at layout level, so by the time the user opens the expanded player the
+// singleton's cached data is fresh. The expanded player reads it instantly
+// instead of waiting for its own first fetch to land — fixes the ~1s
+// "artwork missing" gap on first open.
+//
+// Derived fields (elapsedSeconds / progress) are computed per-render from
+// the shared snapshot + each consumer's local 1s clock tick.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 export type ShoutoutStatus =
   | { active: false }
@@ -17,9 +27,6 @@ export type NowPlaying = {
   shoutout?: ShoutoutStatus;
 };
 
-const POLL_MS = 15_000; // network — track changes are infrequent
-const TICK_MS = 1_000; // local clock for elapsed/progress
-
 export type NowPlayingDerived = NowPlaying & {
   /** Seconds since the track started (clamped to [0, duration]). */
   elapsedSeconds: number;
@@ -27,41 +34,68 @@ export type NowPlayingDerived = NowPlaying & {
   progress: number;
 };
 
+const POLL_MS = 15_000;
+const TICK_MS = 1_000;
+
+const EMPTY: NowPlaying = { isPlaying: false };
+
+type Subscriber = (data: NowPlaying) => void;
+
+const subscribers = new Set<Subscriber>();
+let cachedData: NowPlaying = EMPTY;
+let intervalId: ReturnType<typeof setInterval> | null = null;
+let abortCtrl: AbortController | null = null;
+
+async function poll() {
+  if (!abortCtrl) return;
+  try {
+    const r = await fetch("/api/station/now-playing", {
+      signal: abortCtrl.signal,
+      cache: "no-store",
+    });
+    if (!r.ok) return;
+    const json = (await r.json()) as NowPlaying;
+    cachedData = json;
+    for (const sub of subscribers) sub(json);
+  } catch {
+    /* keep previous */
+  }
+}
+
+function startPolling() {
+  if (intervalId !== null) return;
+  abortCtrl = new AbortController();
+  poll();
+  intervalId = setInterval(poll, POLL_MS);
+}
+
+function stopPolling() {
+  if (intervalId !== null) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+  if (abortCtrl) {
+    abortCtrl.abort();
+    abortCtrl = null;
+  }
+}
+
 export function useNowPlaying(): NowPlayingDerived {
-  const [data, setData] = useState<NowPlaying>({ isPlaying: false });
+  const [data, setData] = useState<NowPlaying>(cachedData);
   const [now, setNow] = useState<number>(() => Date.now());
-  const lastFetchedRef = useRef<number>(0);
 
-  // Network poll for the canonical track + startedAt.
   useEffect(() => {
-    const ctrl = new AbortController();
-    async function poll() {
-      try {
-        const r = await fetch("/api/station/now-playing", {
-          signal: ctrl.signal,
-          cache: "no-store",
-        });
-        if (r.ok) {
-          const json = (await r.json()) as NowPlaying;
-          setData(json);
-          lastFetchedRef.current = Date.now();
-        }
-      } catch {
-        // network blip — keep last data
-      }
-    }
-    poll();
-    const id = setInterval(poll, POLL_MS);
+    subscribers.add(setData);
+    if (subscribers.size === 1) startPolling();
+    // Sync late mounts to whatever the shared poll already has.
+    setData(cachedData);
+
+    const tickId = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => {
-      clearInterval(id);
-      ctrl.abort();
+      subscribers.delete(setData);
+      if (subscribers.size === 0) stopPolling();
+      clearInterval(tickId);
     };
-  }, []);
-
-  // Local clock — drives the wave fill without hitting the network.
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(id);
   }, []);
 
   let elapsedSeconds = 0;

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { TabBar, type TabId } from "./TabBar";
 import { usePlayer } from "./PlayerProvider";
 import { useBroadcast } from "./useBroadcast";
+import { useNowPlaying } from "./useNowPlaying";
 import { PauseIcon, PlayIcon, LoadingIcon } from "./Icons";
 import { ListenerCount } from "./ListenerCount";
 import { RequestForm } from "./RequestForm";
@@ -22,7 +23,13 @@ function initials(title: string | undefined): string {
 function ListenPane() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
   const { nowPlaying } = useBroadcast();
-  const live = nowPlaying.isPlaying ? nowPlaying : null;
+  // Fresh-from-MiniPlayer cache; instant on first open.
+  const np = useNowPlaying();
+  const live = np.isPlaying
+    ? np
+    : nowPlaying.isPlaying
+      ? nowPlaying
+      : null;
   const cover = live?.artworkUrl;
 
   return (

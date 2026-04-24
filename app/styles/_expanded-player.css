@@ -27,6 +27,24 @@
   overscroll-behavior: contain;
 }
 
+/* Shell contents (topbar + booth) fade in AFTER the FLIP morph settles and
+   fade out BEFORE the collapse starts. The FLIP scales the shell non-
+   uniformly (small square → large rectangle), which visually distorts any
+   child until the morph finishes. Hiding children during the morph and
+   only showing them at the end-state masks the distortion entirely — you
+   see a clean morph of an empty card, then content snap-fades in at final
+   size. Symmetrical on close. */
+.ep-shell > * {
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+.ep-root.open .ep-shell > * {
+  opacity: 1;
+  /* Wait for the shell to finish expanding before revealing content.
+     320ms shell anim × ~55% = 180ms delay, 160ms fade = lands at ~340ms. */
+  transition-delay: 180ms;
+}
+
 .ep-shell {
   position: absolute;
   inset: 2vh 2vw;
