@@ -1,5 +1,5 @@
 const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
-const MODEL_PRIMARY = "aura-2-luna-en";
+const MODEL_PRIMARY = "aura-2-helena-en";
 const MODEL_FALLBACK = "aura-asteria-en";
 
 export interface SynthOpts {

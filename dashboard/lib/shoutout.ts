@@ -7,11 +7,12 @@ import { radioHostTransform } from "@/lib/radio-host";
 import { humanizeScript } from "@/lib/humanize";
 
 const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
-// Luna — friendly, upbeat, casual. Voice history: Thalia read too
-// "storyteller performance", Asteria too corporate, Andromeda too soft
-// (read "dead in the water" on Prime Hours). Luna should hit the
-// engaged-DJ register the station's actually going for.
-const MODEL_PRIMARY = "aura-2-luna-en";
+// Helena — the canonical Lena voice used across the station (auto-chatter,
+// shoutouts, marketing videos). Voice history: Thalia was too "storyteller
+// performance", Asteria too corporate, Andromeda too soft, Luna too upbeat.
+// Helena is warmer and sits with the brand. Asteria kept as 4xx fallback
+// for resilience if Deepgram ever rejects Helena specifically.
+const MODEL_PRIMARY = "aura-2-helena-en";
 const MODEL_FALLBACK = "aura-asteria-en";
 export const SHOUTOUT_MAX_CHARS = 2000;
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
