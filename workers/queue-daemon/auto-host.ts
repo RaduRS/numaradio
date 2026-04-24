@@ -86,6 +86,7 @@ export class AutoHostStateMachine {
 
 import { slotTypeFor, promptFor, type ChatterType, type PromptContext } from "./chatter-prompts.ts";
 import { showForHour, timeOfDayFor, formatLocalTime } from "../../lib/schedule.ts";
+import type { StationConfig } from "./station-config.ts";
 
 export interface CurrentTrackInfo {
   title: string;
@@ -100,7 +101,24 @@ export interface CurrentTrackInfo {
 }
 
 export interface AutoHostDeps {
-  flag: { isEnabled(): Promise<boolean> };
+  /** Reads the current tri-state config (cached ~30s by caller). */
+  config: () => Promise<StationConfig>;
+  /**
+   * Raw Icecast listener count for the stream mount. Returns null on
+   * any fetch / parse error — in auto mode, null means "skip the break"
+   * (fail-closed, don't shout to no one).
+   */
+  getListenerCount: () => Promise<number | null>;
+  /**
+   * Called when runChatter() discovers an expired forced_* state. The
+   * caller performs an atomic UPDATE ... WHERE autoHostForcedUntil =
+   * <entry.forcedUntil> to avoid racing with a concurrent operator toggle,
+   * and invalidates the config cache. Must not rethrow.
+   */
+  revertExpired: (entry: {
+    fromMode: "forced_on" | "forced_off";
+    forcedUntil: Date;
+  }) => Promise<void>;
   /**
    * Returns the currently-playing music track. Used for two things:
    *   - back_announce context: "That was <title> by <artist>" — at generation
@@ -183,10 +201,29 @@ export class AutoHostOrchestrator {
     this.#currentRun = myRun;
 
     try {
-      if (!(await this.deps.flag.isEnabled())) {
+      // Tri-state gating: auto / forced_on / forced_off.
+      // Expired forced_* lazy-reverts to auto then evaluates.
+      const gateNow = (this.deps.now ?? Date.now)();
+      let cfg = await this.deps.config();
+      if (cfg.mode !== "auto" && cfg.forcedUntil && cfg.forcedUntil.getTime() <= gateNow) {
+        await this.deps.revertExpired({
+          fromMode: cfg.mode,
+          forcedUntil: cfg.forcedUntil,
+        });
+        cfg = { mode: "auto", forcedUntil: null, forcedBy: null };
+      }
+      if (cfg.mode === "forced_off") {
         this.state.markFailure();
         return;
       }
+      if (cfg.mode === "auto") {
+        const listeners = await this.deps.getListenerCount();
+        if (listeners === null || listeners < 5) {
+          this.state.markFailure();
+          return;
+        }
+      }
+      // forced_on or auto-with-enough-listeners → proceed
 
       // Snapshot current-track info BEFORE generation so timing is
       // anchored to what's playing when we fire, not whatever is playing

@@ -125,16 +125,34 @@ test("onMusicTrackStart with empty-string artist does not push", () => {
 });
 
 import { AutoHostOrchestrator } from "./auto-host.ts";
+import type { StationConfig } from "./station-config.ts";
 
 interface RecordedFailure { reason: string; detail?: string }
 interface RecordedPush { url: string }
+interface RecordedRevert { fromMode: "forced_on" | "forced_off"; forcedUntil: Date }
+
+const AUTO_CFG: StationConfig = { mode: "auto", forcedUntil: null, forcedBy: null };
+
+function configFor(
+  mode: "auto" | "forced_on" | "forced_off",
+  forcedUntilIso?: string,
+): StationConfig {
+  return {
+    mode,
+    forcedUntil: forcedUntilIso ? new Date(forcedUntilIso) : null,
+    forcedBy: forcedUntilIso ? "op@example.com" : null,
+  };
+}
 
 function fakeDeps(overrides: Partial<Parameters<typeof AutoHostOrchestrator.prototype.constructor>[0]> = {}) {
   const failures: RecordedFailure[] = [];
   const pushes: RecordedPush[] = [];
   const sleepCalls: number[] = [];
+  const reverts: RecordedRevert[] = [];
   const deps = {
-    flag: { async isEnabled() { return true; } },
+    config: async () => AUTO_CFG,
+    getListenerCount: async () => 100 as number | null,
+    revertExpired: async (entry: RecordedRevert) => { reverts.push(entry); },
     // Default: duration=null so the orchestrator skips the pre-end wait
     // and pushes immediately. Tests that care about timing override this.
     resolveCurrentTrack: async () => ({
@@ -152,7 +170,7 @@ function fakeDeps(overrides: Partial<Parameters<typeof AutoHostOrchestrator.prot
     sleep: async (ms: number) => { sleepCalls.push(ms); },
     ...overrides,
   };
-  return { deps, failures, pushes, sleepCalls };
+  return { deps, failures, pushes, sleepCalls, reverts };
 }
 
 test("orchestrator happy path: generate, upload, push, markSuccess", async () => {
@@ -164,14 +182,90 @@ test("orchestrator happy path: generate, upload, push, markSuccess", async () =>
   assert.equal(orch.state.slotCounter, 1);
 });
 
-test("orchestrator skips when flag is off", async () => {
+test("forced_on speaks even when listeners=0", async () => {
   const { deps, pushes } = fakeDeps({
-    flag: { async isEnabled() { return false; } },
+    config: async () => configFor("forced_on", "2099-01-01T00:00:00Z"),
+    getListenerCount: async () => 0,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 1);
+});
+
+test("forced_off skips even when listeners=50", async () => {
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("forced_off", "2099-01-01T00:00:00Z"),
+    getListenerCount: async () => 50,
   });
   const orch = new AutoHostOrchestrator(deps);
   await orch.runChatter();
   assert.equal(pushes.length, 0);
   assert.equal(orch.state.slotCounter, 0);
+});
+
+test("auto mode skips when listeners < 5", async () => {
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("auto"),
+    getListenerCount: async () => 4,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 0);
+  assert.equal(orch.state.slotCounter, 0);
+});
+
+test("auto mode speaks when listeners >= 5", async () => {
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("auto"),
+    getListenerCount: async () => 5,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 1);
+});
+
+test("auto mode fails closed when listener count is null (Icecast error)", async () => {
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("auto"),
+    getListenerCount: async () => null,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 0);
+});
+
+test("expired forced_on lazy-reverts then re-evaluates in auto (skips on low listeners)", async () => {
+  const { deps, pushes, reverts } = fakeDeps({
+    config: async () => configFor("forced_on", "2000-01-01T00:00:00Z"),
+    getListenerCount: async () => 0,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(reverts.length, 1);
+  assert.equal(reverts[0]?.fromMode, "forced_on");
+  assert.equal(pushes.length, 0); // reverted to auto, listeners=0, skip
+});
+
+test("expired forced_off lazy-reverts and then speaks when listeners>=5", async () => {
+  const { deps, pushes, reverts } = fakeDeps({
+    config: async () => configFor("forced_off", "2000-01-01T00:00:00Z"),
+    getListenerCount: async () => 10,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(reverts.length, 1);
+  assert.equal(reverts[0]?.fromMode, "forced_off");
+  assert.equal(pushes.length, 1);
+});
+
+test("forced_on with null getListenerCount still speaks (force overrides)", async () => {
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("forced_on", "2099-01-01T00:00:00Z"),
+    getListenerCount: async () => null,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 1);
 });
 
 test("orchestrator retries once on MiniMax failure, then succeeds", async () => {
