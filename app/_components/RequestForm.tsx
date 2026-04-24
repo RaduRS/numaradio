@@ -44,6 +44,7 @@ export function RequestForm({
   const [statusTone, setStatusTone] = useState<StatusTone>("none");
   const [formKey, setFormKey] = useState(0);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const [whoError, setWhoError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,6 +113,7 @@ export function RequestForm({
     e.preventDefault();
     setStatusMessage("");
     setStatusTone("none");
+    setWhoError(null);
     setMessageError(null);
 
     const formEl = e.currentTarget;
@@ -120,16 +122,28 @@ export function RequestForm({
     const requesterName = String(form.get("requesterName") ?? "").trim();
     const message = String(form.get("message") ?? "").trim();
 
+    let firstInvalid: HTMLElement | null = null;
+    if (who.length < 2) {
+      setWhoError(
+        who.length === 0
+          ? "Who's this for? Give Lena a name."
+          : "A little longer — at least two characters.",
+      );
+      firstInvalid =
+        firstInvalid ?? formEl.querySelector<HTMLInputElement>('input[name="who"]');
+    }
     if (message.length < 4) {
       setMessageError(
         message.length === 0
           ? "Add a short message for Lena to read."
           : "A little longer — at least a few words.",
       );
-      const field = formEl.querySelector<HTMLTextAreaElement>(
-        'textarea[name="message"]',
-      );
-      field?.focus();
+      firstInvalid =
+        firstInvalid ??
+        formEl.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
+    }
+    if (firstInvalid) {
+      firstInvalid.focus();
       return;
     }
 
@@ -253,8 +267,28 @@ export function RequestForm({
       ) : (
         <form onSubmit={submit} key={formKey} noValidate>
           <div className="req-input-group">
-            <input name="who" className="req-input" placeholder="Who it's for…" maxLength={60} />
-            <input name="requesterName" className="req-input" placeholder="Your name or city" maxLength={60} />
+            <input
+              name="who"
+              className={`req-input${whoError ? " invalid" : ""}`}
+              placeholder="Who it's for…"
+              maxLength={60}
+              required
+              aria-invalid={whoError ? "true" : undefined}
+              aria-describedby={whoError ? "shoutout-who-error" : undefined}
+              onChange={() => {
+                if (whoError) setWhoError(null);
+              }}
+            />
+            {whoError ? (
+              <div
+                id="shoutout-who-error"
+                className="req-field-error"
+                role="alert"
+              >
+                {whoError}
+              </div>
+            ) : null}
+            <input name="requesterName" className="req-input" placeholder="Your name or city (optional)" maxLength={60} />
             <textarea
               name="message"
               className={`req-input req-textarea${messageError ? " invalid" : ""}`}
