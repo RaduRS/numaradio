@@ -39,21 +39,21 @@ Plus:
 **Beat 1 — Type the mood (frames 0-120, 0-4s).**
 Atmosphere snap-in by frame 6. Eyebrow "Numa Radio · Song Request", LiveChip top-right. Mobile-input card (same visual vocabulary as ShoutoutFlagship's Beat 2 input card) with `TypedText` showing the approved mood prompt *"late-night drive, warm synths, 95 bpm, a little melancholy"* (~58 chars at framesPerChar=2 = ~116 frames). Teal caret blinks. No audio — silence sells the input moment.
 
-**Beat 2 — "Lena is making your track…" loader (frames 120-240, 4-8s).**
-Card fades/collapses. Loader state replaces it:
+**Beat 2 — "Lena is making your track…" loader (frames 120-180, 4-6s).**
+Card fades/collapses. Loader state replaces it for 2 seconds (snappier than a 4s hold — viewers on TikTok don't wait):
 - Centered: pulsing teal `PulsingDot` inside a ring with emanating waves (reuse `RadiatingDot` pattern from ListenNow)
 - Below: mono "LENA IS MAKING YOUR TRACK" (letter-spacing 0.32em)
-- Below that: ticking timecode progress ("0:01" → "0:14", mono)
-Still no audio — building suspense.
+- Below that: ticking timecode progress (e.g. "0:01" → "0:06", mono — ticks 5 seconds over 2 actual seconds, implying compressed time for the "making")
+Still no audio — building suspense briefly.
 
-**Beat 3 — Cover art reveal + Lena announcement (frames 240-360, 8-12s).**
-Hard cut. Flux-generated cover art fades in with subtle Ken Burns (inline `CoverArt` component, same pattern as `LenaPortrait` but for an album cover at full-bleed). Title overlay: the track's actual name from MiniMax (e.g. "Nightwarm") in Archivo Black at upper third, mono sublabel "LISTENER REQUEST · NOW PLAYING". Lena voice plays at frame 240: *"Here's your late-night drive. Fresh track, on Numa Radio."* (~5s).
+**Beat 3 — Cover art reveal + Lena announcement (frames 180-300, 6-10s).**
+Hard cut. Flux-generated cover art fades in with subtle Ken Burns (inline `CoverArt` component, same pattern as `LenaPortrait` but for an album cover at full-bleed). Title overlay: the track's actual name from MiniMax (e.g. "Nightwarm") in Archivo Black at upper third, mono sublabel "LISTENER REQUEST · NOW PLAYING". Lena voice plays at frame 180: *"Here's your late-night drive. Fresh track, on Numa Radio."* (~5s).
 
-**Beat 4 — Money beat (frames 360-780, 12-26s).**
-**The generated track plays at full volume for 14 seconds.** This is the TikTok retention hook — by frame 360 anyone still watching is invested, so reward them with a real-sounding polished song. Visuals continue:
+**Beat 4 — Money beat (frames 300-780, 10-26s).**
+**The generated track plays at full volume for 16 seconds.** This is the TikTok retention hook — anyone still watching by frame 300 is invested, so reward them with as much real polished song as we can fit. The extra 2 seconds from the shortened Beat 2 went here. Visuals continue:
 - Cover art Ken Burns continues
 - Low-opacity `Waveform` across the bottom
-- Listener count ticker: "LISTENING: 27 → 31 → 38 → 44" (one tick per ~3-4s, mono)
+- Listener count ticker: "LISTENING: 27 → 31 → 38 → 44" (one tick per ~4s, mono)
 Lena is silent — the track owns this section.
 
 **Beat 5 — Typographic callout (frames 780-840, 26-28s).**
@@ -71,14 +71,16 @@ Atmosphere snap-in. Eyebrow "Numa Radio · 24 / 7". LiveChip top-right. Big cent
 
 **Beats 1-4 — Four show panels (frames 60-780, 24s = 6s each).**
 
-| Panel | Frames | Clock | Show | Voice MP3 (reused from MeetLena!) | "Now playing" fragment |
-|---|---|---|---|---|---|
-| 1 | 60-240 | 00:00 | Night Shift | `meet-lena-night-shift.mp3` | "Now playing: 'Blue Hours' — request from Mira" |
-| 2 | 240-420 | 06:00 | Morning Room | `meet-lena-morning-room.mp3` | "Now playing: 'First Light' — request from Jakob" |
-| 3 | 420-600 | 12:00 | Daylight Channel | `meet-lena-daylight-channel.mp3` | "Now playing: 'Focus Hours' — anonymous" |
-| 4 | 600-780 | 18:00 | Prime Hours | `meet-lena-prime-hours.mp3` | "Now playing: 'Heavy Weather' — request from Sana" |
+| Panel | Frames | Clock | Show | Voice MP3 (new, rephrased) | Voice text | "Now playing" fragment |
+|---|---|---|---|---|---|---|
+| 1 | 60-240 | 00:00 | Night Shift | `day-in-numa-night-shift.mp3` | *"Night Shift. Quiet hours, wide spaces."* | "Now playing: 'Blue Hours' — request from Mira" |
+| 2 | 240-420 | 06:00 | Morning Room | `day-in-numa-morning-room.mp3` | *"Morning Room. Coffee's on, softer tones."* | "Now playing: 'First Light' — request from Jakob" |
+| 3 | 420-600 | 12:00 | Daylight Channel | `day-in-numa-daylight-channel.mp3` | *"Daylight Channel. Focus music, longer tracks."* | "Now playing: 'Focus Hours' — anonymous" |
+| 4 | 600-780 | 18:00 | Prime Hours | `day-in-numa-prime-hours.mp3` | *"Prime Hours. Dinner to midnight, louder music."* | "Now playing: 'Heavy Weather' — request from Sana" |
 
 Each panel uses `ShowPanel` primitive (same palette as MeetLena). Layered on top of the ShowPanel: a big clock in mono at top-center, and the "Now playing" mono strip at the bottom. Lena voice clip plays at the start of each 180-frame panel (panels are 6s, clips are ~4s, leaving ~2s of musical breathing room before the next panel).
+
+The DayInNuma clips are **intentionally rephrased** from MeetLena's versions, not verbatim. Same core meaning (each show's vibe) but different phrasing, so a viewer who's seen both compositions hears consistency-without-repetition. Generated via the same `generate-voice.ts` + Helena pipeline.
 
 **Beat 5 — Close (frames 780-900, 26-30s).**
 Hard cut to `Wordmark` + teal underline wipe + `numaradio.com` + small mono "ALWAYS ON · 24 / 7" below the URL. Music bed tails over the final 60 frames.
@@ -92,9 +94,13 @@ Hard cut to `Wordmark` + teal underline wipe + `numaradio.com` + small mono "ALW
    - Commit: `src/assets/song-request/track.mp3` + `src/assets/song-request/cover.png`.
    - Cost: ~$0.30-0.50, ~60s wait.
 
-2. **New Lena voice clip.**
+2. **New Lena voice clips — 5 total.**
    - `src/assets/voice/song-request-announce.mp3`: *"Here's your late-night drive. Fresh track, on Numa Radio."*
-   - Via existing `generate-voice.ts` — Helena, same pattern as 2c.1.
+   - `src/assets/voice/day-in-numa-night-shift.mp3`: *"Night Shift. Quiet hours, wide spaces."*
+   - `src/assets/voice/day-in-numa-morning-room.mp3`: *"Morning Room. Coffee's on, softer tones."*
+   - `src/assets/voice/day-in-numa-daylight-channel.mp3`: *"Daylight Channel. Focus music, longer tracks."*
+   - `src/assets/voice/day-in-numa-prime-hours.mp3`: *"Prime Hours. Dinner to midnight, louder music."*
+   - All via existing `generate-voice.ts` — Helena, same pattern as 2c.1. One batch audition gate (same shape as MeetLena's 6-clip audition).
 
 3. **Extended bed-01 music bed.**
    - Edit `src/scripts/music-bed-pool.json`: change bed-01's `durationSeconds` from 20 to 35.
@@ -139,7 +145,7 @@ The plan will choose based on what's cleanest at implementation time. Either way
 - **No Flux Schnell texture generation per video.** SongRequestDemo's cover art is a one-time Flux Pro/Schnell generation during the MiniMax pipeline call, committed. No per-render Flux calls.
 - **No audio primitive extraction.** Voice still plays via inline `<Audio>` (same as 2b/2c.1). Rule-of-2 threshold not yet met.
 - **No new LenaPortrait cameos.** Neither composition needs her face — they're about features + rhythm.
-- **No voice line regeneration for DayInNuma.** We reuse the four `meet-lena-<show>.mp3` clips verbatim. Direct consequence: the show one-liners in DayInNuma sound exactly like the ones in MeetLena — that's intentional consistency.
+- **Rephrased voice lines for DayInNuma, not verbatim.** We generate 4 new Helena clips with slightly different phrasing (same meaning as MeetLena's show one-liners, different words). Consistency-without-repetition.
 - **No HANDOFF.md update after just 2c.2.** Ships with the post-2c.2 wrap — one clean entry covering all five launch pieces rather than piecemeal entries per stage.
 
 ## Ship sequence (for writing-plans)
