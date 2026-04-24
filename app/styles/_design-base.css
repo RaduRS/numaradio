@@ -21,7 +21,26 @@
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  /* Kill the blue tap flash on Android / older iOS. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Remove the 300ms double-tap-to-zoom delay on interactive elements, so
+   the player controls and form buttons respond instantly on mobile. */
+button, a, [role="button"], [role="radio"], input[type="submit"], input[type="button"], input[type="range"], input[type="checkbox"] {
+  touch-action: manipulation;
+}
+
+/* Player chrome shouldn't be selectable — users keep accidentally
+   selecting 'Now playing' labels when trying to tap play/pause. */
+.mini-player, .ep-root, .ep-shell, .ep-topbar {
+  user-select: none;
+  -webkit-user-select: none;
+}
 
 html, body {
   background: var(--bg);

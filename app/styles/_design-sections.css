@@ -974,7 +974,9 @@
   background: rgba(0,0,0,0.3);
   color: var(--fg);
   font-family: inherit;
-  font-size: 14px;
+  /* 16px is the iOS auto-zoom threshold — anything smaller makes Safari
+     zoom the page when the input gets focus, which feels broken. */
+  font-size: 16px;
   transition: border-color 0.2s;
 }
 .req-input:focus {
