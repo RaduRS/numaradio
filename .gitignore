@@ -56,3 +56,9 @@ next-env.d.ts
 
 # Brainstorming / design mockups (superpowers visual companion)
 /.superpowers/
+
+# Tokenstack local index cache
+/.tokenstack/
+
+# Ad-hoc design-audit screenshots (not for commit)
+/audit-*.png
