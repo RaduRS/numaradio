@@ -124,6 +124,23 @@ const FILTER_LABELS: Record<LogFilter, string> = {
   failures: "Failures",
 };
 
+type AutoHostMode = "auto" | "forced_on" | "forced_off";
+interface AutoHostState {
+  mode: AutoHostMode;
+  forcedUntil: string | null;
+}
+
+function formatRevertCountdown(forcedUntilIso: string | null, nowMs: number): string {
+  if (!forcedUntilIso) return "reverting…";
+  const ms = new Date(forcedUntilIso).getTime() - nowMs;
+  if (ms <= 0) return "reverting…";
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min >= 1) return `reverts to Auto in ${min}m ${sec.toString().padStart(2, "0")}s`;
+  return `reverts to Auto in ${sec}s`;
+}
+
 export default function ShoutoutsPage() {
   const { data, isStale, refresh } = usePolling<ListResponse>(
     "/api/shoutouts/list",
@@ -135,31 +152,74 @@ export default function ShoutoutsPage() {
   );
   const [composeText, setComposeText] = useState("");
   const [composing, setComposing] = useState(false);
-  const [autoHostOn, setAutoHostOn] = useState<boolean | null>(null);
+  const [autoHost, setAutoHost] = useState<AutoHostState | null>(null);
   const [autoHostPending, setAutoHostPending] = useState(false);
+  const [listenerCount, setListenerCount] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
   const [logFilter, setLogFilter] = useState<LogFilter>("all");
 
+  // Fetch initial auto-host state.
   useEffect(() => {
     let cancel = false;
-    fetch("/api/shoutouts/auto-host")
-      .then((r) => r.json())
-      .then((d: { ok?: boolean; enabled?: boolean }) => {
-        if (!cancel && d.ok) setAutoHostOn(Boolean(d.enabled));
-      })
-      .catch(() => {});
+    async function load() {
+      try {
+        const r = await fetch("/api/shoutouts/auto-host");
+        const d = (await r.json()) as {
+          ok?: boolean;
+          mode?: AutoHostMode;
+          forcedUntil?: string | null;
+        };
+        if (!cancel && d.ok && d.mode) {
+          setAutoHost({ mode: d.mode, forcedUntil: d.forcedUntil ?? null });
+        }
+      } catch { /* ignore */ }
+    }
+    void load();
     return () => { cancel = true; };
   }, []);
 
-  async function toggleAutoHost(next: boolean) {
+  // Poll real listener count (raw Icecast, not +15 boosted) for the
+  // "Auto — currently On (7 listeners)" display.
+  useEffect(() => {
+    let cancel = false;
+    async function load() {
+      try {
+        const r = await fetch("/api/station/listeners");
+        const d = (await r.json()) as { listeners?: number | null };
+        if (!cancel && typeof d.listeners === "number") {
+          setListenerCount(d.listeners);
+        }
+      } catch { /* ignore */ }
+    }
+    void load();
+    const id = setInterval(load, 15_000);
+    return () => { cancel = true; clearInterval(id); };
+  }, []);
+
+  // Tick every second while a forced state has a countdown, so the
+  // "reverts in 18 min" label updates without a full refresh.
+  useEffect(() => {
+    if (!autoHost?.forcedUntil) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [autoHost?.forcedUntil]);
+
+  async function setAutoHostMode(next: AutoHostMode) {
     setAutoHostPending(true);
     try {
       const r = await fetch("/api/shoutouts/auto-host", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: next }),
+        body: JSON.stringify({ mode: next }),
       });
-      const d = (await r.json()) as { ok?: boolean; enabled?: boolean };
-      if (d.ok) setAutoHostOn(Boolean(d.enabled));
+      const d = (await r.json()) as {
+        ok?: boolean;
+        mode?: AutoHostMode;
+        forcedUntil?: string | null;
+      };
+      if (d.ok && d.mode) {
+        setAutoHost({ mode: d.mode, forcedUntil: d.forcedUntil ?? null });
+      }
     } finally {
       setAutoHostPending(false);
     }
@@ -299,12 +359,15 @@ export default function ShoutoutsPage() {
         </span>
       </header>
 
-      {/* ── Auto-chatter toggle strip ──────────────────────── */}
-      <div className="flex items-center justify-between gap-4 rounded-md border border-line bg-bg-1 px-4 py-3">
+      {/* ── Auto-chatter mode strip ────────────────────────── */}
+      <div className="flex flex-col gap-2 rounded-md border border-line bg-bg-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <span
             className={`h-2 w-2 rounded-full shrink-0 ${
-              autoHostOn ? "bg-accent" : "bg-fg-mute/30"
+              autoHost?.mode === "forced_off" ? "bg-fg-mute/30" :
+              autoHost?.mode === "forced_on" ? "bg-accent" :
+              // auto: dot reflects computed state
+              (listenerCount ?? 0) >= 5 ? "bg-accent" : "bg-fg-mute/30"
             }`}
             aria-hidden
           />
@@ -313,28 +376,49 @@ export default function ShoutoutsPage() {
               Auto-chatter
             </div>
             <div className="truncate text-sm">
-              {autoHostOn
-                ? "Lena speaks between every 2 tracks"
-                : "Off — only manual shoutouts and listener songs"}
-              <span className="ml-2 hidden font-mono text-[10px] text-fg-mute sm:inline">
-                (~30s for changes to take effect)
-              </span>
+              {autoHost === null ? (
+                "Loading…"
+              ) : autoHost.mode === "auto" ? (
+                listenerCount === null
+                  ? "Auto — currently On (listener count unavailable)"
+                  : listenerCount >= 5
+                    ? `Auto — currently On (${listenerCount} listeners)`
+                    : `Auto — currently Off (${listenerCount} listeners, need 5+)`
+              ) : autoHost.mode === "forced_on" ? (
+                `Forced On · ${formatRevertCountdown(autoHost.forcedUntil, nowTick)}`
+              ) : (
+                `Forced Off · ${formatRevertCountdown(autoHost.forcedUntil, nowTick)}`
+              )}
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          disabled={autoHostOn === null || autoHostPending}
-          onClick={() => autoHostOn !== null && toggleAutoHost(!autoHostOn)}
-          className={`shrink-0 font-mono text-[11px] uppercase tracking-[0.15em] px-4 py-1.5 rounded-full border transition ${
-            autoHostOn
-              ? "border-accent text-accent bg-[var(--accent-soft)]"
-              : "border-line text-fg-mute hover:text-fg hover:border-fg-mute"
-          } ${autoHostPending ? "opacity-60 cursor-wait" : ""}`}
-          aria-pressed={autoHostOn === true}
+        <div
+          className="flex shrink-0 rounded-full border border-line overflow-hidden font-mono text-[11px] uppercase tracking-[0.15em]"
+          role="radiogroup"
+          aria-label="Auto-chatter mode"
         >
-          {autoHostOn === null ? "…" : autoHostOn ? "On" : "Off"}
-        </button>
+          {(["auto", "forced_on", "forced_off"] as const).map((m) => {
+            const selected = autoHost?.mode === m;
+            const label = m === "auto" ? "Auto" : m === "forced_on" ? "Forced On" : "Forced Off";
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={autoHost === null || autoHostPending}
+                onClick={() => setAutoHostMode(m)}
+                className={`px-3 py-1.5 transition ${
+                  selected
+                    ? "bg-[var(--accent-soft)] text-accent"
+                    : "text-fg-mute hover:text-fg"
+                } ${autoHostPending ? "opacity-60 cursor-wait" : ""}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Compose ──────────────────────────────────────── */}
@@ -416,9 +500,9 @@ export default function ShoutoutsPage() {
               ) : filteredEvents.length === 0 ? (
                 <div className="px-4 py-8 text-sm text-fg-mute text-center">
                   {logFilter === "all"
-                    ? autoHostOn
+                    ? autoHost?.mode === "forced_on" || (autoHost?.mode === "auto" && (listenerCount ?? 0) >= 5)
                       ? "Waiting for the first voice event…"
-                      : "Nothing on air yet. Flip auto-chatter on above, submit a shoutout, or compose one."
+                      : "Nothing on air yet. Set auto-chatter mode above, submit a shoutout, or compose one."
                     : `No ${FILTER_LABELS[logFilter].toLowerCase()} yet.`}
                 </div>
               ) : (
