@@ -9,6 +9,57 @@ this, then fall back to the archive if a reference here points there.
 
 ---
 
+## Auto-chatter listener gating — CODE READY, NEEDS DEPLOY (2026-04-24)
+
+Replaces the boolean `autoHostEnabled` toggle with a tri-state:
+`auto` / `forced_on` / `forced_off`. In `auto` mode, Lena only speaks
+when the raw Icecast listener count is ≥5 (fail-closed if Icecast
+unreachable). Forced states expire after 20 min back to `auto` — so a
+forgotten force ("left it On for testing") can't run forever to an
+empty room.
+
+- `prisma/schema.prisma` — `AutoHostMode` enum, `autoHostMode` +
+  `autoHostForcedUntil` + `autoHostForcedBy` columns on `Station`,
+  old `autoHostEnabled` dropped.
+- `workers/queue-daemon/station-config.ts` (new, replaces
+  `station-flag.ts`) — 30s TTL cache of `{mode, forcedUntil, forcedBy}`.
+- `workers/queue-daemon/icecast-listeners.ts` (new) — `parseListenerCount`
+  + `fetchListenerCount`; returns null on any fetch/parse error.
+- `workers/queue-daemon/auto-host.ts:runChatter()` — new gating block:
+  reads config, lazy-reverts expired forced states (atomic UPDATE WHERE
+  forcedUntil = stored so we don't clobber a concurrent operator toggle),
+  then branches on mode. `auto` with `listeners === null || listeners <
+  5` → skip.
+- Dashboard `/shoutouts` — three-button segmented control (Auto · Forced
+  On · Forced Off) with a live countdown on forced states and a
+  "currently On/Off (N listeners)" label in Auto mode, polled every 15s
+  via new `GET /api/station/listeners`.
+- API `POST /api/shoutouts/auto-host` body changed from `{enabled:bool}`
+  to `{mode: "auto"|"forced_on"|"forced_off"}`.
+- NanoClaw agent tool `/api/internal/tools/autochatter-toggle` kept its
+  legacy `{enabled:bool}` contract but now writes the tri-state columns
+  under the hood: true → `forced_on` 20m, false → `forced_off` 20m.
+
+**Deploy** (ordering matters — running daemon errors after migration
+lands because `autoHostEnabled` column is gone):
+```
+cd /home/marku/saas/numaradio && git pull
+npx prisma migrate deploy
+sudo systemctl restart numa-queue-daemon
+cd dashboard && npm run deploy
+```
+Gap between migration and daemon restart is seconds; old daemon may
+log one or two failed selects, harmless.
+
+**Watch after restart:**
+- `/shoutouts` shows three-button control with live listener count
+- `journalctl --user -u numa-queue-daemon -f` — `auto_host_auto_revert`
+  line appears ~20min after a forced toggle with no operator action
+- With <5 listeners + Auto mode, no chatter pushes between tracks
+- With Forced On + 0 listeners, chatter still fires every 2 tracks
+
+---
+
 ## Marketing videos — LAUNCH SET SHIPPED (2026-04-24)
 
 Sibling repo `~/saas/numaradio-videos` produces vertical videos for
