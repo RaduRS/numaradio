@@ -7,6 +7,7 @@ import {
   Link as LucideLink,
   ListMusic,
   Loader2,
+  Mail,
   Megaphone,
   Music2,
   Pause,
@@ -21,9 +22,13 @@ import {
 } from "lucide-react";
 import {
   SiBluesky,
+  SiFacebook,
   SiInstagram,
   SiMastodon,
+  SiReddit,
+  SiTelegram,
   SiWhatsapp,
+  SiX,
 } from "@icons-pack/react-simple-icons";
 
 type IconProps = { className?: string; size?: number };
@@ -80,6 +85,26 @@ export function BlueskyIcon({ className = "", size }: IconProps) {
 
 export function WhatsAppIcon({ className = "", size }: IconProps) {
   return <SiWhatsapp className={className} size={size} />;
+}
+
+export function XIcon({ className = "", size }: IconProps) {
+  return <SiX className={className} size={size} />;
+}
+
+export function FacebookIcon({ className = "", size }: IconProps) {
+  return <SiFacebook className={className} size={size} />;
+}
+
+export function TelegramIcon({ className = "", size }: IconProps) {
+  return <SiTelegram className={className} size={size} />;
+}
+
+export function RedditIcon({ className = "", size }: IconProps) {
+  return <SiReddit className={className} size={size} />;
+}
+
+export function MailIcon({ className = "", size }: IconProps) {
+  return <Mail className={className} size={size} strokeWidth={1.6} />;
 }
 
 export function InstagramIcon({ className = "", size }: IconProps) {

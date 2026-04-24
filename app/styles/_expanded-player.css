@@ -361,6 +361,12 @@
 .ep-art-share .share-pill:hover {
   background: rgba(79, 209, 197, 0.1);
 }
+/* The artwork share pill sits at the bottom of the cover — open the popover
+   upward so the menu doesn't get clipped by the artwork edge. */
+.ep-art-share .share-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
 .ep-listen-track {
   text-align: center;
   width: 100%;
