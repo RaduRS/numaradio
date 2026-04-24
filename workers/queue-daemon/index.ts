@@ -8,7 +8,8 @@ import { resolveTrackId, type TrackLookup } from "./resolve-track.ts";
 import { S3Client } from "@aws-sdk/client-s3";
 import { AutoHostOrchestrator } from "./auto-host.ts";
 import { AnnouncementOrchestrator } from "./announce.ts";
-import { StationFlagCache } from "./station-flag.ts";
+import { StationConfigCache, type AutoHostMode } from "./station-config.ts";
+import { fetchListenerCount } from "./icecast-listeners.ts";
 import { generateChatterScript } from "./minimax-script.ts";
 import { synthesizeChatter } from "./deepgram-tts.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
@@ -17,6 +18,8 @@ const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
 const LS_PORT = Number(process.env.NUMA_LS_PORT ?? 1234);
 const HTTP_PORT = Number(process.env.NUMA_DAEMON_PORT ?? 4000);
+const ICECAST_STATUS_URL = process.env.ICECAST_STATUS_URL ?? "http://127.0.0.1:8000/status-json.xsl";
+const ICECAST_MOUNT = process.env.ICECAST_MOUNT ?? "/stream";
 
 const sock = new SupervisedSocket({ host: LS_HOST, port: LS_PORT });
 const lastPushes = new RingBuffer<{ at: string; trackId: string; url: string; script?: string }>(10);
@@ -56,19 +59,55 @@ function getChatterS3Bits(): { s3: S3Client; bucket: string; publicBase: string 
   };
 }
 
-const stationFlag = new StationFlagCache({
+const stationConfig = new StationConfigCache({
   ttlMs: 30_000,
   fetchOnce: async () => {
     const s = await prisma.station.findUniqueOrThrow({
       where: { slug: STATION_SLUG },
-      select: { autoHostEnabled: true },
+      select: {
+        autoHostMode: true,
+        autoHostForcedUntil: true,
+        autoHostForcedBy: true,
+      },
     });
-    return s.autoHostEnabled;
+    return {
+      mode: s.autoHostMode as AutoHostMode,
+      forcedUntil: s.autoHostForcedUntil,
+      forcedBy: s.autoHostForcedBy,
+    };
   },
 });
 
 const autoHost = new AutoHostOrchestrator({
-  flag: stationFlag,
+  config: () => stationConfig.read(),
+  getListenerCount: () =>
+    fetchListenerCount({ url: ICECAST_STATUS_URL, mount: ICECAST_MOUNT }),
+  revertExpired: async ({ fromMode, forcedUntil }) => {
+    // Atomic UPDATE: only revert if forcedUntil hasn't moved (operator may
+    // have just set a new forced state in the same window). updateMany
+    // returns count=0 in that case; we invalidate the cache either way so
+    // the next read picks up the authoritative state.
+    try {
+      await prisma.station.updateMany({
+        where: { slug: STATION_SLUG, autoHostForcedUntil: forcedUntil },
+        data: {
+          autoHostMode: "auto",
+          autoHostForcedUntil: null,
+          autoHostForcedBy: null,
+        },
+      });
+      console.info(
+        `action=auto_host_auto_revert from=${fromMode} user=daemon reason=20m_elapsed`,
+      );
+    } catch (err) {
+      console.warn(
+        "[auto-host] revertExpired failed:",
+        err instanceof Error ? err.message : err,
+      );
+    } finally {
+      stationConfig.invalidate();
+    }
+  },
   resolveCurrentTrack: async () => {
     // Returns the currently-playing track. Used for BOTH:
     //   - back_announce context (Lena's speech bridges the current track's
