@@ -9,7 +9,7 @@ this, then fall back to the archive if a reference here points there.
 
 ---
 
-## Auto-chatter listener gating — CODE READY, NEEDS DEPLOY (2026-04-24)
+## Auto-chatter listener gating — LIVE (2026-04-24)
 
 Replaces the boolean `autoHostEnabled` toggle with a tri-state:
 `auto` / `forced_on` / `forced_off`. In `auto` mode, Lena only speaks
