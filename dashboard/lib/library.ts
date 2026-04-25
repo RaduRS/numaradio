@@ -8,6 +8,7 @@ export interface LibraryTrack {
   bpm: number | null;
   genre: string | null;
   mood: string | null;
+  show: string | null;
   trackStatus: string;
   airingPolicy: string;
   /**
@@ -34,6 +35,7 @@ const LIBRARY_TRACKS_SQL = `
     t.bpm,
     t.genre,
     t.mood,
+    t.show,
     t."trackStatus",
     t."airingPolicy",
     t."sourceType"    AS source_type,
@@ -83,6 +85,7 @@ interface RawRow {
   bpm: number | null;
   genre: string | null;
   mood: string | null;
+  show: string | null;
   trackStatus: string;
   airingPolicy: string;
   source_type: string | null;
@@ -103,6 +106,7 @@ export async function fetchLibraryTracks(pool: Pool): Promise<LibraryTrack[]> {
     bpm: r.bpm,
     genre: r.genre,
     mood: r.mood,
+    show: r.show,
     trackStatus: r.trackStatus,
     airingPolicy: r.airingPolicy,
     sourceType: r.source_type ?? "unknown",

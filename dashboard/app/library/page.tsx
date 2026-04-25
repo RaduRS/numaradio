@@ -45,6 +45,11 @@ function categoriseStatus(s: string): StatusFilter {
   return "other";
 }
 
+function showLabelFor(show: string | null): string {
+  if (!show) return "—";
+  return show.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+
 /**
  * Voice-related entries (auto-chatter and listener-song announcements)
  * live on /shoutouts. /library only surfaces genuine MUSIC push activity:
@@ -291,6 +296,14 @@ export default function LibraryPage() {
                           >
                             {t.trackStatus}
                           </Badge>
+                          {t.show && (
+                            <>
+                              <span aria-hidden>·</span>
+                              <span className="truncate normal-case tracking-normal">
+                                {showLabelFor(t.show)}
+                              </span>
+                            </>
+                          )}
                           {(t.votesUp > 0 || t.votesDown > 0) && (
                             <span className="tabular-nums">
                               <span
@@ -341,6 +354,7 @@ export default function LibraryPage() {
                       <th className="text-left px-2 py-2.5">Artist</th>
                       <th className="text-right px-2 py-2.5 w-14">Time</th>
                       <th className="text-left px-2 py-2.5 w-20">Genre</th>
+                      <th className="text-left px-2 py-2.5 w-24">Show</th>
                       <th className="text-right px-3 py-2.5 w-28">Votes</th>
                       <th className="text-left px-2 py-2.5 w-16">Status</th>
                       <th className="text-right px-4 py-2.5 w-28"></th>
@@ -372,6 +386,7 @@ export default function LibraryPage() {
                             {fmtDuration(t.durationSeconds)}
                           </td>
                           <td className="px-2 py-2 text-fg-mute text-xs">{t.genre ?? "—"}</td>
+                          <td className="px-2 py-2 text-fg-mute text-xs">{showLabelFor(t.show)}</td>
                           <td className="px-3 py-2 text-right font-mono text-xs tabular-nums whitespace-nowrap">
                             <span className={t.votesUp > 0 ? "text-accent" : "text-fg-mute"}>
                               ▲&nbsp;{t.votesUp}
