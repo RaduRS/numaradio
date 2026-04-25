@@ -5,12 +5,22 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
 import { parseBuffer } from "music-metadata";
 import { profanityPrefilter } from "../../lib/moderate.ts";
+import { showForHour } from "../../lib/schedule.ts";
 import {
   startMusicGeneration,
   pollMusicGeneration,
 } from "./minimax.ts";
 import { generateArtwork } from "./openrouter.ts";
 import { expandPrompt } from "./prompt-expand.ts";
+
+export function showEnumFor(date: Date): "night_shift" | "morning_room" | "daylight_channel" | "prime_hours" {
+  switch (showForHour(date.getHours()).name) {
+    case "Night Shift": return "night_shift";
+    case "Morning Room": return "morning_room";
+    case "Daylight Channel": return "daylight_channel";
+    case "Prime Hours": return "prime_hours";
+  }
+}
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const QUEUE_DAEMON_URL =
@@ -228,6 +238,7 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
       // 'last 20 played' filter pins it out of rotation until it ages out.
       airingPolicy: "priority_request",
       safetyStatus: "approved",
+      show: showEnumFor(new Date()),
       trackStatus: "ready",
       durationSeconds,
       assets: {
