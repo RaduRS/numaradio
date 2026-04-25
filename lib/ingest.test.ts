@@ -150,3 +150,34 @@ test("ingestTrack uploads artwork when provided", async () => {
   assert.equal(uploaded.length, 2);
   assert.ok(uploaded.some((u) => u.key.includes("/artwork/primary.png")));
 });
+
+test("ingestTrack rolls back BOTH audio and artwork on tx failure", async () => {
+  const deleted: string[] = [];
+  const fakePrisma = {
+    track: {
+      findFirst: async () => null,
+    },
+    $transaction: async () => { throw new Error("simulated tx failure"); },
+  };
+  await assert.rejects(
+    _ingestTrackImpl({
+      prisma: fakePrisma as any,
+      putObject: async () => {},
+      deleteObject: async (key: string) => { deleted.push(key); },
+      publicUrl: (k) => k,
+      stationSlug: "numaradio",
+      cacheControl: "public",
+      input: {
+        stationId: "station_1",
+        audioBuffer: Buffer.from("fake"),
+        show: "morning_room",
+        title: "Test",
+        artwork: { buffer: Buffer.from("png-bytes"), mimeType: "image/png" },
+      },
+    }),
+    /simulated tx failure/,
+  );
+  assert.equal(deleted.length, 2, "both audio and artwork keys should be deleted");
+  assert.ok(deleted.some((k) => k.includes("/audio/stream.mp3")), "audio key deleted");
+  assert.ok(deleted.some((k) => k.includes("/artwork/primary.png")), "artwork key deleted");
+});

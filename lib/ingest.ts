@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ShowBlock, TrackSourceType } from "@prisma/client";
+import type { Prisma, ShowBlock, TrackSourceType } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db/index.ts";
 import {
   putObject as defaultPutObject,
@@ -95,7 +95,7 @@ export async function _ingestTrackImpl(deps: IngestDeps): Promise<IngestResult> 
   }
 
   try {
-    await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const track = await tx.track.create({
         data: {
           id: trackId,
