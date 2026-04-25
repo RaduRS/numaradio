@@ -13,7 +13,11 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-const SWEEP_MINUTES = 5;
+// Aligned with the dashboard's 60 s "active visitor" count window
+// (see lib/presence on the dashboard). 2 min gives a 2× grace so a
+// heartbeat that was a few seconds late doesn't cause a row to flip
+// out of the count and back in.
+const SWEEP_MINUTES = 2;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(req: Request) {

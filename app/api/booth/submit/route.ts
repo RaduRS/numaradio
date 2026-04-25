@@ -238,15 +238,23 @@ export async function POST(req: Request): Promise<NextResponse> {
       // On success, the dashboard internal route has already marked
       // deliveryStatus='aired' as part of its queue-push transaction.
     } catch (e) {
+      // Persist a CONTROLLED reason — not e.message — so a future
+      // change that puts auth headers or PII into the error message
+      // can't leak into the dashboard's Recent feed via
+      // moderationReason. Full message still goes to journald.
+      const reason =
+        e instanceof Error && e.name === "TimeoutError"
+          ? "internal_forward_timeout"
+          : "internal_forward_network";
       await prisma.shoutout.update({
         where: { id: shoutout.id },
         data: {
           deliveryStatus: "failed",
-          moderationReason: e instanceof Error ? e.message.slice(0, 200) : "network",
+          moderationReason: reason,
         },
       });
       console.warn(
-        `booth-submit: internal forward fetch failed for ${shoutout.id}: ${
+        `booth-submit: internal forward fetch failed for ${shoutout.id} (${reason}): ${
           e instanceof Error ? e.message : "unknown"
         }`,
       );

@@ -31,8 +31,13 @@ export async function POST(
 ): Promise<NextResponse> {
   const { id } = await ctx.params;
   const pool = getDbPool();
-  const operator =
-    req.headers.get("cf-access-authenticated-user-email") ?? "operator";
+  // CF Access is the auth boundary; we just record the email it
+  // forwarded for the audit log. Fall back to "operator" if the
+  // header is missing or doesn't even contain an @, so a misconfig
+  // (or a request that bypasses CF Access) lands a meaningful audit
+  // value rather than a literal "true" / random string.
+  const rawEmail = req.headers.get("cf-access-authenticated-user-email") ?? "";
+  const operator = /^[^@\s]+@[^@\s]+$/.test(rawEmail) ? rawEmail : "operator";
 
   const result = await approveShoutout({
     id,

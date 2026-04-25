@@ -26,6 +26,13 @@ export async function writeIpcMessage(input: WriteIpcMessageInput): Promise<void
   if (!ID_PATTERN.test(shoutoutId)) {
     throw new Error(`invalid shoutout id: ${shoutoutId}`);
   }
+  // Defense-in-depth: refuse non-absolute dirs. Otherwise a misset
+  // NANOCLAW_IPC_DIR (relative path) would resolve against the
+  // dashboard process cwd, potentially landing the held-<id>.json
+  // payload outside the agent's expected drop zone.
+  if (!path.isAbsolute(dir)) {
+    throw new Error(`ipc dir must be an absolute path: ${dir}`);
+  }
   const finalPath = path.join(dir, `held-${shoutoutId}.json`);
   const tmpPath = `${finalPath}.tmp`;
   const payload: Record<string, unknown> = { type: "message", chatJid, text };

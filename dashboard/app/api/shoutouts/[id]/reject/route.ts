@@ -10,8 +10,10 @@ export async function POST(
 ): Promise<NextResponse> {
   const { id } = await ctx.params;
   const pool = getDbPool();
-  const operator =
-    req.headers.get("cf-access-authenticated-user-email") ?? "operator";
+  // See dashboard/app/api/shoutouts/[id]/approve/route.ts — same
+  // header-shape sanity check.
+  const rawEmail = req.headers.get("cf-access-authenticated-user-email") ?? "";
+  const operator = /^[^@\s]+@[^@\s]+$/.test(rawEmail) ? rawEmail : "operator";
 
   const result = await rejectShoutout({ id, operator, pool });
 

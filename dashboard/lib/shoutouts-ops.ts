@@ -98,15 +98,40 @@ export async function approveShoutout(input: ApproveInput): Promise<ApproveResul
       requesterName: row.requesterName ?? undefined,
       pool,
     });
-    await pool.query(
-      `UPDATE "Shoutout"
-          SET "deliveryStatus"    = 'aired',
-              "linkedQueueItemId" = $2,
-              "broadcastText"     = $3,
-              "updatedAt"         = NOW()
-        WHERE id = $1`,
-      [id, gen.queueItemId, text.slice(0, 500)],
-    );
+    // The shoutout is already on Liquidsoap's overlay queue at this
+    // point — gen() has pushed it. If this final UPDATE fails for a
+    // transient reason, the row stays at 'pending' but the audio
+    // will still air. The shoutout-ended Liquidsoap callback flips
+    // deliveryStatus to 'aired' as a backstop, so the worst outcome
+    // is a brief stale 'pending' on the operator dashboard. Retry
+    // once with a small backoff to make that even less likely.
+    try {
+      await pool.query(
+        `UPDATE "Shoutout"
+            SET "deliveryStatus"    = 'aired',
+                "linkedQueueItemId" = $2,
+                "broadcastText"     = $3,
+                "updatedAt"         = NOW()
+          WHERE id = $1`,
+        [id, gen.queueItemId, text.slice(0, 500)],
+      );
+    } catch (e) {
+      console.warn(
+        `[shoutouts-ops] post-generate UPDATE failed for ${id}, retrying once: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      await new Promise((r) => setTimeout(r, 250));
+      await pool.query(
+        `UPDATE "Shoutout"
+            SET "deliveryStatus"    = 'aired',
+                "linkedQueueItemId" = $2,
+                "broadcastText"     = $3,
+                "updatedAt"         = NOW()
+          WHERE id = $1`,
+        [id, gen.queueItemId, text.slice(0, 500)],
+      );
+    }
     return { ok: true, trackId: gen.trackId, queueItemId: gen.queueItemId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "generate_failed";

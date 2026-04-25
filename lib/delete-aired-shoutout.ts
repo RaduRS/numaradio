@@ -11,8 +11,8 @@
 // tracks use `library` / `priority_request`, so this filter prevents an
 // accidental trackId argument from nuking music.
 
-import { prisma } from "@/lib/db";
-import { deleteObject } from "@/lib/storage";
+import { prisma as defaultPrisma } from "./db/index.ts";
+import { deleteObject as defaultDeleteObject } from "./storage/index.ts";
 
 export interface DeleteResult {
   deleted: boolean;
@@ -21,9 +21,44 @@ export interface DeleteResult {
   b2Failures: number;
 }
 
+interface MinimalAsset {
+  id: string;
+  storageKey: string;
+}
+interface MinimalTrack {
+  id: string;
+  sourceType: string;
+  airingPolicy: string;
+  assets: MinimalAsset[];
+}
+
+// Minimal Prisma surface this function actually needs. Typed loosely
+// so the test can pass an in-memory mock without dragging the entire
+// Prisma client typings into a unit test.
+export interface DeleteAiredShoutoutDeps {
+  prisma: {
+    track: {
+      findUnique(args: {
+        where: { id: string };
+        select: unknown;
+      }): Promise<MinimalTrack | null>;
+      delete(args: { where: { id: string } }): Promise<unknown>;
+    };
+    playHistory: { deleteMany(args: { where: { trackId: string } }): Promise<unknown> };
+    queueItem: { deleteMany(args: { where: { trackId: string } }): Promise<unknown> };
+    trackAsset: { deleteMany(args: { where: { trackId: string } }): Promise<unknown> };
+    $transaction(ops: Promise<unknown>[]): Promise<unknown>;
+  };
+  deleteObject(key: string): Promise<unknown>;
+}
+
 export async function deleteAiredShoutout(
   trackId: string,
+  deps?: DeleteAiredShoutoutDeps,
 ): Promise<DeleteResult> {
+  const prisma = (deps?.prisma ?? defaultPrisma) as DeleteAiredShoutoutDeps["prisma"];
+  const deleteObject = deps?.deleteObject ?? defaultDeleteObject;
+
   const track = await prisma.track.findUnique({
     where: { id: trackId },
     select: {

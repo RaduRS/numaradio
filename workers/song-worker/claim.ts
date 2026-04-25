@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 export interface ClaimedJob {
   id: string;
@@ -7,8 +7,13 @@ export interface ClaimedJob {
   isInstrumental: boolean;
 }
 
-export function buildClaimSql(): string {
-  return `
+// SQL kept as a tagged template returning a Prisma.Sql so the call
+// site uses $queryRaw — the Unsafe variant signals "I'm bypassing
+// parameterisation" even though this query has no params today, and
+// the tagged form makes a future edit that introduces a runtime
+// parameter type-safe by construction.
+function claimSql(): Prisma.Sql {
+  return Prisma.sql`
     UPDATE "SongRequest"
        SET "status" = 'processing',
            "startedAt" = NOW()
@@ -24,7 +29,13 @@ export function buildClaimSql(): string {
   `;
 }
 
+// Kept as a string for the existing test helper (workers/song-worker/
+// claim.test.ts asserts the SQL shape).
+export function buildClaimSql(): string {
+  return claimSql().sql;
+}
+
 export async function claimNextJob(prisma: PrismaClient): Promise<ClaimedJob | null> {
-  const rows = await prisma.$queryRawUnsafe<ClaimedJob[]>(buildClaimSql());
+  const rows = await prisma.$queryRaw<ClaimedJob[]>(claimSql());
   return rows.length > 0 ? rows[0] : null;
 }

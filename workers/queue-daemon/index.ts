@@ -60,7 +60,10 @@ function getChatterS3Bits(): { s3: S3Client; bucket: string; publicBase: string 
 }
 
 const stationConfig = new StationConfigCache({
-  ttlMs: 30_000,
+  // 10 s instead of 30 s so an operator-side mode flip in the
+  // dashboard reflects in the daemon within ~10 s. The cache still
+  // absorbs the ~6×/min auto-host call rate without hammering Neon.
+  ttlMs: 10_000,
   fetchOnce: async () => {
     const s = await prisma.station.findUniqueOrThrow({
       where: { slug: STATION_SLUG },
