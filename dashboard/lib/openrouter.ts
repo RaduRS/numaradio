@@ -1,0 +1,101 @@
+/**
+ * OpenRouter image generation — adapted from workers/song-worker/openrouter.ts
+ * but kept local so the dashboard doesn't import from the workers dir (which
+ * carries its own runtime + deps). Same wire format, same parser.
+ */
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const IMAGE_MODEL =
+  process.env.OPENROUTER_IMAGE_MODEL ?? "black-forest-labs/flux.2-pro";
+
+export interface OpenRouterImageResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+      images?: Array<{
+        image_url?: { url?: string };
+      }>;
+    };
+  }>;
+}
+
+const DATA_URI_RE = /^data:image\/\w+;base64,(.+)$/;
+
+function apiKey(): string {
+  const k = process.env.OPEN_ROUTER_API;
+  if (!k) throw new Error("OPEN_ROUTER_API not set");
+  return k;
+}
+
+export function extractPngBase64(resp: OpenRouterImageResponse): string | null {
+  const choice = resp.choices?.[0];
+  const images = choice?.message?.images ?? [];
+  for (const img of images) {
+    const url = img.image_url?.url;
+    if (!url) continue;
+    const m = url.match(DATA_URI_RE);
+    if (m) return m[1];
+    if (url.startsWith("http")) {
+      return `__REMOTE__:${url}`;
+    }
+  }
+  const content = choice?.message?.content?.trim();
+  if (content && /^[A-Za-z0-9+/=\n\r]+$/.test(content) && content.length > 200) {
+    return content.replace(/\s+/g, "");
+  }
+  return null;
+}
+
+/**
+ * Generate album cover art via FLUX Pro on OpenRouter.
+ * Returns the raw image buffer (PNG/JPEG depending on model output).
+ *
+ * The prompt is wrapped to enforce "no text, no logos" because Suno's
+ * built-in art occasionally embeds tracklisting/watermark text — the
+ * whole point of regen here is to get a clean visual.
+ */
+export async function generateArtwork(prompt: string): Promise<Buffer> {
+  const res = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://numaradio.com",
+      "X-Title": "Numa Radio Dashboard",
+    },
+    body: JSON.stringify({
+      model: IMAGE_MODEL,
+      modalities: ["image"],
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Album cover artwork, square 1:1 composition, no text whatsoever, no logos, no watermarks, no titles, no song names, no band names, no captions, no typography, painterly, cinematic. Prompt: ${prompt}`,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`openrouter ${res.status}: ${detail.slice(0, 400)}`);
+  }
+
+  const data = (await res.json()) as OpenRouterImageResponse;
+  const extracted = extractPngBase64(data);
+  if (!extracted) {
+    throw new Error("openrouter: no image in response");
+  }
+  if (extracted.startsWith("__REMOTE__:")) {
+    const url = extracted.slice("__REMOTE__:".length);
+    const imgRes = await fetch(url);
+    if (!imgRes.ok) {
+      throw new Error(`openrouter remote image fetch ${imgRes.status}`);
+    }
+    return Buffer.from(await imgRes.arrayBuffer());
+  }
+  return Buffer.from(extracted, "base64");
+}
