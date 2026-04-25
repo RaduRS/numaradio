@@ -24,6 +24,10 @@ const ICECAST_MOUNT = process.env.ICECAST_MOUNT ?? "/stream";
 const sock = new SupervisedSocket({ host: LS_HOST, port: LS_PORT });
 const lastPushes = new RingBuffer<{ at: string; trackId: string; url: string; script?: string }>(10);
 const lastFailures = new RingBuffer<{ at: string; reason: string; detail?: string }>(10);
+// Surface the most recent hydrate failure so the dashboard /status
+// view can show "queue staging stalled at <time>: <error>" rather
+// than swallowing it in stderr. null = no failure since boot.
+let lastHydrationError: { at: string; message: string } | null = null;
 
 // ─── Auto-chatter wiring ─────────────────────────────────────────
 //
@@ -400,16 +404,27 @@ function statusHandler(): StatusSnapshot {
     socket: sock.isConnected() ? "connected" : "reconnecting",
     lastPushes: lastPushes.snapshot(),
     lastFailures: lastFailures.snapshot(),
+    lastHydrationError,
   };
 }
 
 async function runHydrate(): Promise<void> {
-  await hydrate({
-    listStaged,
-    resolveAssetUrl,
-    markFailed,
-    send: (line) => sock.send(line),
-  });
+  try {
+    await hydrate({
+      listStaged,
+      resolveAssetUrl,
+      markFailed,
+      send: (line) => sock.send(line),
+    });
+    // Successful hydrate clears the prior error so the dashboard
+    // doesn't keep flagging a stale outage after recovery.
+    lastHydrationError = null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    lastHydrationError = { at: new Date().toISOString(), message };
+    // Re-throw so the existing console.error path keeps logging.
+    throw err;
+  }
 }
 
 async function main() {

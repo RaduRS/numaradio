@@ -167,17 +167,29 @@ def notify_shoutout_started(metadata) =
   end
 end
 
-def notify_shoutout_ended() =
-  log.important("[numa] shoutout end")
+def notify_shoutout_ended(metadata) =
+  source_url = metadata["source_url"]
+  initial_uri = metadata["initial_uri"]
+  filename = metadata["filename"]
+  src = if source_url != "" then source_url
+        elsif initial_uri != "" then initial_uri
+        else filename end
+  log.important("[numa] shoutout end: src=" ^ src)
   secret = environment.get(default="", "INTERNAL_API_SECRET")
   if secret != "" then
+    # Pass sourceUrl in the body so the Vercel route can resolve the
+    # trackId without depending on NowSpeaking. That makes a
+    # double-fire (Liquidsoap retry, network blip) idempotent —
+    # cleanup runs from the body either time, instead of relying on
+    # state that the first fire already cleared.
+    body = json.stringify({sourceUrl=src})
     try
       r = http.post(
         headers=[
           ("Content-Type", "application/json"),
           ("x-internal-secret", secret)
         ],
-        data="{}",
+        data=body,
         timeout=5.,
         shoutout_ended_url
       )
@@ -207,7 +219,7 @@ overlay_queue.on_track(notify_shoutout_started)
 overlay_queue = source.on_end(
   delay=0.2,
   overlay_queue,
-  fun (_, _) -> notify_shoutout_ended()
+  fun (_, m) -> notify_shoutout_ended(m)
 )
 
 # ─── Music bed: fallback + 5s crossfade ────────────────────────────

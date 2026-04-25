@@ -40,6 +40,13 @@ export type StatusSnapshot = {
   socket: "connected" | "reconnecting";
   lastPushes: unknown[];
   lastFailures: unknown[];
+  /**
+   * Most recent hydrate() failure, or null if hydrate has been clean
+   * since boot (or recovered since the last error). Surfaced in
+   * /status so the dashboard can flag a stuck queue-staging path
+   * rather than silently logging to stderr.
+   */
+  lastHydrationError: { at: string; message: string } | null;
 };
 
 export interface ServerDeps {
