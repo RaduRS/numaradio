@@ -4,13 +4,13 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { parseFile } from "music-metadata";
 import { prisma } from "../lib/db";
-import { putObject, publicUrl } from "../lib/storage";
 import { fetchSunoMetadata } from "../lib/suno";
+import { ingestTrack } from "../lib/ingest.ts";
+import { resolveShowFromHashtagOrSidecar } from "./ingest-seed-helpers.ts";
 
 const SEED_DIR = join(process.cwd(), "seed");
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const STATION_NAME = process.env.STATION_NAME ?? "Numa Radio";
-const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 // ─── Field normalization & parsing ──────────────────────────────
 
@@ -91,150 +91,43 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
   let { genre, mood } = deriveGenreAndMood(hashtags);
   const lyrics = tags.lyrics?.[0]?.text;
   const durationSec = meta.format.duration ? Math.round(meta.format.duration) : undefined;
-  const sunoUrl = sunoId ? `https://suno.com/song/${sunoId}` : undefined;
 
-  // Suno stopped including BPM/key/structured-genre in ID3 comments around
-  // late 2025. If we have a Suno UUID but ID3 didn't give us those, scrape
-  // the public song page for the server-rendered metadata blob.
-  let sunoRawTags: string | undefined;
+  const show = await resolveShowFromHashtagOrSidecar({ mp3Path: filePath, commentText });
+
   let sunoModel: string | undefined;
-  let sunoGenres: string[] = [];
-  let sunoMoods: string[] = [];
   const needsSunoLookup = sunoId && (!bpm || !musicalKey || !genre);
   if (needsSunoLookup) {
     const result = await fetchSunoMetadata(sunoId!);
     if (result.ok) {
       bpm = bpm ?? result.data.bpm;
       musicalKey = musicalKey ?? result.data.musicalKey;
-      sunoGenres = result.data.genres;
-      sunoMoods = result.data.moods;
-      sunoRawTags = result.data.rawTags;
       sunoModel = result.data.modelVersion;
-      // Promote the first Suno genre/mood into our single-field slots if the
-      // hashtag whitelist didn't already pick something.
-      if (!genre && sunoGenres.length) genre = sunoGenres[0];
-      if (!mood && sunoMoods.length) mood = sunoMoods[0];
+      if (!genre && result.data.genres.length) genre = result.data.genres[0];
+      if (!mood && result.data.moods.length) mood = result.data.moods[0];
     } else {
       console.log(`  ↳ Suno metadata lookup failed: ${result.reason}`);
     }
   }
 
-  // Idempotency: dedupe on Suno ID
-  if (sunoId) {
-    const existing = await prisma.track.findFirst({
-      where: { stationId, sourceReference: sunoId },
-    });
-    if (existing) {
-      console.log(`  ↳ already ingested as ${existing.id} — skipping`);
-      return "skipped";
-    }
-  }
-
-  const track = await prisma.track.create({
-    data: {
-      stationId,
-      sourceType: "suno_manual",
-      sourceReference: sunoId,
-      title,
-      artistDisplay: artist,
-      mood,
-      genre,
-      bpm,
-      durationSeconds: durationSec,
-      lyricsSummary: lyrics?.slice(0, 240),
-      promptSummary: commentText.slice(0, 500),
-      provenanceJson: {
-        sunoId,
-        sunoUrl,
-        sunoRawTags,
-        sunoModel,
-        sunoGenres,
-        sunoMoods,
-        rawComment: commentText,
-        hashtags,
-        key: musicalKey,
-        bpm,
-        sourceFileName: fileName,
-        sourceBytes: audioBuffer.byteLength,
-        sourceCodec: meta.format.codec,
-        sampleRate: meta.format.sampleRate,
-        bitrate: meta.format.bitrate,
-        channels: meta.format.numberOfChannels,
-        ingestedAt: new Date().toISOString(),
-        ingestVersion: 2,
-      },
-      airingPolicy: "library",
-      safetyStatus: "approved",
-      trackStatus: "processing",
-    },
-  });
-  console.log(`  ↳ track ${track.id} — "${title}" by ${artist}`);
-  if (bpm || musicalKey || genre || mood) {
-    console.log(
-      `      ${[bpm && `${bpm} BPM`, musicalKey, genre, mood].filter(Boolean).join(" · ")}`,
-    );
-  }
-
-  // Audio asset. Cache-Control: immutable — the key embeds the track id,
-  // so a given URL's bytes never change. Long max-age lets listener browsers
-  // and any future CDN layer avoid re-fetching.
-  const audioKey = `stations/${STATION_SLUG}/tracks/${track.id}/audio/stream.mp3`;
-  await putObject(audioKey, audioBuffer, "audio/mpeg", IMMUTABLE_CACHE_CONTROL);
-  const audioAsset = await prisma.trackAsset.create({
-    data: {
-      trackId: track.id,
-      assetType: "audio_stream",
-      storageKey: audioKey,
-      publicUrl: publicUrl(audioKey),
-      mimeType: "audio/mpeg",
-      byteSize: audioBuffer.byteLength,
-      durationSeconds: durationSec,
-    },
-  });
-  console.log(
-    `  ↳ uploaded audio (${(audioBuffer.byteLength / 1024 / 1024).toFixed(2)} MB) → ${audioKey}`,
-  );
-
-  // Artwork asset (if embedded)
-  let artAssetId: string | undefined;
   const picture = tags.picture?.[0];
-  if (picture) {
-    const ext = picture.format === "image/png" ? "png" : "jpg";
-    const artKey = `stations/${STATION_SLUG}/tracks/${track.id}/artwork/primary.${ext}`;
-    await putObject(
-      artKey,
-      Buffer.from(picture.data),
-      picture.format,
-      IMMUTABLE_CACHE_CONTROL,
-    );
-    const artAsset = await prisma.trackAsset.create({
-      data: {
-        trackId: track.id,
-        assetType: "artwork_primary",
-        storageKey: artKey,
-        publicUrl: publicUrl(artKey),
-        mimeType: picture.format,
-        byteSize: picture.data.byteLength,
-      },
-    });
-    artAssetId = artAsset.id;
-    console.log(
-      `  ↳ uploaded artwork (${picture.format}, ${(picture.data.byteLength / 1024).toFixed(0)} KB) → ${artKey}`,
-    );
-  } else {
-    console.log("  ↳ no embedded artwork — placeholder will render client-side");
-  }
+  const artwork = picture
+    ? { buffer: Buffer.from(picture.data), mimeType: picture.format }
+    : undefined;
 
-  await prisma.track.update({
-    where: { id: track.id },
-    data: {
-      primaryAudioAssetId: audioAsset.id,
-      primaryArtAssetId: artAssetId,
-      trackStatus: "ready",
-    },
+  const result = await ingestTrack({
+    stationId, audioBuffer, show, title,
+    artistDisplay: artist, lyrics, caption: commentText,
+    styleTags: hashtags, sunoId, bpm, musicalKey, genre, mood,
+    durationSeconds: durationSec, artwork, rawComment: commentText,
+    sourceType: "suno_manual",
+    model: sunoModel as "v5" | "v5.5" | undefined,
   });
-  console.log(`  ↳ marked ready`);
 
+  if (result.status === "skipped") {
+    console.log(`  ↳ already ingested as ${result.trackId} — skipping`);
+    return "skipped";
+  }
+  console.log(`  ↳ track ${result.trackId} — "${title}" by ${artist} · show=${show}`);
   return "ingested";
 }
 
