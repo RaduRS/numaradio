@@ -1,4 +1,5 @@
 import "../lib/load-env.ts";
+import { randomBytes } from "node:crypto";
 import { writeFile, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -93,7 +94,11 @@ async function main() {
 
     const content = buildPlaylist(library, recentIds);
 
-    const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}.m3u`);
+    // PID + Date.now() can collide if the timer double-fires inside
+    // the same millisecond (rare but possible under load). Adding 8
+    // bytes of randomness makes a collision essentially impossible.
+    const suffix = randomBytes(4).toString("hex");
+    const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
     await writeFile(tmpPath, content, "utf8");
     await rename(tmpPath, PLAYLIST_PATH);
 

@@ -16,7 +16,17 @@ interface Body {
 
 // Legacy tool shape for the NanoClaw agent. Translates `enabled` booleans
 // into the tri-state model: true → forced_on for 20 min, false → forced_off
-// for 20 min. GET derives enabled from the current mode.
+// for 20 min. GET derives `enabled` differently from POST's input:
+//
+//   POST `enabled: true`  → forced_on
+//   POST `enabled: false` → forced_off
+//   GET `enabled`         → mode !== "forced_off" (i.e. true while in
+//                           "auto" too — Lena will speak when listeners
+//                           are present, not just when forced).
+//
+// That asymmetry is intentional but easy to misread: if the agent
+// reads `enabled: true` from GET it shouldn't infer that auto-chatter
+// is currently locked-on, only that it's not actively suppressed.
 
 export async function GET(req: Request): Promise<NextResponse> {
   if (!internalAuthOk(req)) {

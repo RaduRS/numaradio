@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "./Logo";
 import { ListenLiveButton } from "./ListenLiveButton";
 
@@ -7,10 +8,13 @@ export function Nav() {
       <div className="shell nav-inner">
         <Logo />
         <div className="nav-links">
-          <a href="/#requests">Requests</a>
-          <a href="/#format">The Station</a>
-          <a href="/#now">Now Playing</a>
-          <a href="/#schedule">Shows</a>
+          {/* <Link> for in-app section anchors so navigating from
+              /about → /#requests stays a client-side transition with
+              the Next router managing scroll restoration. */}
+          <Link href="/#requests">Requests</Link>
+          <Link href="/#format">The Station</Link>
+          <Link href="/#now">Now Playing</Link>
+          <Link href="/#schedule">Shows</Link>
         </div>
         <div className="nav-right">
           <div className="live-chip">

@@ -102,14 +102,6 @@
   color: var(--fg-mute);
 }
 
-@media (max-width: 899px) {
-  .ep-shell {
-    inset: 0;
-    border-radius: 0;
-    border: none;
-  }
-}
-
 /* Desktop Booth layout */
 .ep-booth {
   flex: 1;

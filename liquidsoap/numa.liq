@@ -240,9 +240,10 @@ voice = compress(
 voice = limit(threshold=-1., voice)
 
 # ─── Mix: voice rides on top, bed ducks while she speaks ───────────
-# smooth_add p=0.5 → bed drops to 50% (≈ -6 dB) when voice has content.
-# duration=0.5s sets the attack/release fade for the duck. Voice plays
-# unducked on top.
+# smooth_add p=0.3 → bed drops to ≈30% (≈ -10 dB) when voice has
+# content. duration=0.5s sets the attack/release fade for the duck.
+# Voice plays unducked on top. Originally documented as p=0.5 / -6 dB;
+# the ear preferred a deeper duck during testing on 2026-04-20.
 source = smooth_add(
   duration=0.5,
   p=0.3,

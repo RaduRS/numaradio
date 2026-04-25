@@ -329,8 +329,27 @@ export default function ShoutoutsPage() {
     });
   }, [events, logFilter]);
 
-  const totalAired = events.filter((e) => e.kind !== "failure").length;
-  const totalFailed = events.filter((e) => e.kind === "failure").length;
+  // Per-kind counts memoized once per `events` change instead of
+  // recomputing 5× per render inside the filter-chip map below.
+  const filterCounts = useMemo<Record<LogFilter, number>>(() => {
+    const c: Record<LogFilter, number> = {
+      all: events.length,
+      shoutouts: 0,
+      chatter: 0,
+      announce: 0,
+      failures: 0,
+    };
+    for (const e of events) {
+      if (e.kind === "shoutout") c.shoutouts++;
+      else if (e.kind === "chatter") c.chatter++;
+      else if (e.kind === "announce") c.announce++;
+      else if (e.kind === "failure") c.failures++;
+    }
+    return c;
+  }, [events]);
+
+  const totalAired = events.length - filterCounts.failures;
+  const totalFailed = filterCounts.failures;
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-5 sm:gap-6 sm:px-6 sm:py-8">
@@ -463,12 +482,6 @@ export default function ShoutoutsPage() {
                 </CardTitle>
                 <div className="flex items-center gap-1 flex-wrap" role="group" aria-label="Event filter">
                   {(["all", "shoutouts", "chatter", "announce", "failures"] as LogFilter[]).map((f) => {
-                    const count =
-                      f === "all" ? events.length :
-                      f === "shoutouts" ? events.filter(e => e.kind === "shoutout").length :
-                      f === "chatter" ? events.filter(e => e.kind === "chatter").length :
-                      f === "announce" ? events.filter(e => e.kind === "announce").length :
-                      events.filter(e => e.kind === "failure").length;
                     const active = logFilter === f;
                     return (
                       <button
@@ -482,7 +495,7 @@ export default function ShoutoutsPage() {
                             : "border-line text-fg-mute hover:text-fg hover:border-fg-mute"
                         }`}
                       >
-                        {FILTER_LABELS[f]} <span className="opacity-60">({count})</span>
+                        {FILTER_LABELS[f]} <span className="opacity-60">({filterCounts[f]})</span>
                       </button>
                     );
                   })}

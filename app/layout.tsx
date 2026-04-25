@@ -93,12 +93,24 @@ export const metadata: Metadata = {
     title: "Numa Radio — Always On",
     description:
       "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
+    // Without an explicit images list, Next.js doesn't auto-include
+    // the /opengraph-image route in the og:image meta — link previews
+    // on Slack/iMessage/etc. fall back to text-only.
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Numa Radio — Always On",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Numa Radio — Always On",
     description:
       "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
+    images: ["/opengraph-image"],
   },
   appleWebApp: {
     capable: true,

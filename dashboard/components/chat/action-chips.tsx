@@ -6,6 +6,17 @@ interface Props {
   actions: ChatAction[];
 }
 
+// Tool responses come from in-process server code so they shouldn't
+// contain control characters today, but a future tool that streams
+// back e.g. journalctl output could pick up ANSI escapes or U+0000.
+// React already escapes the string for HTML; we additionally strip
+// non-printables so a stray \x1B[31m can't render as anything weird.
+function sanitizeSummary(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  const cleaned = s.replace(/[\x00-\x1F\x7F]/g, "");
+  return cleaned.length > 48 ? cleaned.slice(0, 47) + "…" : cleaned;
+}
+
 /**
  * Compact pills. Collapsed (default): one summary line with count.
  * Expanded: one pill per action — `name · result` — and nothing else.
@@ -66,9 +77,7 @@ export function ActionChips({ actions }: Props) {
                     <>
                       <span className="text-fg-mute/50">·</span>
                       <span className="font-sans italic">
-                        {a.resultSummary.length > 48
-                          ? a.resultSummary.slice(0, 47) + "…"
-                          : a.resultSummary}
+                        {sanitizeSummary(a.resultSummary)}
                       </span>
                     </>
                   )}
