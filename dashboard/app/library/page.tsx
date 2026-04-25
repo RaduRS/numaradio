@@ -6,6 +6,13 @@ import { usePolling } from "@/hooks/use-polling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
 import type {
@@ -94,33 +101,47 @@ function labelFor(entry: DaemonPush): string {
   return entry.trackId ?? "(unknown)";
 }
 
+const SHOW_OPTIONS: { value: string; label: string }[] = [
+  { value: "night_shift", label: "Night Shift" },
+  { value: "morning_room", label: "Morning Room" },
+  { value: "daylight_channel", label: "Daylight Channel" },
+  { value: "prime_hours", label: "Prime Hours" },
+];
+
 function ShowCell({ track, onChange }: { track: LibraryTrack; onChange: () => void }) {
   const [pending, setPending] = useState(false);
+  async function set(next: string) {
+    setPending(true);
+    try {
+      await setTrackShow(track.id, next);
+      toast.success(`Show set: ${showLabelFor(next)}`);
+      onChange();
+    } catch (err) {
+      toast.error(`Failed: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setPending(false);
+    }
+  }
   return (
-    <select
+    <Select
       value={track.show ?? ""}
+      onValueChange={(v) => { if (typeof v === "string" && v) void set(v); }}
       disabled={pending}
-      onChange={async (e) => {
-        const next = e.target.value;
-        setPending(true);
-        try {
-          await setTrackShow(track.id, next);
-          toast.success(`Show set: ${showLabelFor(next)}`);
-          onChange();
-        } catch (err) {
-          toast.error(`Failed: ${err instanceof Error ? err.message : err}`);
-        } finally {
-          setPending(false);
-        }
-      }}
-      className="bg-transparent border border-line rounded px-1 py-0.5 text-xs font-mono outline-none focus:border-accent disabled:opacity-50"
     >
-      <option value="" disabled>—</option>
-      <option value="night_shift">Night Shift</option>
-      <option value="morning_room">Morning Room</option>
-      <option value="daylight_channel">Daylight Channel</option>
-      <option value="prime_hours">Prime Hours</option>
-    </select>
+      <SelectTrigger
+        size="sm"
+        className="h-7 text-xs font-mono w-[140px] disabled:opacity-50"
+      >
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
+      <SelectContent>
+        {SHOW_OPTIONS.map((o) => (
+          <SelectItem key={o.value} value={o.value} className="text-xs font-mono">
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
