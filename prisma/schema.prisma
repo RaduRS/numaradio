@@ -25,6 +25,13 @@ enum AutoHostMode {
   forced_off
 }
 
+enum ShowBlock {
+  night_shift
+  morning_room
+  daylight_channel
+  prime_hours
+}
+
 enum TrackSourceType {
   suno_manual
   minimax_request
@@ -177,6 +184,7 @@ model Track {
   artistDisplay       String?
   description         String?
   mood                String?
+  show                ShowBlock?
   genre               String?
   bpm                 Int?
   durationSeconds     Int?
@@ -203,6 +211,7 @@ model Track {
   songRequests SongRequest[]
 
   @@index([stationId, trackStatus, airingPolicy])
+  @@index([stationId, show, trackStatus, airingPolicy])
 }
 
 model TrackAsset {
