@@ -188,6 +188,24 @@ export default async function RootLayout({
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }`}
         </Script>
+        {/* iOS Safari occasionally restores a backgrounded tab from the
+            back-forward cache without re-running Next's CSS chunk loader,
+            leaving the page entirely unstyled until a manual refresh.
+            We probe a CSS variable we know is set by globals.css; if it's
+            empty on a bfcache restore (event.persisted === true) we force
+            a one-time reload so the user gets styles back without having
+            to pull-to-refresh. The probe avoids reloads in the normal
+            (styled) case so audio playback isn't interrupted. */}
+        <Script id="bfcache-style-recovery" strategy="afterInteractive">
+          {`window.addEventListener('pageshow', function (e) {
+            if (!e.persisted) return;
+            try {
+              var probe = getComputedStyle(document.documentElement)
+                .getPropertyValue('--bg').trim();
+              if (!probe) window.location.reload();
+            } catch (_) { /* no-op */ }
+          });`}
+        </Script>
       </body>
     </html>
   );
