@@ -13,6 +13,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  EllipsisVerticalIcon,
+  PlayIcon,
+  ImageIcon,
+  Loader2Icon,
+} from "lucide-react";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
 import type {
@@ -166,6 +187,9 @@ export default function LibraryPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState<Set<string>>(new Set());
+  const [regenTarget, setRegenTarget] = useState<LibraryTrack | null>(null);
+  const [regenHint, setRegenHint] = useState("");
 
   const tracks = tracksPoll.data?.tracks ?? [];
 
@@ -210,6 +234,25 @@ export default function LibraryPage() {
     () => (pushesPoll.data?.lastFailures ?? []).filter((f) => !isVoiceFailure(f)),
     [pushesPoll.data],
   );
+
+  async function regenerateArtwork(track: LibraryTrack, hint: string) {
+    setRegenerating((prev) => { const n = new Set(prev); n.add(track.id); return n; });
+    try {
+      const res = await fetch(`/api/library/track/${track.id}/artwork`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hint: hint.trim() || undefined }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      toast.success(`New artwork — "${track.title}"`);
+      await tracksPoll.refresh();
+    } catch (err) {
+      toast.error(`Regenerate failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setRegenerating((prev) => { const n = new Set(prev); n.delete(track.id); return n; });
+    }
+  }
 
   async function pushTrack(track: LibraryTrack) {
     if (!track.audioStreamUrl) {
@@ -407,75 +450,128 @@ export default function LibraryPage() {
                   );
                 })}
               </ul>
-              {/* Desktop table — md and up. */}
-              <div className="hidden overflow-x-auto md:block">
+              {/* Desktop table — md and up. Denser per row, no horizontal cram:
+                  cover (with status dot) · title+artist (stacked) · meta strip
+                  · show · row-action menu. Drops 4 columns vs the old layout. */}
+              <div className="hidden md:block">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-bg-1 z-[1] border-b border-line">
                     <tr className="text-fg-mute font-mono text-[10px] uppercase tracking-[0.2em]">
-                      <th className="text-left px-4 py-2.5 w-16"></th>
-                      <th className="text-left px-2 py-2.5">Title</th>
-                      <th className="text-left px-2 py-2.5">Artist</th>
-                      <th className="text-right px-2 py-2.5 w-14">Time</th>
-                      <th className="text-left px-2 py-2.5 w-20">Genre</th>
-                      <th className="text-left px-2 py-2.5 w-24">Show</th>
-                      <th className="text-right px-3 py-2.5 w-28">Votes</th>
-                      <th className="text-left px-2 py-2.5 w-16">Status</th>
-                      <th className="text-right px-4 py-2.5 w-28"></th>
+                      <th className="text-left px-4 py-2.5 w-[72px]"></th>
+                      <th className="text-left px-2 py-2.5">Track</th>
+                      <th className="text-left px-2 py-2.5 w-[260px]">Meta</th>
+                      <th className="text-left px-2 py-2.5 w-[160px]">Show</th>
+                      <th className="text-right px-3 py-2.5 w-[56px]"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {pageTracks.map((t) => {
-                      const disabled = !t.audioStreamUrl || pendingId === t.id;
+                      const playable = !!t.audioStreamUrl;
+                      const isPending = pendingId === t.id;
+                      const isRegen = regenerating.has(t.id);
+                      const statusCat = categoriseStatus(t.trackStatus);
                       return (
                         <tr
                           key={t.id}
                           className="border-t border-line align-middle hover:bg-bg/40 transition-colors"
                         >
-                          <td className="px-4 py-2">
-                            {t.artworkUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={t.artworkUrl}
-                                alt=""
-                                className="w-14 h-14 rounded-md object-cover bg-bg-1 shadow-sm shadow-black/40"
-                              />
-                            ) : (
-                              <div className="w-14 h-14 rounded-md bg-bg border border-line" />
-                            )}
+                          {/* Cover + tiny status indicator */}
+                          <td className="px-4 py-3">
+                            <div className="relative w-14 h-14">
+                              {t.artworkUrl ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={t.artworkUrl}
+                                  alt=""
+                                  className={`w-14 h-14 rounded-md object-cover bg-bg-1 shadow-sm shadow-black/40 transition-opacity ${isRegen ? "opacity-30" : ""}`}
+                                />
+                              ) : (
+                                <div className="w-14 h-14 rounded-md bg-bg border border-line" />
+                              )}
+                              {isRegen && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <Loader2Icon size={20} className="animate-spin text-accent" />
+                                </div>
+                              )}
+                              {!isRegen && statusCat !== "ready" && (
+                                <span
+                                  title={`Status: ${t.trackStatus}`}
+                                  className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-bg-1 ${
+                                    statusCat === "failed" ? "bg-[var(--bad)]" :
+                                    statusCat === "draft" ? "bg-[var(--warn)]" :
+                                    "bg-fg-mute"
+                                  }`}
+                                />
+                              )}
+                            </div>
                           </td>
-                          <td className="px-2 py-2 font-medium">{t.title}</td>
-                          <td className="px-2 py-2 text-fg-mute">{t.artist ?? "—"}</td>
-                          <td className="px-2 py-2 text-right font-mono text-xs text-fg-mute tabular-nums">
-                            {fmtDuration(t.durationSeconds)}
+
+                          {/* Title + artist stacked */}
+                          <td className="px-2 py-3 min-w-0">
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-medium text-fg truncate" title={t.title}>
+                                {t.title}
+                              </span>
+                              <span className="text-xs text-fg-mute font-mono truncate" title={t.artist ?? ""}>
+                                {t.artist ?? "—"}
+                              </span>
+                            </div>
                           </td>
-                          <td className="px-2 py-2 text-fg-mute text-xs">{t.genre ?? "—"}</td>
-                          <td className="px-2 py-2 text-xs">
+
+                          {/* Meta strip — duration · genre · votes in one mono line */}
+                          <td className="px-2 py-3 text-xs text-fg-mute font-mono">
+                            <div className="flex items-center gap-3 whitespace-nowrap tabular-nums">
+                              <span>{fmtDuration(t.durationSeconds)}</span>
+                              <span className="text-fg-mute/40">·</span>
+                              <span className="truncate max-w-[90px]" title={t.genre ?? ""}>
+                                {t.genre ?? "—"}
+                              </span>
+                              <span className="text-fg-mute/40">·</span>
+                              <span className="flex items-center gap-1.5">
+                                <span className={t.votesUp > 0 ? "text-accent" : "text-fg-mute"}>
+                                  ▲{t.votesUp}
+                                </span>
+                                <span className={t.votesDown > 0 ? "text-[var(--bad)]" : "text-fg-mute"}>
+                                  ▼{t.votesDown}
+                                </span>
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Show selector (unchanged) */}
+                          <td className="px-2 py-3">
                             <ShowCell track={t} onChange={() => tracksPoll.refresh()} />
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-xs tabular-nums whitespace-nowrap">
-                            <span className={t.votesUp > 0 ? "text-accent" : "text-fg-mute"}>
-                              ▲&nbsp;{t.votesUp}
-                            </span>
-                            <span className="inline-block w-3" />
-                            <span className={t.votesDown > 0 ? "text-[var(--bad)]" : "text-fg-mute"}>
-                              ▼&nbsp;{t.votesDown}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2">
-                            <Badge variant="outline" className={statusBadgeClass(t.trackStatus)}>
-                              {t.trackStatus}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-2 text-right">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              disabled={disabled}
-                              onClick={() => pushTrack(t)}
-                              title={!t.audioStreamUrl ? "No audio asset" : "Push to priority queue"}
-                            >
-                              {pendingId === t.id ? "…" : "Play Next"}
-                            </Button>
+
+                          {/* Row-action menu */}
+                          <td className="px-3 py-3 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                className="w-8 h-8 inline-flex items-center justify-center rounded text-fg-mute hover:text-fg hover:bg-bg/60 transition-colors disabled:opacity-30"
+                                disabled={isPending || isRegen}
+                                title="Track actions"
+                                aria-label="Track actions"
+                              >
+                                <EllipsisVerticalIcon size={16} />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[200px]">
+                                <DropdownMenuItem
+                                  disabled={!playable || isPending}
+                                  onClick={() => pushTrack(t)}
+                                >
+                                  <PlayIcon size={14} />
+                                  <span>{isPending ? "Pushing…" : "Play next"}</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  disabled={isRegen}
+                                  onClick={() => { setRegenTarget(t); setRegenHint(""); }}
+                                >
+                                  <ImageIcon size={14} />
+                                  <span>Regenerate artwork…</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       );
@@ -606,6 +702,49 @@ export default function LibraryPage() {
           </div>
         </aside>
       </div>
+
+      {/* Regenerate-artwork confirmation dialog */}
+      <Dialog open={!!regenTarget} onOpenChange={(o) => { if (!o) setRegenTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Regenerate artwork</DialogTitle>
+            <DialogDescription>
+              Replaces the cover for <span className="text-fg font-medium">"{regenTarget?.title}"</span>{" "}
+              with a fresh FLUX Pro generation. Existing cover is deleted from B2.
+              Track playback isn't affected.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 mt-2">
+            <label className="text-[11px] uppercase tracking-[0.18em] text-fg-mute font-mono">
+              Operator note (optional)
+            </label>
+            <textarea
+              value={regenHint}
+              onChange={(e) => setRegenHint(e.target.value)}
+              placeholder="e.g. abstract sunrise over an empty highway, no people"
+              rows={3}
+              className="bg-bg border border-line rounded px-3 py-2 text-sm font-mono outline-none focus:border-accent resize-y placeholder:text-fg-mute/50"
+            />
+            <span className="text-xs text-fg-mute">
+              Track metadata (title, mood, genre, show) is always sent. Add this only if the
+              defaults aren't producing what you want.
+            </span>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRegenTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!regenTarget) return;
+                const t = regenTarget;
+                setRegenTarget(null);
+                void regenerateArtwork(t, regenHint);
+              }}
+            >
+              Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
