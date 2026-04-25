@@ -14,13 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,12 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  EllipsisVerticalIcon,
-  PlayIcon,
-  ImageIcon,
-  Loader2Icon,
-} from "lucide-react";
+import { PlayIcon, ImageIcon, Loader2Icon } from "lucide-react";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
 import type {
@@ -166,6 +154,35 @@ function ShowCell({ track, onChange }: { track: LibraryTrack; onChange: () => vo
   );
 }
 
+// ─── Action icon button ────────────────────────────────────────────
+
+function ActionIcon({
+  onClick, disabled, title, tone, children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  title: string;
+  tone: "accent" | "muted";
+  children: React.ReactNode;
+}) {
+  const toneCls =
+    tone === "accent"
+      ? "text-fg-mute hover:text-accent hover:border-accent/60 hover:bg-[var(--accent-soft)]"
+      : "text-fg-mute hover:text-fg hover:border-fg-mute hover:bg-bg/60";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={`w-8 h-8 inline-flex items-center justify-center border border-line rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${toneCls}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ─── Component ─────────────────────────────────────────────────────
 
 const PAGE_SIZE = 10;
@@ -293,7 +310,7 @@ export default function LibraryPage() {
   }, [tracks]);
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-5 sm:gap-6 sm:px-6 sm:py-8">
+    <main className="mx-auto w-full max-w-[1440px] px-4 py-6 flex flex-col gap-5 sm:gap-6 sm:px-6 sm:py-8">
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
         <h1
@@ -450,18 +467,22 @@ export default function LibraryPage() {
                   );
                 })}
               </ul>
-              {/* Desktop table — md and up. Denser per row, no horizontal cram:
-                  cover (with status dot) · title+artist (stacked) · meta strip
-                  · show · row-action menu. Drops 4 columns vs the old layout. */}
+              {/* Desktop table — md and up. Each meta field gets its own column
+                  so duration, genre, and votes don't collide. Two icon buttons
+                  per row for the two common actions (Play next, Regenerate
+                  artwork) — fewer clicks than a dropdown for the actions
+                  the operator uses every time. */}
               <div className="hidden md:block">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-bg-1 z-[1] border-b border-line">
                     <tr className="text-fg-mute font-mono text-[10px] uppercase tracking-[0.2em]">
                       <th className="text-left px-4 py-2.5 w-[72px]"></th>
                       <th className="text-left px-2 py-2.5">Track</th>
-                      <th className="text-left px-2 py-2.5 w-[260px]">Meta</th>
-                      <th className="text-left px-2 py-2.5 w-[160px]">Show</th>
-                      <th className="text-right px-3 py-2.5 w-[56px]"></th>
+                      <th className="text-right px-3 py-2.5 w-[64px]">Time</th>
+                      <th className="text-left px-3 py-2.5 w-[140px]">Genre</th>
+                      <th className="text-right px-3 py-2.5 w-[90px]">Votes</th>
+                      <th className="text-left px-3 py-2.5 w-[160px]">Show</th>
+                      <th className="text-right px-4 py-2.5 w-[100px]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -475,7 +496,7 @@ export default function LibraryPage() {
                           key={t.id}
                           className="border-t border-line align-middle hover:bg-bg/40 transition-colors"
                         >
-                          {/* Cover + tiny status indicator */}
+                          {/* Cover + tiny status indicator dot */}
                           <td className="px-4 py-3">
                             <div className="relative w-14 h-14">
                               {t.artworkUrl ? (
@@ -518,60 +539,56 @@ export default function LibraryPage() {
                             </div>
                           </td>
 
-                          {/* Meta strip — duration · genre · votes in one mono line */}
-                          <td className="px-2 py-3 text-xs text-fg-mute font-mono">
-                            <div className="flex items-center gap-3 whitespace-nowrap tabular-nums">
-                              <span>{fmtDuration(t.durationSeconds)}</span>
-                              <span className="text-fg-mute/40">·</span>
-                              <span className="truncate max-w-[90px]" title={t.genre ?? ""}>
-                                {t.genre ?? "—"}
-                              </span>
-                              <span className="text-fg-mute/40">·</span>
-                              <span className="flex items-center gap-1.5">
-                                <span className={t.votesUp > 0 ? "text-accent" : "text-fg-mute"}>
-                                  ▲{t.votesUp}
-                                </span>
-                                <span className={t.votesDown > 0 ? "text-[var(--bad)]" : "text-fg-mute"}>
-                                  ▼{t.votesDown}
-                                </span>
-                              </span>
-                            </div>
+                          {/* Time */}
+                          <td className="px-3 py-3 text-right text-xs text-fg-mute font-mono tabular-nums whitespace-nowrap">
+                            {fmtDuration(t.durationSeconds)}
                           </td>
 
-                          {/* Show selector (unchanged) */}
-                          <td className="px-2 py-3">
+                          {/* Genre */}
+                          <td className="px-3 py-3 text-xs text-fg-mute font-mono">
+                            <span className="block truncate" title={t.genre ?? ""}>
+                              {t.genre ?? "—"}
+                            </span>
+                          </td>
+
+                          {/* Votes */}
+                          <td className="px-3 py-3 text-right text-xs font-mono tabular-nums whitespace-nowrap">
+                            <span className={t.votesUp > 0 ? "text-accent" : "text-fg-mute"}>
+                              ▲ {t.votesUp}
+                            </span>
+                            <span className="inline-block w-2.5" />
+                            <span className={t.votesDown > 0 ? "text-[var(--bad)]" : "text-fg-mute"}>
+                              ▼ {t.votesDown}
+                            </span>
+                          </td>
+
+                          {/* Show selector */}
+                          <td className="px-3 py-3">
                             <ShowCell track={t} onChange={() => tracksPoll.refresh()} />
                           </td>
 
-                          {/* Row-action menu */}
-                          <td className="px-3 py-3 text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger
-                                className="w-8 h-8 inline-flex items-center justify-center rounded text-fg-mute hover:text-fg hover:bg-bg/60 transition-colors disabled:opacity-30"
-                                disabled={isPending || isRegen}
-                                title="Track actions"
-                                aria-label="Track actions"
+                          {/* Action icons — Play next + Regenerate artwork */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <ActionIcon
+                                onClick={() => pushTrack(t)}
+                                disabled={!playable || isPending || isRegen}
+                                title={!playable ? "No audio asset" : isPending ? "Pushing…" : "Play next"}
+                                tone="accent"
                               >
-                                <EllipsisVerticalIcon size={16} />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="min-w-[200px]">
-                                <DropdownMenuItem
-                                  disabled={!playable || isPending}
-                                  onClick={() => pushTrack(t)}
-                                >
-                                  <PlayIcon size={14} />
-                                  <span>{isPending ? "Pushing…" : "Play next"}</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  disabled={isRegen}
-                                  onClick={() => { setRegenTarget(t); setRegenHint(""); }}
-                                >
-                                  <ImageIcon size={14} />
-                                  <span>Regenerate artwork…</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                <PlayIcon size={15} strokeWidth={2} />
+                              </ActionIcon>
+                              <ActionIcon
+                                onClick={() => { setRegenTarget(t); setRegenHint(""); }}
+                                disabled={isRegen || isPending}
+                                title={isRegen ? "Regenerating…" : "Regenerate artwork"}
+                                tone="muted"
+                              >
+                                {isRegen
+                                  ? <Loader2Icon size={15} className="animate-spin" />
+                                  : <ImageIcon size={15} strokeWidth={2} />}
+                              </ActionIcon>
+                            </div>
                           </td>
                         </tr>
                       );
