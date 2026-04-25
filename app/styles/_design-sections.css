@@ -1932,6 +1932,16 @@
   cursor: pointer;
   transition: background 0.2s;
   align-items: start;
+  /* Reset <button> defaults — the row used to be a <div> and needs to
+     render identically as a button for keyboard a11y. */
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
 }
 .step-row:first-child { border-top: none; padding-top: 0; }
 .step-row:last-child { border-bottom: 1px solid var(--line); padding-bottom: 28px; }

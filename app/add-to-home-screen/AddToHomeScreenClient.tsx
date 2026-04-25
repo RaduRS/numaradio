@@ -782,10 +782,12 @@ export function AddToHomeScreenClient() {
               {steps.map((s, i) => {
                 const n = i + 1;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={i}
                     className={`step-row${activeStep === n ? " active" : ""}`}
                     onClick={() => selectStep(n)}
+                    aria-pressed={activeStep === n}
                   >
                     <div className="step-num-lg">
                       {String(n).padStart(2, "0")}
@@ -794,7 +796,7 @@ export function AddToHomeScreenClient() {
                       <h3>{s.title}</h3>
                       <p>{s.body}</p>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

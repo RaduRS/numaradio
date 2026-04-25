@@ -139,7 +139,11 @@ export class SupervisedSocket {
         for (const fn of this.reconnectListeners) await fn();
         return;
       } catch {
-        await new Promise((r) => setTimeout(r, delay));
+        // Add up to 1s of jitter so multiple supervised sockets
+        // restarting together (e.g. after a Liquidsoap reload) don't
+        // hammer the telnet endpoint at exactly the same instants.
+        const jitter = Math.random() * 1000;
+        await new Promise((r) => setTimeout(r, delay + jitter));
         delay = Math.min(delay * 2, this.max);
       }
     }

@@ -93,6 +93,31 @@ export async function POST(req: Request) {
   const durationMs = (track.durationSeconds ?? 180) * 1000;
   const expectedEndAt = new Date(startedAt.getTime() + durationMs);
 
+  // Close out the previous still-open PlayHistory row (if any) so
+  // its endedAt and completedNormally reflect what actually
+  // happened. Heuristic: if the previous row was within 5 s of its
+  // expected duration, treat as completedNormally; if it's missing
+  // a duration (legacy data) leave completedNormally untouched.
+  // Without a track-ended Liquidsoap callback this is the closest
+  // we can get to a truthful ledger — better than every row
+  // showing completedNormally=true forever.
+  const previous = await prisma.playHistory.findFirst({
+    where: { stationId: station.id, endedAt: null, segmentType: "audio_track" },
+    orderBy: { startedAt: "desc" },
+    select: { id: true, startedAt: true, durationSeconds: true },
+  });
+  let closePreviousOp: ReturnType<typeof prisma.playHistory.update> | null = null;
+  if (previous) {
+    const elapsedSec = Math.round((startedAt.getTime() - previous.startedAt.getTime()) / 1000);
+    const expected = previous.durationSeconds ?? null;
+    const completedNormally =
+      expected != null ? Math.abs(elapsedSec - expected) <= 5 : true;
+    closePreviousOp = prisma.playHistory.update({
+      where: { id: previous.id },
+      data: { endedAt: startedAt, completedNormally },
+    });
+  }
+
   const nowPlayingOp = prisma.nowPlaying.upsert({
     where: { stationId: station.id },
     create: {
@@ -117,6 +142,10 @@ export async function POST(req: Request) {
       titleSnapshot: track.title,
       startedAt,
       durationSeconds: track.durationSeconds,
+      // Optimistic — closed out by the NEXT track-started call (see
+      // the previous-row close-out above). If Liquidsoap restarts
+      // without firing a final track-started, this row stays open
+      // indefinitely; an operator-side sweeper can clean those up.
       completedNormally: true,
     },
   });
@@ -125,15 +154,17 @@ export async function POST(req: Request) {
   // re-air it on demand from the dashboard library page (which now surfaces
   // request_only tracks and allows pushing them). This makes listener
   // submissions one-shot by default rather than permanent rotation adds.
+  const ops: Promise<unknown>[] = [nowPlayingOp, playHistoryOp];
+  if (closePreviousOp) ops.push(closePreviousOp);
   if (track.airingPolicy === "priority_request") {
-    const demoteOp = prisma.track.update({
-      where: { id: track.id },
-      data: { airingPolicy: "request_only" },
-    });
-    await prisma.$transaction([nowPlayingOp, playHistoryOp, demoteOp]);
-  } else {
-    await prisma.$transaction([nowPlayingOp, playHistoryOp]);
+    ops.push(
+      prisma.track.update({
+        where: { id: track.id },
+        data: { airingPolicy: "request_only" },
+      }),
+    );
   }
+  await prisma.$transaction(ops as never);
 
   return Response.json({ ok: true, trackId: track.id, startedAt });
 }
