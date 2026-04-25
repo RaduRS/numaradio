@@ -50,20 +50,20 @@ async function withServer<T>(
 test("POST /push forwards body to handler and returns its result", async () => {
   const deps = mkDeps();
   await withServer(deps, async (port) => {
-    const { status, json } = await hit(port, "/push", { trackId: "t1", sourceUrl: "u1" });
+    const { status, json } = await hit(port, "/push", { trackId: "t1", sourceUrl: "https://cdn.numaradio.com/u1.mp3" });
     assert.equal(status, 200);
     assert.equal(json.queueItemId, "qi-1");
-    assert.deepEqual(deps.__pushed[0], { trackId: "t1", sourceUrl: "u1" });
+    assert.deepEqual(deps.__pushed[0], { trackId: "t1", sourceUrl: "https://cdn.numaradio.com/u1.mp3" });
   });
 });
 
 test("POST /push forwards the kind discriminator to the handler", async () => {
   const deps = mkDeps();
   await withServer(deps, async (port) => {
-    await hit(port, "/push", { trackId: "t1", sourceUrl: "u1", kind: "shoutout" });
+    await hit(port, "/push", { trackId: "t1", sourceUrl: "https://cdn.numaradio.com/u1.mp3", kind: "shoutout" });
     assert.deepEqual(deps.__pushed[0], {
       trackId: "t1",
-      sourceUrl: "u1",
+      sourceUrl: "https://cdn.numaradio.com/u1.mp3",
       kind: "shoutout",
     });
   });
@@ -88,7 +88,7 @@ test("POST /push returns 400 when handler throws with statusCode=400", async () 
     },
   });
   await withServer(deps, async (port) => {
-    const { status, json } = await hit(port, "/push", { trackId: "bogus", sourceUrl: "u" });
+    const { status, json } = await hit(port, "/push", { trackId: "bogus", sourceUrl: "https://cdn.numaradio.com/u.mp3" });
     assert.equal(status, 400);
     assert.match(json.message, /unknown track/);
   });
@@ -97,7 +97,7 @@ test("POST /push returns 400 when handler throws with statusCode=400", async () 
 test("POST /on-track invokes handler and returns 200", async () => {
   const deps = mkDeps();
   await withServer(deps, async (port) => {
-    const { status } = await hit(port, "/on-track", { sourceUrl: "u", title: "T", artist: "A" });
+    const { status } = await hit(port, "/on-track", { sourceUrl: "https://cdn.numaradio.com/u.mp3", title: "T", artist: "A" });
     assert.equal(status, 200);
     assert.equal(deps.__onTrack.length, 1);
   });
@@ -120,5 +120,63 @@ test("unknown path returns 404", async () => {
   await withServer(deps, async (port) => {
     const { status } = await hit(port, "/does-not-exist");
     assert.equal(status, 404);
+  });
+});
+
+// validatePushUrl — defense against telnet injection. The daemon
+// passes sourceUrl into Liquidsoap via a single-line telnet command,
+// so any whitespace would terminate the push early and let a caller
+// inject additional Liquidsoap verbs.
+test("validatePushUrl accepts B2/CDN https URLs", async () => {
+  const { validatePushUrl } = await import("./server.ts");
+  assert.equal(
+    validatePushUrl("https://cdn.numaradio.com/stations/numaradio/tracks/abc/audio/master.mp3"),
+    null,
+  );
+  assert.equal(
+    validatePushUrl("https://f003.backblazeb2.com/file/numaradio/x.mp3"),
+    null,
+  );
+});
+
+test("validatePushUrl accepts file:// URLs (local shoutouts)", async () => {
+  const { validatePushUrl } = await import("./server.ts");
+  assert.equal(validatePushUrl("file:///var/numa/cache/shoutout-123.mp3"), null);
+});
+
+test("validatePushUrl rejects newline injection (telnet boundary)", async () => {
+  const { validatePushUrl } = await import("./server.ts");
+  assert.match(
+    validatePushUrl("https://cdn.numaradio.com/x.mp3\nrotation.skip") ?? "",
+    /whitespace/,
+  );
+  assert.match(
+    validatePushUrl("https://cdn.numaradio.com/x.mp3\r\nrotation.skip") ?? "",
+    /whitespace/,
+  );
+});
+
+test("validatePushUrl rejects space (telnet arg separator)", async () => {
+  const { validatePushUrl } = await import("./server.ts");
+  assert.match(validatePushUrl("https://example.com/a b.mp3") ?? "", /whitespace/);
+});
+
+test("validatePushUrl rejects unsupported schemes", async () => {
+  const { validatePushUrl } = await import("./server.ts");
+  assert.match(validatePushUrl("javascript:alert(1)") ?? "", /http\(s\) or file/);
+  assert.match(validatePushUrl("ftp://example.com/x") ?? "", /http\(s\) or file/);
+  assert.match(validatePushUrl("data:audio/mpeg;base64,xxxx") ?? "", /http\(s\) or file/);
+});
+
+test("POST /push returns 400 for whitespace in sourceUrl", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/push", {
+      trackId: "t1",
+      sourceUrl: "https://cdn.numaradio.com/x.mp3\nrotation.skip",
+    });
+    assert.equal(status, 400);
+    assert.match(json.error, /whitespace/);
+    assert.equal(deps.__pushed.length, 0);
   });
 });

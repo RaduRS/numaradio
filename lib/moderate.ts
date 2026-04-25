@@ -155,23 +155,36 @@ async function runModerator(
     return { decision: "held", reason: "moderator_not_configured", text: rawText };
   }
 
-  const res = await fetch(MINIMAX_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: MODERATION_MODEL,
-      // MiniMax-M2.7 is a reasoning model — its `thinking` block runs
-      // before the actual decision JSON and can easily swallow a small
-      // budget. 3200 leaves comfortable headroom; operator has tokens.
-      max_tokens: 3200,
-      system: systemPrompt,
-      messages: [{ role: "user", content: rawText }],
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(MINIMAX_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODERATION_MODEL,
+        // MiniMax-M2.7 is a reasoning model — its `thinking` block runs
+        // before the actual decision JSON and can easily swallow a small
+        // budget. 3200 leaves comfortable headroom; operator has tokens.
+        max_tokens: 3200,
+        system: systemPrompt,
+        messages: [{ role: "user", content: rawText }],
+      }),
+      // Fail-closed on a hung upstream — without this the booth submit
+      // route hangs until Vercel's function timeout and the user sees
+      // their spinner stall for 15+ seconds.
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    const reason =
+      err instanceof Error && err.name === "TimeoutError"
+        ? "moderator_timeout"
+        : "moderator_network";
+    return { decision: "held", reason, text: rawText };
+  }
 
   if (!res.ok) {
     return {

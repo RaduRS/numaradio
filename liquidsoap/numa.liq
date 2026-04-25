@@ -109,6 +109,7 @@ def notify_track_started(metadata) =
             ("x-internal-secret", secret)
           ],
           data=body,
+          timeout=5.,
           api_url
         )
         if response.status_code != 200 then
@@ -122,6 +123,7 @@ def notify_track_started(metadata) =
       _ = http.post(
         headers=[("Content-Type", "application/json")],
         data=body,
+        timeout=5.,
         daemon_url
       )
     catch err do
@@ -153,6 +155,7 @@ def notify_shoutout_started(metadata) =
           ("x-internal-secret", secret)
         ],
         data=body,
+        timeout=5.,
         shoutout_started_url
       )
       if r.status_code != 200 then
@@ -175,6 +178,7 @@ def notify_shoutout_ended() =
           ("x-internal-secret", secret)
         ],
         data="{}",
+        timeout=5.,
         shoutout_ended_url
       )
       if r.status_code != 200 then

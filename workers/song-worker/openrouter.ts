@@ -21,6 +21,22 @@ function apiKey(): string {
 
 const DATA_URI_RE = /^data:image\/\w+;base64,(.+)$/;
 
+// Reject URLs whose hostname resolves to localhost or an RFC 1918 /
+// link-local range. Defense-in-depth against a compromised or rogue
+// upstream serving an internal URL that would otherwise be fetched
+// from inside the mini-server's network.
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]") return true;
+  if (/^10\./.test(h)) return true;
+  if (/^192\.168\./.test(h)) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(h)) return true;
+  if (/^169\.254\./.test(h)) return true; // link-local
+  if (/^(fc|fd)/.test(h)) return true; // IPv6 ULA
+  if (h.startsWith("fe80:")) return true; // IPv6 link-local
+  return false;
+}
+
 export function extractPngBase64(resp: OpenRouterImageResponse): string | null {
   const choice = resp.choices?.[0];
   const images = choice?.message?.images ?? [];
@@ -64,6 +80,7 @@ export async function generateArtwork(prompt: string): Promise<Buffer> {
         },
       ],
     }),
+    signal: AbortSignal.timeout(60_000),
   });
 
   if (!res.ok) {
@@ -78,7 +95,19 @@ export async function generateArtwork(prompt: string): Promise<Buffer> {
   }
   if (extracted.startsWith("__REMOTE__:")) {
     const url = extracted.slice("__REMOTE__:".length);
-    const imgRes = await fetch(url);
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error("openrouter remote image: invalid URL");
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      throw new Error(`openrouter remote image: unsupported protocol ${parsed.protocol}`);
+    }
+    if (isPrivateOrLocalHost(parsed.hostname)) {
+      throw new Error(`openrouter remote image: refusing private host ${parsed.hostname}`);
+    }
+    const imgRes = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!imgRes.ok) {
       throw new Error(`openrouter remote image fetch ${imgRes.status}`);
     }

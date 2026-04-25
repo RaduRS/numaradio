@@ -60,6 +60,25 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+// Accepted URL schemes for Liquidsoap playback. file:// is used for
+// local on-disk MP3s (shoutouts staged by dashboard); http(s) is for
+// B2 / CDN URLs. Anything else is a sign of confusion or abuse.
+const VALID_PUSH_URL = /^(https?:|file:)\/\//i;
+
+export function validatePushUrl(sourceUrl: string): string | null {
+  // Whitespace in a sourceUrl is dangerous: the daemon passes the URL
+  // into Liquidsoap's telnet protocol as part of a single-line command
+  // (`priority.push <url>\n`). A caller that slips in a `\n` could
+  // terminate the push command early and inject additional telnet
+  // verbs. A legitimate URL is always whitespace-free because HTTP/
+  // file URIs require percent-encoding.
+  if (/\s/.test(sourceUrl)) return "sourceUrl contains whitespace";
+  if (!VALID_PUSH_URL.test(sourceUrl)) {
+    return "sourceUrl must be http(s) or file";
+  }
+  return null;
+}
+
 export function createHandler(deps: ServerDeps): RequestListener {
   return async (req, res) => {
     try {
@@ -73,6 +92,13 @@ export function createHandler(deps: ServerDeps): RequestListener {
         }
         if (!body?.trackId || !body?.sourceUrl) {
           return sendJson(res, 400, { error: "missing trackId or sourceUrl" });
+        }
+        if (typeof body.sourceUrl !== "string") {
+          return sendJson(res, 400, { error: "sourceUrl must be a string" });
+        }
+        const urlErr = validatePushUrl(body.sourceUrl);
+        if (urlErr) {
+          return sendJson(res, 400, { error: urlErr });
         }
         const result = await deps.pushHandler(body);
         return sendJson(res, 200, result);

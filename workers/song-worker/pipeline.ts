@@ -108,6 +108,11 @@ async function pushToQueueDaemon(input: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+    // The daemon is on loopback and the payload is small. If it's not
+    // answering within 5s the process is wedged — fail fast so the
+    // surrounding pipeline can mark the job failed instead of hanging
+    // the single-worker queue indefinitely.
+    signal: AbortSignal.timeout(5_000),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -177,8 +182,13 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
     data: { status: "finalizing" },
   });
 
-  // Step 4: download MiniMax audio + upload both assets to B2.
-  const audioRes = await fetch(remoteAudioUrl);
+  // Step 4: download MiniMax audio + upload both assets to B2. A
+  // stalled MP3 transfer here would block every subsequent song
+  // request since song-worker processes one job at a time; 30s is
+  // generous for a multi-megabyte download from a CDN.
+  const audioRes = await fetch(remoteAudioUrl, {
+    signal: AbortSignal.timeout(30_000),
+  });
   if (!audioRes.ok) throw new Error(`minimax audio download ${audioRes.status}`);
   const audioBytes = Buffer.from(await audioRes.arrayBuffer());
 
