@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PlayIcon, ImageIcon, Loader2Icon } from "lucide-react";
+import { ArtworkPreview } from "@/components/ui/artwork-preview";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
 import type {
@@ -498,33 +499,28 @@ export default function LibraryPage() {
                         >
                           {/* Cover + tiny status indicator dot */}
                           <td className="px-4 py-3">
-                            <div className="relative w-14 h-14">
-                              {t.artworkUrl ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img
-                                  src={t.artworkUrl}
-                                  alt=""
-                                  className={`w-14 h-14 rounded-md object-cover bg-bg-1 shadow-sm shadow-black/40 transition-opacity ${isRegen ? "opacity-30" : ""}`}
-                                />
-                              ) : (
-                                <div className="w-14 h-14 rounded-md bg-bg border border-line" />
-                              )}
+                            <ArtworkPreview
+                              src={t.artworkUrl}
+                              alt={t.title}
+                              previewSize={280}
+                              thumbClassName={`block w-14 h-14 rounded-md object-cover bg-bg-1 shadow-sm shadow-black/40 transition-opacity ${isRegen ? "opacity-30" : ""}`}
+                            >
                               {isRegen && (
-                                <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                   <Loader2Icon size={20} className="animate-spin text-accent" />
-                                </div>
+                                </span>
                               )}
                               {!isRegen && statusCat !== "ready" && (
                                 <span
                                   title={`Status: ${t.trackStatus}`}
-                                  className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-bg-1 ${
+                                  className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-bg-1 pointer-events-none ${
                                     statusCat === "failed" ? "bg-[var(--bad)]" :
                                     statusCat === "draft" ? "bg-[var(--warn)]" :
                                     "bg-fg-mute"
                                   }`}
                                 />
                               )}
-                            </div>
+                            </ArtworkPreview>
                           </td>
 
                           {/* Title + artist stacked */}
