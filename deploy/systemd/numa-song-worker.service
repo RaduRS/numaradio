@@ -8,11 +8,18 @@ PartOf=multi-user.target
 Type=simple
 User=marku
 WorkingDirectory=/home/marku/saas/numaradio
-EnvironmentFile=/home/marku/saas/numaradio/.env.local
-EnvironmentFile=-/etc/numa/env
+# Production secrets live in /etc/numa/env (root-owned, mode 0600).
+# .env.local is for local dev; production should fail loud if
+# /etc/numa/env is missing rather than silently falling back to a
+# committed dev-secret file. (No leading `-` = required.)
+EnvironmentFile=/etc/numa/env
 ExecStart=/usr/bin/npx tsx workers/song-worker/index.ts
 Restart=on-failure
 RestartSec=5
+# Crash-loop protection — a recurring startup bug shouldn't fork an
+# infinite restart loop into journald.
+StartLimitBurst=3
+StartLimitIntervalSec=30
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=numa-song-worker

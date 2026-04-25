@@ -62,3 +62,7 @@ next-env.d.ts
 
 # Ad-hoc design-audit screenshots (not for commit)
 /audit-*.png
+
+# Obsidian MCP / dev-session log files
+/logs/
+*.log

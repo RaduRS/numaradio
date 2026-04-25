@@ -11,6 +11,12 @@ EnvironmentFile=/etc/numa/env
 ExecStart=/usr/bin/npm run queue:daemon
 Restart=always
 RestartSec=2s
+# Crash-loop protection — Restart=always with no rate limit will spin
+# every 2 s forever if e.g. Neon is unreachable on startup. 5 attempts
+# in 60 s gives transient outages room to clear and stops a runaway
+# loop from filling the journal.
+StartLimitBurst=5
+StartLimitIntervalSec=60
 StandardOutput=journal
 StandardError=journal
 

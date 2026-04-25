@@ -1,0 +1,24 @@
+[Unit]
+Description=Numa Radio — Operator Dashboard (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=marku
+WorkingDirectory=/home/marku/saas/numaradio/dashboard
+EnvironmentFile=/home/marku/saas/numaradio/dashboard/.env.local
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+# Stop the loop if the dashboard fails repeatedly to start (e.g.
+# missing env var, busted build artifacts). 3 attempts in 30 s gives
+# a fresh deploy room to settle while bounding pathological loops.
+StartLimitBurst=3
+StartLimitIntervalSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=numa-dashboard
+
+[Install]
+WantedBy=multi-user.target

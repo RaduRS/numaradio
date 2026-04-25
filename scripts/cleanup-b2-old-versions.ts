@@ -1,8 +1,13 @@
-// One-shot cleanup: after the backfill-b2-cache-control.ts migration added a
-// new version of every object (with Cache-Control headers), the pre-backfill
-// versions linger as hidden older versions. They aren't served by the public
-// URL (B2 always serves IsLatest=true) but still consume storage. This script
-// deletes them by (Key, VersionId).
+// Cleanup of B2 stale object versions. After a backfill that touches
+// every object (e.g. cache-control rewrite), the pre-backfill versions
+// linger as hidden older versions — not served by the public URL
+// (B2 always serves IsLatest=true) but still billed for storage.
+// This script deletes them by (Key, VersionId).
+//
+// SAFETY: defaults to dry-run. Pass `--confirm` to actually delete.
+//
+//   npx tsx scripts/cleanup-b2-old-versions.ts            # dry run
+//   npx tsx scripts/cleanup-b2-old-versions.ts --confirm  # destructive
 
 import "../lib/load-env";
 import {
@@ -10,6 +15,8 @@ import {
   ListObjectVersionsCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+
+const CONFIRM = process.argv.includes("--confirm");
 
 function getEnv(name: string): string {
   const v = process.env[name];
@@ -49,7 +56,18 @@ async function main(): Promise<void> {
     versionIdMarker = r.IsTruncated ? r.NextVersionIdMarker : undefined;
   } while (keyMarker);
 
-  console.log(`Found ${stale.length} stale versions to delete.`);
+  console.log(`Found ${stale.length} stale versions.`);
+
+  if (!CONFIRM) {
+    console.log("\nDRY RUN — re-run with --confirm to actually delete.");
+    console.log("First 10 candidates:");
+    for (const obj of stale.slice(0, 10)) {
+      console.log(`  ${obj.Key}  (${obj.VersionId})`);
+    }
+    return;
+  }
+
+  console.log("\nDeleting…");
 
   let deleted = 0;
   let failed = 0;

@@ -1,0 +1,21 @@
+[Unit]
+Description=Numa Radio — Liquidsoap
+After=network-online.target icecast2.service
+Wants=network-online.target
+Requires=icecast2.service
+
+[Service]
+Type=simple
+User=marku
+EnvironmentFile=/etc/numa/env
+ExecStart=/usr/bin/liquidsoap /home/marku/saas/numaradio/liquidsoap/numa.liq
+Restart=on-failure
+RestartSec=5
+# Crash-loop protection — if the broadcast process fails 5 times in
+# 60 s, stop trying. An operator should investigate before letting it
+# spin (e.g. wrong Icecast password, malformed config).
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Install]
+WantedBy=multi-user.target
