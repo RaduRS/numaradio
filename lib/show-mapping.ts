@@ -24,9 +24,9 @@ export function inferShowFromMetadata(input: ShowMappingInput): ShowBlock {
   const { bpm, genre, mood } = input;
   const g = lc(genre);
 
-  if (mood && NIGHT_MOODS.has(mood)) return "night_shift";
-  if (mood && MORNING_MOODS.has(mood)) return "morning_room";
-  if (mood && PRIME_MOODS.has(mood)) return "prime_hours";
+  if (mood && NIGHT_MOODS.has(mood) && (bpm === null || bpm < 95)) return "night_shift";
+  if (mood && MORNING_MOODS.has(mood) && (bpm === null || (bpm >= 95 && bpm <= 115))) return "morning_room";
+  if (mood && PRIME_MOODS.has(mood) && (bpm === null || bpm > 115)) return "prime_hours";
 
   if (g && DAYLIGHT_GENRES.has(g) && (bpm === null || (bpm >= 105 && bpm <= 125))) return "daylight_channel";
   if (g && NIGHT_GENRES.has(g)) return "night_shift";

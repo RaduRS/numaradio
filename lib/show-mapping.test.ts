@@ -17,8 +17,8 @@ test("energetic mood + fast BPM → prime_hours", () => {
 test("all-null fallback → daylight_channel", () => {
   assert.equal(inferShowFromMetadata({ bpm: null, genre: null, mood: null }), "daylight_channel");
 });
-test("ambient mood at 110 BPM still → night_shift (mood beats BPM)", () => {
-  assert.equal(inferShowFromMetadata({ bpm: 110, genre: "Lofi", mood: "Mellow" }), "night_shift");
+test("ambient mood with no BPM → night_shift (mood beats absent BPM)", () => {
+  assert.equal(inferShowFromMetadata({ bpm: null, genre: "Lofi", mood: "Mellow" }), "night_shift");
 });
 test("DnB → prime_hours via genre", () => {
   assert.equal(inferShowFromMetadata({ bpm: null, genre: "DnB", mood: null }), "prime_hours");
