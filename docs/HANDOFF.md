@@ -1,11 +1,61 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-24 evening
+Last updated: 2026-04-25
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
 deployed, and the evergreen conventions. When picking up work: read
 this, then fall back to the archive if a reference here points there.
+
+---
+
+## Stack audit pass — LIVE (2026-04-25)
+
+A 7-agent parallel audit + 9-session fix sweep. Full plan, findings,
+and per-session breakdown:
+
+- `docs/superpowers/specs/2026-04-25-stack-audit-plan.md`
+- `docs/superpowers/specs/2026-04-25-stack-audit-findings.md`
+- `docs/superpowers/specs/2026-04-25-stack-audit-summary.md`
+
+**Headline:** 65 findings shipped, 2 P0 security fixes (XFF
+spoofing + a non-timing-safe internal-secret compare), tests grew
+188 → 200, both apps build clean, all systemd-controlled services
+restarted with new code in place. Commits `466ab3f` through
+`74698d5` on `main`.
+
+**Operator follow-ups (need sudo, can't be automated):**
+1. `sudo bash deploy/secure-numa-env.sh` — chmod 0600 on
+   `/etc/numa/env`. One-time hardening.
+2. Re-install systemd templates so the new `StartLimitBurst` /
+   updated `EnvironmentFile=` actually take effect:
+   ```
+   sudo install -m 0644 deploy/systemd/numa-queue-daemon.service /etc/systemd/system/
+   sudo install -m 0644 deploy/systemd/numa-song-worker.service /etc/systemd/system/
+   sudo install -m 0644 deploy/systemd/numa-liquidsoap.service /etc/systemd/system/
+   sudo install -m 0644 deploy/systemd/numa-dashboard.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   ```
+3. `sudo systemctl restart numa-song-worker` (not in sudoers
+   allowlist, so picks up the new timeout + SSRF code only after a
+   manual restart).
+4. Watch DevTools CSP-violation console for a week. Both
+   `next.config.ts` files ship `Content-Security-Policy-Report-Only`.
+   When the console stays clean, flip the header key to
+   `Content-Security-Policy` to enforce.
+
+**Behavioural changes a future session should know about:**
+- The `shoutout-ended` Liquidsoap callback now sends
+  `{sourceUrl}` in the body. The Vercel route resolves trackId
+  from the body first, then falls back to NowSpeaking. This makes
+  a double-fire cleanup-safe.
+- queue-daemon `/status` JSON now includes a `lastHydrationError`
+  field ({at, message} | null).
+- PlayHistory `endedAt` and `completedNormally` are now closed
+  out by the next `track-started` (was always {endedAt: null,
+  completedNormally: true}).
+- 23 findings deferred with reasoning — see the audit-summary doc
+  before re-opening any of them.
 
 ---
 
