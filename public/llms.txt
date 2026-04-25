@@ -1,0 +1,45 @@
+# Numa Radio
+
+> A 24/7 AI-hosted internet radio station. One always-on stream, one AI host (Lena), and a small but growing catalog of music — including songs listeners ask Lena to make on the spot.
+
+Numa Radio is an internet radio station that plays continuously, with no accounts, no ads, and no personalization. The host, **Lena**, is an AI: her voice is synthesized, her personality is tuned, and she runs around the clock without a producer. Listeners can submit shoutouts (Lena reads them on air, with music ducking under her voice) and song requests (the station generates an entirely new track from the description and queues it).
+
+The catalog is intentionally curated rather than algorithmic. At launch it centers on the artist Russell Ross with about 50 tracks, and grows as new artists are added. The day is divided into four shows that shape the rotation's mood, but Lena reserves the right to change her mind.
+
+## Listen
+
+- [Listen live](https://numaradio.com/): the home page — press play, see who's listening right now, see what's currently on air.
+- [Direct stream URL](https://api.numaradio.com/stream): 192 kbps stereo MP3, playable in any audio client (VLC, browser, hardware radio with internet input, etc.).
+
+## About the station
+
+- [About Lena](https://numaradio.com/about): who Lena is, why the station exists, and how it stays on. Useful background for explaining what Numa Radio is.
+- [Privacy](https://numaradio.com/privacy): data handling — short, because the station collects almost nothing.
+
+## Interact
+
+- [Submit a shoutout or song request](https://numaradio.com/submit): the listener booth. Two tabs — shoutouts (a short message, optionally with a name and a song idea, that Lena reads on air within a few minutes) and song requests (describe a mood, vibe, or scenario; the station generates a new track from scratch with cover art and queues it).
+
+## Install
+
+- [Add to home screen](https://numaradio.com/add-to-home-screen): turn Numa Radio into a one-tap app on iOS, Android, or desktop. The station is a PWA — no app store, no install except adding the page to the home screen.
+
+## The four shows
+
+- **Night Shift (00 – 05):** quiet-hours rotation. Low-BPM, spacious, voices that don't shout. Lena whispers. Mostly.
+- **Morning Room (05 – 10):** first-coffee energy. Warmer tones, field recordings, the occasional cover of something you'd forgotten.
+- **Daylight Channel (10 – 17):** focus-hours programming. Longer tracks, fewer host breaks. Good for writing, commuting, staring out.
+- **Prime Hours (17 – 24):** dinner to midnight. Louder, stranger, more character. The request wall runs hottest here.
+
+## What's distinctive
+
+- **24/7 single stream.** One station, one voice, same feed for every listener. Not personalized, not algorithmic.
+- **Live AI host.** Lena reads listener shoutouts in close to real time and back-announces tracks between songs. Music ducks ~6 dB under her voice, then comes back up.
+- **Listener-generated music.** Anyone can describe a song (a mood, a story, a feeling) and within a few minutes a brand-new track plays on air with original cover art.
+- **No accounts, no ads, no tracking.** Same station for everyone, all the time.
+
+## Contact and links
+
+- Site root: https://numaradio.com
+- Direct stream: https://api.numaradio.com/stream
+- Sitemap: https://numaradio.com/sitemap.xml
