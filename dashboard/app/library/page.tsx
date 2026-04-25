@@ -72,6 +72,18 @@ function isVoiceFailure(f: DaemonFailure): boolean {
   );
 }
 
+async function setTrackShow(trackId: string, show: string) {
+  const res = await fetch(`/api/library/track/${trackId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ show }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+}
+
 // Extract the MP3 filename or fall back to the trackId tail — useful
 // for quickly identifying a push when rows scroll past.
 function labelFor(entry: DaemonPush): string {
@@ -80,6 +92,36 @@ function labelFor(entry: DaemonPush): string {
     if (last) return last;
   }
   return entry.trackId ?? "(unknown)";
+}
+
+function ShowCell({ track, onChange }: { track: LibraryTrack; onChange: () => void }) {
+  const [pending, setPending] = useState(false);
+  return (
+    <select
+      value={track.show ?? ""}
+      disabled={pending}
+      onChange={async (e) => {
+        const next = e.target.value;
+        setPending(true);
+        try {
+          await setTrackShow(track.id, next);
+          toast.success(`Show set: ${showLabelFor(next)}`);
+          onChange();
+        } catch (err) {
+          toast.error(`Failed: ${err instanceof Error ? err.message : err}`);
+        } finally {
+          setPending(false);
+        }
+      }}
+      className="bg-transparent border border-line rounded px-1 py-0.5 text-xs font-mono outline-none focus:border-accent disabled:opacity-50"
+    >
+      <option value="" disabled>—</option>
+      <option value="night_shift">Night Shift</option>
+      <option value="morning_room">Morning Room</option>
+      <option value="daylight_channel">Daylight Channel</option>
+      <option value="prime_hours">Prime Hours</option>
+    </select>
+  );
 }
 
 // ─── Component ─────────────────────────────────────────────────────
@@ -386,7 +428,9 @@ export default function LibraryPage() {
                             {fmtDuration(t.durationSeconds)}
                           </td>
                           <td className="px-2 py-2 text-fg-mute text-xs">{t.genre ?? "—"}</td>
-                          <td className="px-2 py-2 text-fg-mute text-xs">{showLabelFor(t.show)}</td>
+                          <td className="px-2 py-2 text-xs">
+                            <ShowCell track={t} onChange={() => tracksPoll.refresh()} />
+                          </td>
                           <td className="px-3 py-2 text-right font-mono text-xs tabular-nums whitespace-nowrap">
                             <span className={t.votesUp > 0 ? "text-accent" : "text-fg-mute"}>
                               ▲&nbsp;{t.votesUp}
