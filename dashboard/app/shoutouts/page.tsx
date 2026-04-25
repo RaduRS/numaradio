@@ -352,7 +352,7 @@ export default function ShoutoutsPage() {
   const totalFailed = filterCounts.failures;
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 flex flex-col gap-5 sm:gap-6 sm:px-6 sm:py-8">
+    <main className="mx-auto w-full max-w-[1440px] px-4 py-6 flex flex-col gap-5 sm:gap-6 sm:px-6 sm:py-8">
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
         <h1

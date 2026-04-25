@@ -34,7 +34,7 @@ export function DashboardNav() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
+      <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center gap-3 px-4 sm:gap-6 sm:px-6">
         <Link
           href="/"
           className="font-display text-lg font-extrabold uppercase tracking-wide text-fg transition-opacity hover:opacity-80 sm:text-xl"

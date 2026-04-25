@@ -67,9 +67,9 @@ export default function ChatPage() {
   return (
     // h-[calc(100dvh-3.5rem)] — fills viewport below the persistent
     // 3.5rem (h-14) dashboard nav. Chat owns everything below that.
-    // max-w-6xl matches the rest of the dashboard; an inner column
+    // max-w-[1440px] matches the rest of the dashboard; an inner column
     // narrows further for readability below.
-    <main className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-6xl flex-col px-4 pb-4 sm:px-6 sm:pb-6">
+    <main className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-[1440px] flex-col px-4 pb-4 sm:px-6 sm:pb-6">
       {/* ── Page sub-header ───────────────────────────────────── */}
       <header className="pt-4 pb-3 sm:pt-6 sm:pb-4">
         <div className="flex flex-col gap-3 border-b border-line pb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
