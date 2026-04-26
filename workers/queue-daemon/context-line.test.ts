@@ -24,7 +24,7 @@ const baseState: StationState = {
   topGenreLastHour: "ambient",
   votesUpLast30Min: 8,
   votesDownLast30Min: 1,
-  listenersWithFloor: 18,
+  currentListeners: 18,
   recentShoutoutSamples: ["happy birthday to my mum", "rainy lisbon vibe"],
 };
 
@@ -142,12 +142,12 @@ test("validateContextLine: false numerical claim rejected", () => {
 test("buildPrompt: trims null fields from JSON", () => {
   const state: StationState = {
     ...baseState,
-    listenersWithFloor: null,
+    currentListeners: null,
     topGenreLastHour: null,
     recentShoutoutSamples: [],
   };
   const prompts = buildPrompt(state);
-  assert.ok(!prompts.user.includes("listenersWithFloor"));
+  assert.ok(!prompts.user.includes("currentListeners"));
   assert.ok(!prompts.user.includes("topGenreLastHour"));
   assert.ok(!prompts.user.includes("recentShoutoutSamples"));
 });

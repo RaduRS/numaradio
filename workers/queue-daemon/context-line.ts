@@ -29,7 +29,14 @@ export interface StationState {
   topGenreLastHour: string | null;
   votesUpLast30Min: number;
   votesDownLast30Min: number;
-  listenersWithFloor: number | null;
+  /** The "people listening right now" count — matches what the public
+   *  site displays to listeners. Includes the +15 marketing floor so
+   *  Lena's references match what listeners see ("44 of you tuned in"
+   *  matches the "44 listening" count on numaradio.com). Renamed from
+   *  the older "listenersWithFloor" because the model was reading the
+   *  word "floor" as a noun ("listeners on the floor") rather than as
+   *  a math/offset suffix. */
+  currentListeners: number | null;
   recentShoutoutSamples: string[];
 }
 
@@ -116,7 +123,7 @@ export function validateNumericalClaims(line: string, state: StationState): Vali
     state.freshTracksLast24h,
     state.votesUpLast30Min,
     state.votesDownLast30Min,
-    ...(state.listenersWithFloor != null ? [state.listenersWithFloor] : []),
+    ...(state.currentListeners != null ? [state.currentListeners] : []),
     state.hourOfShift,
     // Window-reference numbers Lena might naturally say when describing
     // the data ("the last ten minutes" / "the last half hour" / "since
@@ -172,6 +179,7 @@ YOUR LINE MUST:
 - Never reference specific clock times ("4:13 AM" — bad)
 - Never name real or fake artists/tracks (the catalogue is OK to reference generically: "the rotation", "tonight's stretch", "this hour")
 - When the wall is quiet, INVITE — don't dismiss. "Come keep me company at numaradio.com" is right; "I don't mind quiet" is wrong.
+- The JSON field "currentListeners" is just a number. Treat it as a count of people tuned in. Phrasings like "X of you on the line", "X tuned in", "X listening" are right; phrasings that turn "listeners" into a venue ("on the floor", "in the room", "in the booth") are WRONG — Lena has no booth, no floor, no physical room.
 
 BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
 - "fine by me" / "I don't mind" / "doesn't bother me" / "doesn't matter to me" — Lena is never indifferent to listeners
@@ -195,7 +203,7 @@ export function buildPrompt(state: StationState): PromptPair {
   const stateForModel: Record<string, unknown> = { ...state };
   // Trim listener field when null so the model sees absence rather than
   // a noisy "null" value.
-  if (state.listenersWithFloor === null) delete stateForModel.listenersWithFloor;
+  if (state.currentListeners === null) delete stateForModel.currentListeners;
   if (state.topGenreLastHour === null) delete stateForModel.topGenreLastHour;
   if (state.recentShoutoutSamples.length === 0) delete stateForModel.recentShoutoutSamples;
 
@@ -299,7 +307,8 @@ export interface GatherStateOpts {
   stationId: string;
   now: Date;
   fetchListeners: () => Promise<number | null>;
-  /** +15 marketing-floor offset for listenersWithFloor. */
+  /** Marketing offset added to the raw Icecast count to match what the
+   *  public site displays. Defaults to 15. Set to 0 to use raw count only. */
   listenerFloor?: number;
 }
 
@@ -405,7 +414,7 @@ export async function buildStationState(opts: GatherStateOpts): Promise<StationS
     topGenreLastHour: topGenre,
     votesUpLast30Min: votesUp,
     votesDownLast30Min: votesDown,
-    listenersWithFloor:
+    currentListeners:
       listenersRaw === null ? null : listenersRaw + floor,
     recentShoutoutSamples: recentSamples,
   };
