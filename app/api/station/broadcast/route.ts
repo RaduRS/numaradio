@@ -22,7 +22,15 @@ export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const HISTORY_LIMIT = 4;
-const STALE_GRACE_SECONDS = 30;
+// How long past Track.durationSeconds we keep showing the current track
+// before flipping to "isPlaying: false". Bumped from 30s → 120s because
+// many catalogue entries have durationSeconds shorter than actual
+// playback (metadata extracted from MP3 frames vs Liquidsoap's real
+// playout). At 30s, listeners saw the artwork + artist disappear in the
+// last 20-30s of every long-running track. 120s comfortably covers
+// normal duration variance while still flagging a genuinely dead
+// broadcast (no track-started in 2 min = something's wrong).
+const STALE_GRACE_SECONDS = 120;
 
 const HEADERS = {
   // Very tight CDN TTL — this feed surfaces live track changes. Any extra
