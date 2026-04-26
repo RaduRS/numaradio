@@ -220,14 +220,29 @@
 }
 
 /* Waveform */
+.wave-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
 .wave {
   display: flex;
   align-items: center;
   gap: 2px;
   height: 40px;
-  margin-bottom: 24px;
   overflow: hidden;
   position: relative;
+}
+.wave-time {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--fg-mute);
+  font-variant-numeric: tabular-nums;
 }
 .wave-bar {
   flex: 1;

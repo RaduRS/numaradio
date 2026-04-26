@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 import { Skeleton } from "./Skeleton";
+import { Waveform } from "./Waveform";
 
 type TrackSummary = {
   trackId: string;
@@ -252,21 +253,14 @@ export function Broadcast() {
                 )}
               </div>
             </div>
-            <div className="progress">
-              <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${Math.round(progress * 100)}%` }}
-                />
-              </div>
-              <div className="progress-labels">
-                <span>{formatMinSec(elapsedSeconds)}</span>
-                <span>
-                  {live?.durationSeconds
-                    ? formatMinSec(live.durationSeconds)
-                    : "—"}
-                </span>
-              </div>
+            <div style={{ marginTop: 28 }}>
+              <Waveform
+                hasTrack={Boolean(live)}
+                progress={progress}
+                elapsedSeconds={elapsedSeconds}
+                durationSeconds={live?.durationSeconds ?? null}
+                showTime
+              />
             </div>
           </div>
 

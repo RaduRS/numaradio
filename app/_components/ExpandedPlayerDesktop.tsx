@@ -9,6 +9,7 @@ import { VolumeControl } from "./VolumeControl";
 import { VoteButtons } from "./VoteButtons";
 import { OnAirFeed } from "./OnAirFeed";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
+import { Waveform } from "./Waveform";
 
 export function ExpandedPlayerDesktop() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
@@ -48,6 +49,13 @@ export function ExpandedPlayerDesktop() {
           <div className="ep-booth-title">{title}</div>
           <div className="ep-booth-artist">{artist}</div>
         </div>
+        <Waveform
+          hasTrack={Boolean(live)}
+          progress={np.progress}
+          elapsedSeconds={np.elapsedSeconds}
+          durationSeconds={live?.durationSeconds ?? null}
+          showTime
+        />
         <div className="ep-controls">
           <button
             className="btn-play"

@@ -13,6 +13,7 @@ import { VolumeControl } from "./VolumeControl";
 import { VoteButtons } from "./VoteButtons";
 import { LiveClock } from "./LiveClock";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
+import { Waveform } from "./Waveform";
 
 function ListenPane() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
@@ -47,6 +48,13 @@ function ListenPane() {
         <div className="ep-listen-title">{live?.title ?? "—"}</div>
         <div className="ep-listen-artist">{live?.artistDisplay ?? "—"}</div>
       </div>
+      <Waveform
+        hasTrack={Boolean(live)}
+        progress={np.progress}
+        elapsedSeconds={np.elapsedSeconds}
+        durationSeconds={live?.durationSeconds ?? null}
+        showTime
+      />
       <div className="ep-controls">
         <button
           className="ep-listen-play"

@@ -75,7 +75,13 @@ export function PlayerCard() {
         </div>
       </div>
 
-      <Waveform />
+      <Waveform
+        hasTrack={np.isPlaying}
+        progress={np.progress}
+        elapsedSeconds={np.elapsedSeconds}
+        durationSeconds={np.durationSeconds}
+        showTime
+      />
 
       <div className="player-controls">
         <button
