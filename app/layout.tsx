@@ -36,6 +36,12 @@ const jsonLdGraph = {
       name: "Numa Radio",
       url: "https://numaradio.com",
       logo: "https://numaradio.com/apple-icon",
+      sameAs: [
+        "https://www.instagram.com/numa.radio/",
+        "https://www.tiktok.com/@numaradio",
+        "https://www.youtube.com/@numaradio",
+        "https://x.com/NumaRadio",
+      ],
     },
     {
       "@type": "BroadcastService",
@@ -109,6 +115,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
+    site: "@NumaRadio",
+    creator: "@NumaRadio",
     title: "Numa Radio — Always On",
     description:
       "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",

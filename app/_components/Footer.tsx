@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { ListenerCount } from "./ListenerCount";
-import { InstagramIcon, TikTokIcon, YouTubeIcon } from "./Icons";
+import { InstagramIcon, TikTokIcon, YouTubeIcon, XIcon } from "./Icons";
 
 const SOCIALS = [
   { label: "Instagram", href: "https://www.instagram.com/numa.radio/", Icon: InstagramIcon },
   { label: "TikTok", href: "https://www.tiktok.com/@numaradio", Icon: TikTokIcon },
   { label: "YouTube", href: "https://www.youtube.com/@numaradio", Icon: YouTubeIcon },
+  { label: "X", href: "https://x.com/NumaRadio", Icon: XIcon },
 ];
 
 export function Footer() {
