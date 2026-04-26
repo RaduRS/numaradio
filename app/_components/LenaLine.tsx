@@ -36,8 +36,12 @@ export interface LenaLineProps {
  */
 export function LenaLine({ className, layout = "card", avatar = "L" }: LenaLineProps) {
   const line = useLenaLine();
-  const isLive = line?.source === "live";
-  const freshLabel = isLive && line ? relativeTimeLabel(line.atIso) : null;
+  // `live` (real on-air audio chatter) and `context` (every-10-min
+  // truthful state-aware line) both deserve the fresh "just now / X
+  // min ago" pill — the listener doesn't need to know whether it was
+  // spoken or written, only that it's fresh.
+  const isFresh = line?.source === "live" || line?.source === "context";
+  const freshLabel = isFresh && "atIso" in line ? relativeTimeLabel(line.atIso) : null;
 
   if (layout === "quote-only") {
     if (!line) {

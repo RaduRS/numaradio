@@ -13,6 +13,7 @@ import { fetchListenerCount } from "./icecast-listeners.ts";
 import { generateChatterScript } from "./minimax-script.ts";
 import { synthesizeChatter } from "./deepgram-tts.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
+import { ContextLineOrchestrator, buildStationState } from "./context-line.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -226,6 +227,55 @@ async function stationId(): Promise<string> {
   });
   return s.id;
 }
+
+// ─── Tier 2 — context-aware Lena lines ───────────────────────────────
+// Background tick every CONTEXT_LINE_TICK_MS. Reads real station state
+// from Neon, asks MiniMax for one short truthful Lena line, validates,
+// persists as Chatter row with chatterType="context_line" + audioUrl=null.
+// Public lena-line route layers these between live audio chatter and
+// the evergreen pool (see /api/station/lena-line/route.ts).
+const CONTEXT_LINE_TICK_MS = 10 * 60_000;
+const CONTEXT_LINE_FIRST_DELAY_MS = 30_000;
+
+const contextLine = new ContextLineOrchestrator({
+  fetchStationState: async () => {
+    const sid = await stationId();
+    return buildStationState({
+      prisma,
+      stationId: sid,
+      now: new Date(),
+      fetchListeners: () =>
+        fetchListenerCount({ url: ICECAST_STATUS_URL, mount: ICECAST_MOUNT }),
+    });
+  },
+  generateLine: (prompts) =>
+    generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+  persistLine: async (script) => {
+    const sid = await stationId();
+    await prisma.chatter.create({
+      data: {
+        stationId: sid,
+        chatterType: "context_line",
+        slot: 0,
+        script,
+        audioUrl: null,
+      },
+    });
+  },
+  logSuccess: (script) => {
+    lastPushes.push({
+      at: new Date().toISOString(),
+      trackId: "context-line",
+      url: "",
+      script,
+    });
+    console.log(`[context-line] ${script.slice(0, 80)}`);
+  },
+  logFailure: (reason, detail) => {
+    lastFailures.push({ at: new Date().toISOString(), reason, detail });
+    console.warn(`[context-line] fail ${reason}: ${detail ?? ""}`);
+  },
+});
 
 async function resolveAssetUrl(trackId: string): Promise<string | null> {
   const asset = await prisma.trackAsset.findFirst({
@@ -459,6 +509,13 @@ async function main() {
   });
 
   await sock.start();
+
+  // Tier 2 context-line tick. First fire 30s after boot so the daemon
+  // has time to connect; subsequent ticks every 10 min. catch() so a
+  // single failure never bubbles into an unhandled rejection.
+  const contextTick = () => contextLine.runOnce().catch(() => undefined);
+  setTimeout(contextTick, CONTEXT_LINE_FIRST_DELAY_MS);
+  setInterval(contextTick, CONTEXT_LINE_TICK_MS);
 
   const shutdown = () => {
     console.log("[queue-daemon] shutting down");

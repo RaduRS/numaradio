@@ -14,12 +14,18 @@ export type LenaLineLive = {
   type: string;
   show: string;
 };
+export type LenaLineContext = {
+  source: "context";
+  script: string;
+  atIso: string;
+  show: string;
+};
 export type LenaLinePool = {
   source: "pool";
   script: string;
   show: string;
 };
-export type LenaLine = LenaLineLive | LenaLinePool | null;
+export type LenaLine = LenaLineLive | LenaLineContext | LenaLinePool | null;
 
 const POLL_MS = 60_000;
 
