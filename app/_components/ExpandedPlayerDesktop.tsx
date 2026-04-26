@@ -10,6 +10,7 @@ import { VoteButtons } from "./VoteButtons";
 import { OnAirFeed } from "./OnAirFeed";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 import { Waveform } from "./Waveform";
+import { LenaLine } from "./LenaLine";
 
 export function ExpandedPlayerDesktop() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
@@ -81,10 +82,7 @@ export function ExpandedPlayerDesktop() {
         <div className="ep-booth-lena">
           <div className="tag">Lena · on the mic</div>
           <div className="quote">
-            &ldquo;Alright, night owls — that&apos;s Russell sliding into frame.
-            Someone in Lisbon asked for slow and a little heartbroken. I heard
-            you. We&apos;ll pick the tempo back up after this one,
-            promise.&rdquo;
+            <LenaLine layout="quote-only" />
           </div>
         </div>
       </div>

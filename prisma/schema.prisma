@@ -173,6 +173,28 @@ model Station {
   segments     BroadcastSegment[]
   playHistory  PlayHistory[]
   songRequests SongRequest[]
+  chatter      Chatter[]
+}
+
+/// One row per auto-chatter push by the queue daemon. Captures the
+/// script Lena read so the public site can surface "what she just
+/// said" alongside the always-on rotation pool. The audio itself
+/// lives in B2 (referenced by audioUrl); the script is the canonical
+/// text representation.
+model Chatter {
+  id          String   @id @default(cuid())
+  stationId   String
+  /// "back_announce" | "shoutout_cta" | "song_cta" | "filler"
+  chatterType String
+  /// 1..20 — slot index in the daemon's rotation buffer
+  slot        Int
+  script      String
+  audioUrl    String?
+  airedAt     DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+
+  @@index([stationId, airedAt])
 }
 
 model Track {

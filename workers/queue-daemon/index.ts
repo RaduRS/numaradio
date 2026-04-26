@@ -164,6 +164,18 @@ const autoHost = new AutoHostOrchestrator({
     });
     console.log(`[auto-chatter] slot=${slot} type=${type} id=${chatterId}`);
   },
+  persistChatter: async ({ type, slot, url, script }) => {
+    const sid = await stationId();
+    await prisma.chatter.create({
+      data: {
+        stationId: sid,
+        chatterType: type,
+        slot,
+        script,
+        audioUrl: url,
+      },
+    });
+  },
   logFailure: ({ reason, detail }) => {
     lastFailures.push({ at: new Date().toISOString(), reason, detail });
     console.warn(`[auto-chatter] fail ${reason}: ${detail ?? ""}`);

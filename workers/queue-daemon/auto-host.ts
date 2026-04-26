@@ -134,6 +134,10 @@ export interface AutoHostDeps {
   uploadChatter: (body: Buffer, chatterId: string) => Promise<string>;
   pushToOverlay: (url: string) => Promise<void>;
   logPush: (entry: { chatterId: string; type: ChatterType; slot: number; url: string; script: string }) => void;
+  /** Persist the chatter row to Neon so the public site can surface it
+   *  as "what Lena just said". Optional — daemon keeps broadcasting if
+   *  the DB is briefly unavailable. */
+  persistChatter?: (entry: { chatterId: string; type: ChatterType; slot: number; url: string; script: string }) => Promise<void>;
   logFailure: (entry: { reason: string; detail?: string }) => void;
   sleep?: (ms: number) => Promise<void>;
   /** Injectable clock for testing; defaults to Date.now. */
@@ -271,6 +275,20 @@ export class AutoHostOrchestrator {
       }
 
       this.deps.logPush({ ...asset });
+      // Best-effort DB write so the public site can mirror the script as
+      // "Lena · just now". Failure here is non-fatal — the broadcast is
+      // already on air, the in-memory ring buffer captured it for the
+      // dashboard, and the public site falls back to its quote pool.
+      if (this.deps.persistChatter) {
+        try {
+          await this.deps.persistChatter({ ...asset });
+        } catch (e) {
+          this.deps.logFailure({
+            reason: "auto_chatter_persist_failed",
+            detail: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
       this.state.markSuccess();
     } catch (err) {
       // Defensive catch — should never happen because generateAsset never rethrows.

@@ -14,6 +14,7 @@ import { VoteButtons } from "./VoteButtons";
 import { LiveClock } from "./LiveClock";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 import { Waveform } from "./Waveform";
+import { LenaLine } from "./LenaLine";
 
 function ListenPane() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
@@ -87,9 +88,7 @@ function ListenPane() {
           marginBottom: 6,
         }}>Lena · on the mic</div>
         <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-          &ldquo;Alright, night owls — that&apos;s Russell sliding into frame.
-          Someone in Lisbon asked for slow and a little heartbroken. We&apos;ll
-          pick the tempo back up after this one, promise.&rdquo;
+          <LenaLine layout="quote-only" />
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import { VoteButtons } from "./VoteButtons";
 import { VolumeControl } from "./VolumeControl";
 import { ShareControls } from "./ShareControls";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
+import { LenaLine } from "./LenaLine";
 
 export function PlayerCard() {
   const { status, isPlaying, isLoading, toggle, expand } = usePlayer();
@@ -118,20 +119,7 @@ export function PlayerCard() {
         </span>
       </div>
 
-      <div className="lena-card">
-        <div className="lena-avatar">L</div>
-        <div className="lena-content">
-          <div className="lena-head">
-            <span className="lena-name">Lena</span>
-            <span className="lena-label">Host · Live</span>
-          </div>
-          <div className="lena-text">
-            &ldquo;Alright, night owls — that&apos;s Russell sliding into frame.
-            Someone in Lisbon asked for slow and a little heartbroken. I heard
-            you. We&apos;ll pick the tempo back up after this one, promise.&rdquo;
-          </div>
-        </div>
-      </div>
+      <LenaLine />
     </div>
   );
 }
