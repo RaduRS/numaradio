@@ -55,9 +55,12 @@ export function LenaLine({ className, layout = "card", avatarSize = 36 }: LenaLi
         </span>
       );
     }
+    // key on the script so changing lines triggers a remount + the
+    // CSS fade-in keyframe — listener sees a soft transition instead
+    // of a snap-replace.
     return (
-      <span className={className}>
-        &ldquo;{line.script}&rdquo;
+      <span className={className} key={line.script}>
+        <span className="lena-text-anim">&ldquo;{line.script}&rdquo;</span>
       </span>
     );
   }
@@ -91,9 +94,9 @@ export function LenaLine({ className, layout = "card", avatarSize = 36 }: LenaLi
             Host · Live{freshLabel ? ` · ${freshLabel}` : ""}
           </span>
         </div>
-        <div className="lena-text">
+        <div className="lena-text" key={line?.script ?? "loading"}>
           {line ? (
-            <>&ldquo;{line.script}&rdquo;</>
+            <span className="lena-text-anim">&ldquo;{line.script}&rdquo;</span>
           ) : (
             <>
               <Skeleton width="92%" height={14} style={{ marginBottom: 6 }} />

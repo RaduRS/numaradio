@@ -386,14 +386,14 @@
 }
 .lena-avatar-frame img {
   display: block;
-  /* Zoom 1.5× into the face. Origin shifted UP from center so the
-     scale anchors near the eyes — face fills the circle without
-     cutting the top of the head. The portrait is 1024×768 with the
-     face roughly at the upper-third of frame; combined with
-     objectPosition: "center 35%", this keeps her properly framed at
-     any avatar size from 36px through 240px. */
-  transform: scale(1.5);
-  transform-origin: 50% 35%;
+  /* Zoom 1.3× into the face. Origin at 50% 45% — the eyes/cheekbones
+     midline of the portrait — so the scale pivots there and we keep
+     hair on top AND neck/shoulders at the bottom. (1.5× was too tight
+     and clipped the hair; pure 1.0× left empty space around the face.)
+     Combined with objectPosition: "center 35%" on the <img>, this
+     keeps her properly framed at any avatar size from 36px → 240px. */
+  transform: scale(1.3);
+  transform-origin: 50% 45%;
 }
 /* Live-dot indicator. Static by default (pool lines = evergreen),
    pulses when the line source is "live" or "context" — i.e. Lena
@@ -456,6 +456,21 @@
   font-size: 14px;
   line-height: 1.45;
   color: var(--fg-dim);
+}
+
+/* Soft fade-in when the line changes. Triggered by React remounting
+   the .lena-text container (we change its `key` prop on every new
+   script). 600ms feels like a magazine-page turn — visible enough to
+   notice the change, gentle enough not to distract while listening. */
+.lena-text-anim {
+  animation: lenaTextFadeIn 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes lenaTextFadeIn {
+  0%   { opacity: 0; transform: translateY(2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lena-text-anim { animation: none; }
 }
 
 /* ── Feature variant — used on the About page hero ────────────────────
