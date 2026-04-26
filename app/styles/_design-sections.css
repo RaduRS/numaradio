@@ -458,16 +458,37 @@
   color: var(--fg-dim);
 }
 
-/* Soft fade-in when the line changes. Triggered by React remounting
-   the .lena-text container (we change its `key` prop on every new
-   script). 600ms feels like a magazine-page turn — visible enough to
-   notice the change, gentle enough not to distract while listening. */
+/* "Tune-in" reveal when the line changes. React remounts the
+   .lena-text container on every new script (key={line.script}); the
+   text starts blurred + slightly letter-spaced + softly glowing teal,
+   then resolves crisp — like a station signal locking in on a CRT.
+   900ms total: visible enough to catch from across the room, restrained
+   enough not to feel gimmicky. */
 .lena-text-anim {
-  animation: lenaTextFadeIn 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: lenaTuneIn 900ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-@keyframes lenaTextFadeIn {
-  0%   { opacity: 0; transform: translateY(2px); }
-  100% { opacity: 1; transform: translateY(0); }
+@keyframes lenaTuneIn {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+    letter-spacing: 0.04em;
+    text-shadow:
+      0 0 18px color-mix(in srgb, var(--accent) 70%, transparent),
+      0 0 4px color-mix(in srgb, var(--accent) 40%, transparent);
+    transform: translateY(3px);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    letter-spacing: normal;
+    text-shadow: none;
+    transform: translateY(0);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .lena-text-anim { animation: none; }
