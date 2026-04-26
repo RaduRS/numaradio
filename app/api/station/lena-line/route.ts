@@ -29,7 +29,12 @@ export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
-const CONTEXT_WINDOW_MS = 30 * 60 * 1000;
+// Context-line TTL. Daemon writes a new context line every 10 min, so
+// anything older is technically stale. Capping at 10 min so the public
+// site falls through to a fresh pool pick (rotates every poll) when the
+// most recent context line ages out — that way visitors see content
+// move at least once a minute, not stay frozen for 30.
+const CONTEXT_WINDOW_MS = 10 * 60 * 1000;
 const POOL_DIR = resolve(process.cwd(), "patterns", "lena-quotes");
 
 const SHOW_TO_FILE: Record<string, string> = {
