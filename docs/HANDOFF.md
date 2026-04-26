@@ -1,11 +1,113 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-26
+Last updated: 2026-04-26 (evening)
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
 deployed, and the evergreen conventions. When picking up work: read
 this, then fall back to the archive if a reference here points there.
+
+---
+
+## 2026-04-26 (evening) — Lena Tier 2.5 + content-pipeline polish — LIVE
+
+A long session. Multiple connected ships:
+
+**Tier 2.5 — world_aside chatter (Brave + MiniMax)**
+3 of every 20 auto-chatter slots become short Lena asides about
+real outside-world facts (weather in 5 cities, music news, AI/tech,
+on-this-day, light culture, astro events). Direct path: queue-daemon
+picks topic by weighted random + anti-repeat → Brave Search →
+MiniMax writes Lena-voice line → validated → broadcast through the
+existing TTS pipeline. Dashboard `/shoutouts` got a second 3-state
+toggle (Auto/Forced On/Forced Off) mirroring auto-chatter; toggle B
+inherits A's listener gate (silent when nobody's listening).
+
+NanoClaw is **NOT** involved — the spec originally routed through
+NanoClaw's chat HTTP channel but we switched to direct (simpler,
+single repo, fewer moving parts). Spec amendment at the top of
+`docs/superpowers/specs/2026-04-26-lena-world-aside-design.md`
+documents the pivot.
+
+Brave key location: `BRAVE_API_KEY=...` in `/etc/numa/env` (already set).
+Smoke test: `BRAVE_API_KEY=$(sudo grep '^BRAVE_API_KEY=' /etc/numa/env | cut -d= -f2- | tr -d '\r\n"') npx tsx scripts/test-world-aside.ts`
+(6/6 categories produce concrete in-voice lines).
+
+**"Next up" rotation indicator + click-to-override**
+`/shoutouts` shows the next 5 rotation slots as chips. Clicking one
+forces it as the next chatter type (one-shot override consumed by
+the daemon). World aside chips show "→ filler" demotion when toggle
+B is forced_off so operators see what listeners will actually hear.
+
+**Lena visual integration**
+- Canonical portrait (`numaradio-videos/src/assets/lena/lena-v1.png`)
+  copied into `public/lena/portrait.png`
+- Replaces the "L" gradient placeholder in PlayerCard (36px) and
+  About page (240px feature with teal halo + live quote)
+- Inner `.lena-avatar-frame` div clips circular without clipping the
+  live-dot. Image scaled 1.3× anchored at 50%/45% (small) or 1.0×
+  (feature) for proper face framing.
+- Live-dot pulses when source is `live` or `context` (real fresh
+  chatter), static when `pool`. Honors prefers-reduced-motion.
+- 900ms CRT "tune-in" animation when the quote changes (blur clears,
+  glowing teal text-shadow dissipates, letter-spacing snaps back).
+
+**Lena cadence + content fixes**
+- Context-line TTL: 30 min → 10 min (was too stale-feeling).
+- Removed `currentListeners` from context state — drifted faster
+  than 10-min context refresh. Lena now talks about other facts
+  (shoutout/track counts, votes, top genre) which age 0-2 between
+  ticks. Generic listener phrasings allowed ("whoever's around").
+- Token-based numerical-claim parser handles compound words:
+  "one hundred and eight" → 108 (was [100, 8] which dropped many
+  truthful lines). +6 tests covering scale words.
+- Pool tone scrub: regenerated all 600 quotes with banned-aloof-
+  phrases regex ("fine by me", "I don't mind", "doesn't bother me").
+  Lena always warms toward listeners, never shrugs them off.
+
+**Error pages — branded 404 / 500 / global-error**
+- `app/not-found.tsx` "OFF THE DIAL · ERR 404" with a teal tuner-
+  needle drift animation
+- `app/error.tsx` "STATIC · STAND BY · ERR 500" same dial in red
+  with jagged step animation
+- `app/global-error.tsx` minimal inline-styled fallback "OFF AIR ·
+  CRITICAL"
+- All three reuse Nav + Footer (where applicable). Honors
+  prefers-reduced-motion.
+
+**Frame-accurate track durations (root-cause fix)**
+The public site was flipping artwork → placeholder in the last
+20-30s of long tracks. Root cause: `music-metadata` was being called
+without `{ duration: true }`, using the unreliable Xing/VBRI header
+estimate. AI-generated MP3s often have bad headers → catalogue
+durations off by 30-90s.
+
+Fix:
+- `lib/probe-duration.ts` — pure-JS wrapper around music-metadata
+  in full-scan mode (frame-accurate). Supports file paths, HTTP URLs
+  (streamed), and Buffers. ffmpeg now installed on Orion (handy for
+  future use, not required by the current code path).
+- Wired into `scripts/ingest-seed.ts` and `workers/song-worker/pipeline.ts`
+- `scripts/backfill-track-durations.ts` re-probes every Track's B2
+  asset via HTTP and updates Track + TrackAsset rows. Dry-run by
+  default, `--apply` writes. **Backfill ran successfully** —
+  6 tracks updated, biggest delta `Dashboard Glow: 195s → 285s`
+  (was 90s short!).
+- `STALE_GRACE_SECONDS` reverted from 120s back to 30s now that
+  durations are accurate.
+
+Future Suno-numa-radio drafts and listener-generated MiniMax songs
+will all probe correctly at ingest time.
+
+**To pick up daemon hygiene** (not urgent, public-site fix is live
+via Vercel):
+```
+sudo systemctl restart numa-queue-daemon   # passwordless via sudoers
+sudo systemctl restart numa-song-worker    # needs password
+```
+
+Commits between `f434fb8` and `5c3e847` on `main`. ~30 commits in
+the day. All tests passing (210+ across daemon + new probe).
 
 ---
 
