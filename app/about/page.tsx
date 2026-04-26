@@ -4,6 +4,7 @@ import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
 import { ListenLiveButton } from "../_components/ListenLiveButton";
 import { ListenerCount } from "../_components/ListenerCount";
+import { LenaLine } from "../_components/LenaLine";
 
 export const metadata: Metadata = {
   title: "About Lena — Numa Radio",
@@ -69,20 +70,13 @@ export default function AboutPage() {
             </div>
           </div>
 
-          <div className="lena-card" style={{ maxWidth: 620, marginTop: 40 }}>
-            <div className="lena-avatar">L</div>
-            <div className="lena-content">
-              <div className="lena-head">
-                <span className="lena-name">Lena</span>
-                <span className="lena-label">Host · Live</span>
-              </div>
-              <div className="lena-text">
-                &ldquo;I don&apos;t sleep, I don&apos;t eat, I don&apos;t get
-                tired of songs. That&apos;s the one thing I can genuinely offer —
-                the mic is always hot, and I&apos;m always listening.&rdquo;
-              </div>
-            </div>
-          </div>
+          {/* Live Lena quote with the canonical portrait at feature size.
+              The dynamic system surfaces "live" / "context" lines when
+              fresh chatter exists; otherwise it falls back to the per-show
+              evergreen pool — so the About page is never empty and never
+              stale. The .lena-card--feature modifier scales padding, gap,
+              and typography for the bigger avatar. */}
+          <LenaLine className="lena-card--feature" avatarSize={240} />
         </div>
       </section>
 

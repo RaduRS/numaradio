@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useLenaLine, relativeTimeLabel } from "./useLenaLine";
 import { Skeleton } from "./Skeleton";
 
@@ -12,36 +13,39 @@ export interface LenaLineProps {
    *  (just the body text — used inline where the surrounding component
    *  already provides the chrome). */
   layout?: "card" | "quote-only";
-  /** Avatar character override; defaults to "L". card layout only. */
-  avatar?: string;
+  /** Avatar size in px. 36 (default) for in-card use, 96+ for feature
+   *  surfaces (about page, future hero placements). The portrait is
+   *  rendered through next/image which serves an optimized variant for
+   *  the requested size. */
+  avatarSize?: number;
 }
 
 /**
  * Dynamic Lena line. Reads from the shared useLenaLine hook so all four
  * surfaces stay in sync. Two render shapes:
  *
- *   layout="card"         (default — used in About page Lena block):
- *     ┌──────────────────────────────────┐
- *     │ ⓛ  Lena  Host · Live · just now  │
- *     │    "It's quiet here, the way…"   │
- *     └──────────────────────────────────┘
+ *   layout="card"         (default — used in PlayerCard + About hero):
+ *     ┌────────────────────────────────────┐
+ *     │ [portrait]  Lena  Host · Live · …  │
+ *     │             "It's quiet here, …"   │
+ *     └────────────────────────────────────┘
  *
  *   layout="quote-only":
  *     "It's quiet here, the way…"
  *     (caller wraps with their own chrome)
  *
- * On first paint with no cache, renders Skeleton placeholders so the
- * card never collapses to zero height (no layout shift when the line
- * loads).
+ * The avatar is the canonical Lena portrait (public/lena/portrait.png).
+ * A red live-dot in the bottom-right indicates broadcast presence; it
+ * pulses when the source is "live" or "context" (real fresh chatter)
+ * and stays static for "pool" lines.
  */
-export function LenaLine({ className, layout = "card", avatar = "L" }: LenaLineProps) {
+export function LenaLine({ className, layout = "card", avatarSize = 36 }: LenaLineProps) {
   const line = useLenaLine();
-  // `live` (real on-air audio chatter) and `context` (every-10-min
-  // truthful state-aware line) both deserve the fresh "just now / X
-  // min ago" pill — the listener doesn't need to know whether it was
-  // spoken or written, only that it's fresh.
+  // "live" = audio chatter the daemon just aired (≤5 min)
+  // "context" = generated text from real station state (≤30 min)
+  // Both deserve the fresh "just now / X min ago" pill + dot pulse.
   const isFresh = line?.source === "live" || line?.source === "context";
-  const freshLabel = isFresh && "atIso" in line ? relativeTimeLabel(line.atIso) : null;
+  const freshLabel = isFresh && line && "atIso" in line ? relativeTimeLabel(line.atIso) : null;
 
   if (layout === "quote-only") {
     if (!line) {
@@ -60,7 +64,22 @@ export function LenaLine({ className, layout = "card", avatar = "L" }: LenaLineP
 
   return (
     <div className={`lena-card ${className ?? ""}`.trim()}>
-      <div className="lena-avatar">{avatar}</div>
+      <div
+        className={`lena-avatar ${isFresh ? "lena-avatar--fresh" : ""}`}
+        style={{ width: avatarSize, height: avatarSize }}
+      >
+        <Image
+          src="/lena/portrait.png"
+          alt="Lena, Numa Radio's AI host"
+          width={avatarSize * 2}
+          height={avatarSize * 2}
+          // The portrait is 1024×768 with the face roughly centered
+          // horizontally and a touch above mid-height. object-position
+          // pins the face when the square crop kicks in.
+          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 30%" }}
+          priority={avatarSize >= 96}
+        />
+      </div>
       <div className="lena-content">
         <div className="lena-head">
           <span className="lena-name">Lena</span>
