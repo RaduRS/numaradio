@@ -68,39 +68,76 @@ const BANNED_REGEX =
 
 const CLOCK_TIME_REGEX = /\b\d{1,2}:\d{2}\s*(am|pm)?\b/i;
 
+// Single-word numerals (no scale words). "twenty" = 20, "seven" = 7.
 const NUMBER_WORDS: Record<string, number> = {
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
   eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
   fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
   nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60,
-  seventy: 70, eighty: 80, ninety: 90, hundred: 100,
+  seventy: 70, eighty: 80, ninety: 90,
 };
+// Multiplier scale words. "two hundred" = 2 * 100 = 200.
+const SCALE_WORDS: Record<string, number> = { hundred: 100, thousand: 1000 };
 
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
 
 /**
  * Pull every distinct integer claim out of a line so we can verify it
- * against the state. Both digit-form ("3", "47") and word-form ("three",
- * "forty-seven") are picked up. Returns deduped + sorted ascending so
- * the validator can compare against any state field.
+ * against the state. Handles:
+ *   - digit form: "3", "47", "108"
+ *   - simple word numbers: "three", "twenty-seven", "forty seven"
+ *   - compound word numbers with scale: "one hundred and eight" = 108,
+ *     "two thousand five hundred" = 2500, "a hundred" = 100
+ *
+ * Returns deduped + sorted ascending. Token-based parser (not regex):
+ * walks the line word-by-word, accumulating a chunk until a scale word
+ * (hundred/thousand) flushes it into the running total, and committing
+ * to the result set whenever we hit a non-number word.
  */
 export function extractNumericalClaims(line: string): number[] {
   const found = new Set<number>();
+
+  // Digit form first — straightforward.
   for (const m of line.matchAll(/\b\d+\b/g)) {
     const n = Number(m[0]);
     if (Number.isFinite(n)) found.add(n);
   }
-  // word numbers: simple "twenty-seven" / "forty seven" / "three"
-  const lower = line.toLowerCase();
-  const wordMatches = lower.matchAll(
-    /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)(?:[-\s](one|two|three|four|five|six|seven|eight|nine))?\b/g,
-  );
-  for (const m of wordMatches) {
-    const a = NUMBER_WORDS[m[1]] ?? 0;
-    const b = m[2] ? NUMBER_WORDS[m[2]] ?? 0 : 0;
-    const total = a + b;
-    if (total > 0) found.add(total);
+
+  // Word form via tokenizer.
+  const tokens = line.toLowerCase().match(/[a-z]+/g) ?? [];
+  let chunk = 0;     // pending sub-total ("twenty-seven" → 27 before scale)
+  let total = 0;     // committed scale-multiplied total ("one hundred" → 100)
+  let active = false;
+
+  const commit = () => {
+    if (active) {
+      const sum = total + chunk;
+      if (sum > 0) found.add(sum);
+    }
+    chunk = 0;
+    total = 0;
+    active = false;
+  };
+
+  for (const tok of tokens) {
+    if (NUMBER_WORDS[tok] != null) {
+      chunk += NUMBER_WORDS[tok];
+      active = true;
+    } else if (SCALE_WORDS[tok] != null) {
+      // "a hundred" / standalone "hundred" → chunk defaults to 1
+      if (chunk === 0) chunk = 1;
+      total += chunk * SCALE_WORDS[tok];
+      chunk = 0;
+      active = true;
+    } else if (tok === "and" && active) {
+      // "one hundred and eight" — keep chunk/total alive
+    } else {
+      // any other word breaks the number sequence
+      commit();
+    }
   }
+  commit();
+
   return [...found].sort((a, b) => a - b);
 }
 
@@ -175,6 +212,7 @@ YOUR LINE MUST:
 - Reference the chosen fact ACCURATELY using the exact number or category given. If you say "three of you", the state must show 3. If the state shows 0 of something, do NOT claim activity for it.
 - Never invent a fact that isn't in the JSON
 - Never reference specific clock times ("4:13 AM" — bad)
+- Format numbers ≥ 20 as digits (e.g. "108 tracks", "47 songs"). Numbers 1–19 can be words ("three of you", "eleven minutes") — read more naturally for small counts. Digits keep large numbers unambiguous and let listeners see the precision.
 - Never name real or fake artists/tracks (the catalogue is OK to reference generically: "the rotation", "tonight's stretch", "this hour")
 - When the wall is quiet, INVITE — don't dismiss. "Come keep me company at numaradio.com" is right; "I don't mind quiet" is wrong.
 - Do NOT speculate about how many listeners are tuned in. The JSON does not include a listener count — that lives elsewhere on the public site and changes minute-to-minute. If you'd like to address listeners as a group, use generic phrasings ("whoever's around", "anyone tuned in") rather than naming a number.

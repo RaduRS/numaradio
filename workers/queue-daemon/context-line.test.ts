@@ -43,6 +43,34 @@ test("extractNumericalClaims: empty when no claims", () => {
   assert.deepEqual(extractNumericalClaims("It's quiet here, the way I like it."), []);
 });
 
+test("extractNumericalClaims: 'one hundred and eight' parses as 108", () => {
+  // The bug that killed two consecutive context lines on prod — model
+  // wrote '108 tracks' as compound words; old parser saw 100 + 8 instead
+  // of 108, neither matched state, line dropped.
+  const claims = extractNumericalClaims("One hundred and eight tracks into this shift.");
+  assert.deepEqual(claims, [108]);
+});
+
+test("extractNumericalClaims: 'a hundred' = 100, 'two hundred' = 200, 'three thousand' = 3000", () => {
+  assert.deepEqual(extractNumericalClaims("a hundred of you"), [100]);
+  assert.deepEqual(extractNumericalClaims("two hundred songs aired"), [200]);
+  assert.deepEqual(extractNumericalClaims("three thousand minutes"), [3000]);
+});
+
+test("extractNumericalClaims: 'two thousand five hundred' = 2500", () => {
+  assert.deepEqual(extractNumericalClaims("Two thousand five hundred listens this month."), [2500]);
+});
+
+test("extractNumericalClaims: separate numbers stay separate", () => {
+  // "three or four" must NOT collapse to 7 — two distinct claims.
+  assert.deepEqual(extractNumericalClaims("three or four songs"), [3, 4]);
+});
+
+test("extractNumericalClaims: 'and' inside a compound stays connected", () => {
+  // "and" between numbers continues the chunk; "and" outside breaks it.
+  assert.deepEqual(extractNumericalClaims("one hundred and forty-seven tracks"), [147]);
+});
+
 // ─── validateNumericalClaims ────────────────────────────────────────
 
 test("validateNumericalClaims: claim matches a state field → ok", () => {
