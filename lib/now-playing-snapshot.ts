@@ -21,11 +21,10 @@ export type NowPlayingSnapshot = {
 };
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
-// Keep in sync with app/api/station/broadcast/route.ts. 120s allows for
-// catalogue durationSeconds that underreport vs actual playback (common
-// when metadata is extracted from MP3 frames). At 30s, the public site
-// flipped artwork → placeholder in the last 20-30s of every long track.
-const STALE_GRACE_SECONDS = 120;
+// Keep in sync with app/api/station/broadcast/route.ts. Frame-accurate
+// durations (via lib/probe-duration.ts + the 2026-04-26 backfill) mean
+// 30s is enough to absorb track-started callback latency.
+const STALE_GRACE_SECONDS = 30;
 
 const OFFLINE: NowPlayingSnapshot = {
   isPlaying: false,
