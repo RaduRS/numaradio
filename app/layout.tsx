@@ -188,23 +188,21 @@ export default async function RootLayout({
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }`}
         </Script>
-        {/* iOS Safari occasionally restores a backgrounded tab from the
-            back-forward cache without re-running Next's CSS chunk loader,
-            leaving the page entirely unstyled until a manual refresh.
-            We probe a CSS variable we know is set by globals.css; if it's
-            empty on a bfcache restore (event.persisted === true) we force
-            a one-time reload so the user gets styles back without having
-            to pull-to-refresh. The probe avoids reloads in the normal
-            (styled) case so audio playback isn't interrupted. */}
-        <Script id="bfcache-style-recovery" strategy="afterInteractive">
-          {`window.addEventListener('pageshow', function (e) {
-            if (!e.persisted) return;
-            try {
-              var probe = getComputedStyle(document.documentElement)
-                .getPropertyValue('--bg').trim();
-              if (!probe) window.location.reload();
-            } catch (_) { /* no-op */ }
-          });`}
+        {/* iOS WebKit (Safari + Chrome-on-iOS) can restore a backgrounded
+            tab in an unstyled state — the DOM comes back but the CSS
+            bundle wasn't re-applied. Three paths trigger it:
+              1. bfcache restore: pageshow w/ persisted=true
+              2. tab evicted from memory then reopened: fresh load whose
+                 pageshow already fired before afterInteractive runs
+              3. iOS shows a stale snapshot then settles into broken state
+                 → caught only when the tab actually becomes visible
+            We probe --bg (set on :root by _design-base.css). If the whole
+            CSS bundle failed to load it returns empty; we reload once.
+            sessionStorage guards against an infinite loop if the network
+            error is sticky. Audio playback is preserved in the styled
+            case because we never reload then. */}
+        <Script id="ios-style-recovery" strategy="afterInteractive">
+          {`(function(){var k='numa.cssRecovery';function ok(){try{return !!getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();}catch(_){return true;}}function check(){if(ok()){try{sessionStorage.removeItem(k);}catch(_){}return;}var p=false;try{if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,'1');p=sessionStorage.getItem(k)==='1';}catch(_){}if(!p)return;try{window.location.reload();}catch(_){}}window.addEventListener('pageshow',check);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')check();});if(document.readyState==='complete')check();})();`}
         </Script>
       </body>
     </html>
