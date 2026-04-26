@@ -81,7 +81,7 @@ test("pickTopic on-this-day formats topic with month-day", () => {
 
 // ─── buildPrompt ────────────────────────────────────────────────────
 
-test("buildPrompt includes show + briefing + snippets", () => {
+test("buildPrompt includes show + briefing + snippets + today", () => {
   const p = buildPrompt({
     show: "Night Shift",
     briefing: "Tokyo's weather right now",
@@ -89,18 +89,24 @@ test("buildPrompt includes show + briefing + snippets", () => {
       { title: "Tokyo weather", description: "14°C, light rain" },
       { title: "Tokyo forecast", description: "cloudy through Wednesday" },
     ],
+    now: new Date("2026-04-26T22:00:00Z"),
   });
   assert.match(p.user, /Night Shift/);
   assert.match(p.user, /Tokyo's weather right now/);
   assert.match(p.user, /14°C, light rain/);
   assert.match(p.user, /cloudy through Wednesday/);
+  // Today's date is on the FIRST line so the model considers it before reading snippets.
+  assert.match(p.user, /^Today is .+April .*2026/);
 });
 
-test("buildPrompt system prompt has Lena identity + banned phrases", () => {
-  const p = buildPrompt({ show: "X", briefing: "y", results: [] });
+test("buildPrompt system prompt has Lena identity + Celsius + staleness rules", () => {
+  const p = buildPrompt({ show: "X", briefing: "y", results: [], now: new Date() });
   assert.match(p.system, /Lena/);
   assert.match(p.system, /fine by me/i);
   assert.match(p.system, /NO_GOOD_ANGLE/);
+  // Two new rule blocks added for unit + temporal accuracy.
+  assert.match(p.system, /Celsius/);
+  assert.match(p.system, /already happened|past tense|stale/i);
 });
 
 // ─── validateLine ───────────────────────────────────────────────────

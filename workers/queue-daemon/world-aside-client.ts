@@ -251,6 +251,19 @@ YOUR LINE MUST:
 - Never name Numa Radio's own catalogue artists or tracks (you don't have access to them — just reference "the rotation" generically if you need to). Outside-world artists/tracks (from the search snippets) are fine and expected.
 - Never touch politics, war, ongoing disasters, religion, sports, celebrity gossip — refuse the line if the snippet drifts there.
 
+TEMPERATURE UNITS:
+- ALWAYS use Celsius. If a snippet only gives Fahrenheit, convert it: C = (F − 32) × 5/9, rounded to nearest whole number. Example: snippet says 79°F → write "26°C". Never put °F in your line.
+
+EVENT TIMING vs TODAY (read carefully — this is where bad lines come from):
+- The user message starts with today's date. The snippets often describe events with their own dates (release dates, peak dates, anniversaries). Compare them.
+- If the event has ALREADY HAPPENED:
+  • Within the last week → frame in past tense. "Lyrids peaked last weekend — hope you caught them" (good). "If you're outside tonight, look up" for a 5-day-old peak (BAD — the peak is over).
+  • More than ~2 weeks past → output NO_GOOD_ANGLE. The news is too stale to feel current.
+- If the event is in the FUTURE: frame as upcoming. "Lyrids peak this weekend" / "drops next Friday".
+- If the event is HAPPENING TODAY OR TONIGHT (snippet date == today's date in the user message): "tonight" / "today" is fine.
+- For undated content (album already released, ongoing rotation, etc.) timing words aren't required.
+- Anniversaries / "on this day" history: always frame as past ("On April 26th, 1986, Chernobyl"). The year shows it's history.
+
 GOOD EXAMPLES (specific, real names, in voice):
 - "Heads up: Taylor Swift dropped a new single yesterday. Not in our rotation, but worth a check."
 - "OpenAI announced GPT-5 this morning. World keeps moving while the music plays — glad you're here for some of it."
@@ -283,6 +296,8 @@ interface BuildPromptArgs {
   show: string;
   briefing: string;
   results: BraveResult[];
+  /** Today, used by the model to judge whether snippet events are stale. */
+  now: Date;
 }
 
 export function buildPrompt(args: BuildPromptArgs): { system: string; user: string } {
@@ -290,7 +305,11 @@ export function buildPrompt(args: BuildPromptArgs): { system: string; user: stri
     .slice(0, 3)
     .map((r, i) => `${i + 1}. ${r.title}${r.age ? ` (${r.age})` : ""}\n   ${r.description}`)
     .join("\n");
-  const user = `Show context: ${args.show} (Lena is on the mic right now).
+  const today = args.now.toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const user = `Today is ${today}.
+Show context: ${args.show} (Lena is on the mic right now).
 Topic framing: ${args.briefing}.
 
 Brave search results (top 3 — use as raw material, do not quote verbatim):
@@ -363,6 +382,7 @@ export async function fetchWorldAside(
     show: String(req.show),
     briefing: picked.briefing,
     results,
+    now,
   });
 
   let raw: string;
