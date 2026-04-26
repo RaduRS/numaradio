@@ -499,6 +499,14 @@
     0 0 0 1px rgba(79, 209, 197, 0.28),
     0 0 80px -10px rgba(79, 209, 197, 0.22);
 }
+.lena-card--feature .lena-avatar-frame img {
+  /* At 240px the source is large enough that the small-avatar's 1.3×
+     face zoom feels claustrophobic — listener wants to SEE her, not
+     just her face. Drop the zoom for the feature variant; the photo's
+     own composition (face upper-third, dark frame below) does the work. */
+  transform: scale(1);
+  transform-origin: center;
+}
 .lena-card--feature .lena-name { font-size: 22px; font-weight: 600; }
 .lena-card--feature .lena-label {
   font-size: 10px;
@@ -2797,4 +2805,138 @@
     grid-template-columns: 1fr;
   }
   .submit-arrow { transform: rotate(90deg); padding: 4px 0; }
+}
+
+/* ── Error pages (404 + 500) ──────────────────────────────────────────
+   Shared styling for app/not-found.tsx + app/error.tsx. Visual motif is
+   a small horizontal "tuner dial" — a row of tick marks with a needle
+   that drifts (404: smooth teal drift, 500: red jitter). Reads as a
+   broadcast moment, not a generic error page. */
+.error-hero {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  padding: 80px 0 120px;
+}
+.error-shell {
+  max-width: 720px;
+}
+.error-tuner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  height: 36px;
+  margin-bottom: 32px;
+  position: relative;
+  width: min(420px, 90%);
+}
+.error-tuner-edge {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line) 60%);
+}
+.error-tuner-edge:last-child {
+  background: linear-gradient(90deg, var(--line) 40%, transparent);
+}
+.error-tuner-tick {
+  width: 1px;
+  height: 10px;
+  background: var(--line-strong);
+  opacity: 0.6;
+}
+.error-tuner-tick--strong {
+  height: 18px;
+  opacity: 1;
+}
+.error-tuner-needle {
+  width: 2px;
+  height: 28px;
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 1px;
+  animation: tunerDrift 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes tunerDrift {
+  0%, 100% { transform: translateX(-22px); opacity: 0.55; }
+  50%      { transform: translateX(22px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .error-tuner-needle { animation: none; }
+}
+
+.error-headline {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 110%;
+  font-size: clamp(56px, 9vw, 112px);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  margin: 12px 0 24px;
+}
+.error-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 36px;
+}
+.error-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--fg-dim);
+  text-decoration: none;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.error-cta:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.error-cta--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+.error-cta--primary:hover {
+  background: transparent;
+  color: var(--accent);
+}
+.error-digest {
+  margin-top: 40px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--fg-mute);
+  text-transform: uppercase;
+}
+
+/* 500 variant — same dial, red, jittery */
+.error-hero--500 .error-tuner-needle {
+  background: var(--red-live);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--red-live) 70%, transparent);
+  animation: tunerStatic 0.6s steps(6, end) infinite;
+}
+.error-hero--500 .accent {
+  color: var(--red-live);
+}
+@keyframes tunerStatic {
+  0%   { transform: translateX(-22px); opacity: 1; }
+  16%  { transform: translateX(14px); opacity: 0.4; }
+  33%  { transform: translateX(-8px); opacity: 0.9; }
+  50%  { transform: translateX(20px); opacity: 0.5; }
+  66%  { transform: translateX(-18px); opacity: 1; }
+  83%  { transform: translateX(6px); opacity: 0.7; }
+  100% { transform: translateX(-22px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .error-hero--500 .error-tuner-needle { animation: none; }
 }
