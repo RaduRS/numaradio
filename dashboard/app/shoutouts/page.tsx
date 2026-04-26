@@ -647,7 +647,6 @@ export default function ShoutoutsPage() {
                 const demoted = s.type === "world_aside" && worldOff;
                 const display = demoted ? `${label} → filler` : label;
                 const isFirst = i === 0;
-                const isWorld = s.type === "world_aside";
                 const isPending = isFirst && pendingOverride !== null;
                 const pendingLabel =
                   isPending && pendingOverride
@@ -665,7 +664,7 @@ export default function ShoutoutsPage() {
                         : isFirst
                           ? "border-accent text-accent bg-[var(--accent-soft)]"
                           : "border-line text-fg-mute hover:text-fg hover:border-fg-mute/40"
-                    } ${isWorld && !demoted ? "italic" : ""}`}
+                    }`}
                   >
                     {isPending && pendingLabel ? `→ ${pendingLabel} (queued)` : `${isFirst ? "→ " : ""}${display}`}
                   </button>
