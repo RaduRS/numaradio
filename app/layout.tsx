@@ -7,7 +7,9 @@ import { MiniPlayer } from "./_components/MiniPlayer";
 import { ExpandedPlayer } from "./_components/ExpandedPlayer";
 import { PresenceHeartbeat } from "./_components/PresenceHeartbeat";
 import { NowPlayingSeeder } from "./_components/NowPlayingSeeder";
+import { FallbackArtworkProvider } from "./_components/FallbackArtworkProvider";
 import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
+import { fallbackArtworkSrc, showSlugFor } from "@/lib/show-slug";
 
 // Schema.org graph describing the station. Rendered as an inline
 // <script type="application/ld+json"> in <head> so SSR-only crawlers
@@ -138,6 +140,12 @@ export default async function RootLayout({
   } catch {
     initialNowPlaying = { isPlaying: false, shoutout: { active: false } as const };
   }
+  // Per-show fallback artwork URL — covers the brief window before the
+  // real B2 image bytes arrive on the wire. Computed once at SSR using
+  // server time so the same URL is in the initial HTML, served as a
+  // CSS background-image fallback under the real artwork in PlayerCard
+  // / Broadcast / ExpandedPlayer*.
+  const fallbackArtUrl = fallbackArtworkSrc(showSlugFor(new Date()));
   return (
     <html
       lang="en"
@@ -161,6 +169,10 @@ export default async function RootLayout({
             fetchPriority="high"
           />
         ) : null}
+        {/* Preload the per-show fallback so it's in HTTP cache before
+            React hydrates — same-origin, ~400 KB, takes < 50 ms. Shows
+            instantly under the real artwork while B2 catches up. */}
+        <link rel="preload" as="image" href={fallbackArtUrl} fetchPriority="high" />
         {/* Inline in <head> (not via next/script) so the structured
             data is in the initial SSR HTML. `<` escape defends
             against a payload smuggling a `</script>` if the data
@@ -179,11 +191,13 @@ export default async function RootLayout({
             alive across client-side navigations so playback doesn't cut
             out when the user moves between /, /about, /submit, etc.
             MiniPlayer sits here too so the floating controls survive nav. */}
-        <PlayerProvider>
-          {children}
-          <MiniPlayer />
-          <ExpandedPlayer />
-        </PlayerProvider>
+        <FallbackArtworkProvider url={fallbackArtUrl}>
+          <PlayerProvider>
+            {children}
+            <MiniPlayer />
+            <ExpandedPlayer />
+          </PlayerProvider>
+        </FallbackArtworkProvider>
         <PresenceHeartbeat />
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }`}

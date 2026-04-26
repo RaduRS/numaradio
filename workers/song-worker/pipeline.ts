@@ -3,7 +3,7 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
 import { parseBuffer } from "music-metadata";
 import { profanityPrefilter } from "../../lib/moderate.ts";
-import { showForHour } from "../../lib/schedule.ts";
+import { showSlugFor, type ShowSlug } from "../../lib/show-slug.ts";
 import { loadFallbackArtwork } from "../../lib/fallback-artwork.ts";
 import {
   startMusicGeneration,
@@ -12,14 +12,10 @@ import {
 import { generateArtwork } from "./openrouter.ts";
 import { expandPrompt } from "./prompt-expand.ts";
 
-export function showEnumFor(date: Date): "night_shift" | "morning_room" | "daylight_channel" | "prime_hours" {
-  switch (showForHour(date.getHours()).name) {
-    case "Night Shift": return "night_shift";
-    case "Morning Room": return "morning_room";
-    case "Daylight Channel": return "daylight_channel";
-    case "Prime Hours": return "prime_hours";
-  }
-}
+// Re-exported here so existing callers keep working; logic lives in
+// lib/show-slug.ts so the public site, song-worker and dashboard all
+// agree on the date→slug mapping.
+export const showEnumFor: (date: Date) => ShowSlug = showSlugFor;
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const QUEUE_DAEMON_URL =

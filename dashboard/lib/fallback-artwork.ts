@@ -21,7 +21,7 @@ const VALID: ReadonlySet<FallbackShow> = new Set([
   "prime_hours",
 ]);
 
-const ASSETS_DIR = path.resolve(process.cwd(), "..", "assets", "fallback-artwork");
+const ASSETS_DIR = path.resolve(process.cwd(), "..", "public", "fallback-artwork");
 
 let cache: Partial<Record<FallbackShow, Buffer>> = {};
 

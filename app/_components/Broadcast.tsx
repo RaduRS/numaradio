@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 
 type TrackSummary = {
   trackId: string;
@@ -204,7 +205,8 @@ export function Broadcast() {
   const title = live?.title ?? "Warming up";
   const artist = live?.artistDisplay ?? "Numa Radio";
   const art = live?.artworkUrl;
-  const artGlyph = live ? initials(live.title) : "··";
+  const fallback = useFallbackArtworkUrl();
+  const artBg = art ? `url(${art}), url(${fallback})` : `url(${fallback})`;
 
   return (
     <section className="broadcast" id="now">
@@ -222,18 +224,12 @@ export function Broadcast() {
           <div className="broadcast-now">
             <div
               className="broadcast-art"
-              style={
-                art
-                  ? {
-                      backgroundImage: `url(${art})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }
-                  : undefined
-              }
-            >
-              {!art && <div className="glyph">{artGlyph}</div>}
-            </div>
+              style={{
+                backgroundImage: artBg,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            />
             <div className="now-track-lg">
               <div className="title">{title}</div>
               <div className="sub">

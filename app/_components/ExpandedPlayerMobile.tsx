@@ -12,25 +12,21 @@ import { ShareControls } from "./ShareControls";
 import { VolumeControl } from "./VolumeControl";
 import { VoteButtons } from "./VoteButtons";
 import { LiveClock } from "./LiveClock";
-
-function initials(title: string | undefined): string {
-  if (!title) return "··";
-  const words = title.split(/\s+/).filter(Boolean);
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
+import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 
 function ListenPane() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
   const { nowPlaying } = useBroadcast();
   // Fresh-from-MiniPlayer cache; instant on first open.
   const np = useNowPlaying();
+  const fallback = useFallbackArtworkUrl();
   const live = np.isPlaying
     ? np
     : nowPlaying.isPlaying
       ? nowPlaying
       : null;
   const cover = live?.artworkUrl;
+  const coverBg = cover ? `url(${cover}), url(${fallback})` : `url(${fallback})`;
 
   return (
     <div className="ep-listen">
@@ -38,24 +34,7 @@ function ListenPane() {
         <span><LiveClock /></span>
         <span><ListenerCount suffix=" listening" /></span>
       </div>
-      <div
-        className="ep-listen-art"
-        style={
-          cover
-            ? { backgroundImage: `url(${cover})` }
-            : {
-                background:
-                  "radial-gradient(circle at 30% 20%, #2A4E4B, transparent 60%), radial-gradient(circle at 70% 80%, var(--accent), transparent 55%), linear-gradient(135deg, #1A1E23, #0F1114)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: "var(--font-display)",
-                fontWeight: 800,
-                fontSize: 64,
-              }
-        }
-      >
-        {!cover && initials(live?.title)}
+      <div className="ep-listen-art" style={{ backgroundImage: coverBg }}>
         <div className="ep-art-share">
           <ShareControls />
         </div>

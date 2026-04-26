@@ -8,22 +8,23 @@ import { useNowPlaying } from "./useNowPlaying";
 import { VoteButtons } from "./VoteButtons";
 import { VolumeControl } from "./VolumeControl";
 import { ShareControls } from "./ShareControls";
-
-function initials(title: string | undefined): string {
-  if (!title) return "··";
-  const words = title.split(/\s+/).filter(Boolean);
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
+import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 
 export function PlayerCard() {
   const { status, isPlaying, isLoading, toggle, expand } = usePlayer();
   const np = useNowPlaying();
+  const fallback = useFallbackArtworkUrl();
 
   const title = np.title ?? "—";
   const artist = np.artistDisplay ?? "—";
   const cover = np.artworkUrl;
-  const coverInitials = initials(np.title);
+  // CSS background-image stack: real cover on top, fallback underneath.
+  // While B2 downloads, browser shows the same-origin fallback; once
+  // the cover bytes arrive, they cover the fallback. No flash, no
+  // layout shift, no "—" initials placeholder.
+  const backgroundImage = cover
+    ? `url(${cover}), url(${fallback})`
+    : `url(${fallback})`;
 
   return (
     <div
@@ -47,18 +48,12 @@ export function PlayerCard() {
 
       <div
         className="now-art"
-        style={
-          cover
-            ? {
-                backgroundImage: `url(${cover})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }
-            : undefined
-        }
-      >
-        {!cover && <div className="art-inner">{coverInitials}</div>}
-      </div>
+        style={{
+          backgroundImage,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
 
       <div className="now-info">
         {np.shoutout?.active && (

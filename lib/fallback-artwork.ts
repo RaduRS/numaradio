@@ -1,9 +1,11 @@
 // Per-show fallback covers, used when OpenRouter (Flux) artwork
-// generation fails (no credits, network error, etc.). Source PNGs are
-// rendered in numaradio-videos via `npm run video:fallback-artwork`
-// and committed at assets/fallback-artwork/{show}.png. They are 1024
-// x1024 — same size as Flux output — so library thumbnails render
-// identically.
+// generation fails (no credits, network error, etc.) AND as a
+// CSS-fallback placeholder on the public site while real artwork
+// loads. Source PNGs are rendered in numaradio-videos via
+// `npm run video:fallback-artwork` and committed at
+// public/fallback-artwork/{show}.png — public/ so Next.js auto-serves
+// them at /fallback-artwork/{show}.png. 1024×1024 matches Flux output,
+// so library thumbnails render identically.
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -40,7 +42,7 @@ export function isFallbackShow(value: unknown): value is FallbackShow {
 export async function loadFallbackArtwork(show: FallbackShow): Promise<Buffer> {
   const cached = cache[show];
   if (cached) return cached;
-  const file = path.join(repoRoot(), "assets", "fallback-artwork", `${show}.png`);
+  const file = path.join(repoRoot(), "public", "fallback-artwork", `${show}.png`);
   const bytes = await fs.readFile(file);
   cache[show] = bytes;
   return bytes;

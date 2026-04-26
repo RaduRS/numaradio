@@ -8,13 +8,7 @@ import { ShareControls } from "./ShareControls";
 import { VolumeControl } from "./VolumeControl";
 import { VoteButtons } from "./VoteButtons";
 import { OnAirFeed } from "./OnAirFeed";
-
-function initials(title: string | undefined): string {
-  if (!title) return "··";
-  const words = title.split(/\s+/).filter(Boolean);
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
+import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 
 export function ExpandedPlayerDesktop() {
   const { status, isPlaying, isLoading, toggle } = usePlayer();
@@ -24,6 +18,7 @@ export function ExpandedPlayerDesktop() {
   // available instantly on first open. useBroadcast may take ~500ms to
   // populate; we only need it for the feed/upNext/shoutout extras.
   const np = useNowPlaying();
+  const fallback = useFallbackArtworkUrl();
 
   const live = np.isPlaying
     ? np
@@ -31,6 +26,7 @@ export function ExpandedPlayerDesktop() {
       ? nowPlaying
       : null;
   const cover = live?.artworkUrl;
+  const coverBg = cover ? `url(${cover}), url(${fallback})` : `url(${fallback})`;
   const title = live?.title ?? "—";
   const artist = live?.artistDisplay ?? "—";
 
@@ -39,11 +35,7 @@ export function ExpandedPlayerDesktop() {
       {/* Left — Listen view: artwork, track, controls, Lena card.
           Mirrors the mobile Listen tab. */}
       <div className="ep-booth-left">
-        <div
-          className={`ep-booth-art ${cover ? "" : "ep-booth-art-fallback"}`}
-          style={cover ? { backgroundImage: `url(${cover})` } : undefined}
-        >
-          {!cover && initials(live?.title)}
+        <div className="ep-booth-art" style={{ backgroundImage: coverBg }}>
           <div className="ep-art-share">
             <ShareControls />
           </div>
