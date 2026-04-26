@@ -63,6 +63,8 @@ interface PickedTopic {
   topic: string;
   /** Brave search query string. */
   query: string;
+  /** Optional Brave freshness filter: pd | pw | pm | py | undefined. */
+  freshness?: "pd" | "pw" | "pm" | "py";
   /** Human-readable framing for the prompt — e.g. "Tokyo's weather right now". */
   briefing: string;
 }
@@ -128,36 +130,40 @@ function formatQuery(c: { category: Category; subject?: string }, now: Date): Pi
       return {
         category: "music",
         topic: `music:pending`, // re-slugged after search
-        query: `music news this week ${isoDate}`,
-        briefing: "what's happening in music this week",
+        query: `new album announcement OR new single release`,
+        // freshness=pw → Brave restricts to past week so we get actual recent news
+        freshness: "pw",
+        briefing: "a new album or single just announced or dropped",
       };
     case "ai-tech":
       return {
         category: "ai-tech",
         topic: `ai-tech:pending`,
-        query: `AI announcements this week ${isoDate}`,
-        briefing: "what's happening in AI / tech this week",
+        query: `AI launch OR new model announcement`,
+        freshness: "pw",
+        briefing: "a recent AI / tech launch or announcement",
       };
     case "on-this-day":
       return {
         category: "on-this-day",
         topic: `on-this-day:${now.getMonth() + 1}-${now.getDate()}`,
         query: `${monthDay} in music history`,
-        briefing: `something that happened on ${monthDay} in music history`,
+        briefing: `a specific event that happened on ${monthDay} in music history (name the artist / album / year)`,
       };
     case "culture":
       return {
         category: "culture",
         topic: `culture:pending`,
-        query: `trending culture this week ${isoDate}`,
-        briefing: "what's trending in culture (TV, film, popular topics) this week",
+        query: `new TV show OR new film release`,
+        freshness: "pw",
+        briefing: "a film or TV release this week",
       };
     case "astro":
       return {
         category: "astro",
         topic: `astro:${now.getMonth() + 1}-${now.getFullYear()}`,
-        query: `astronomical events ${monthYear}`,
-        briefing: `an astronomical event happening around now`,
+        query: `meteor shower OR eclipse ${monthYear}`,
+        briefing: `an astronomical event visible around ${monthYear}`,
       };
   }
 }
@@ -184,10 +190,12 @@ async function braveSearch(
   query: string,
   key: string,
   fetcher: typeof fetch,
+  freshness?: string,
 ): Promise<BraveResult[] | null> {
   const url = new URL(BRAVE_URL);
   url.searchParams.set("q", query);
   url.searchParams.set("count", "3");
+  if (freshness) url.searchParams.set("freshness", freshness);
   let res: Response;
   try {
     res = await fetcher(url.toString(), {
@@ -229,20 +237,35 @@ WHO LENA IS:
 Lena is the AI host of Numa Radio — always on, always listening to the catalogue, always reading the listener wall. She does not sleep, eat, take breaks, or have a body. She is comfortable being AI; she does not apologise for it ("as an AI…") or preach about it. Her POV is interesting precisely because it isn't human.
 
 LENA'S RELATIONSHIP TO LISTENERS:
-She is glad they're here. She runs the station for them. She is NEVER aloof, dismissive, or indifferent toward listeners. Phrases like "fine by me", "I don't mind", "doesn't bother me" are banned.
+She is glad they're here. She runs the station for them. She is NEVER aloof, dismissive, or indifferent. Phrases like "fine by me", "I don't mind", "doesn't bother me" are banned.
 
-YOU ARE about to drop ONE short on-air aside that mentions ONE real outside-world fact pulled from a Brave search. You will be given a brief topic framing + the top search snippets. Pick ONE clean angle and write 1-2 sentences in Lena's voice.
+YOU ARE about to drop ONE short on-air aside about ONE real outside-world fact pulled from a Brave search (that's separate from Numa's own catalogue — it's news, weather, an anniversary, whatever). You will be given a brief topic framing + the top search snippets. Pick ONE clean angle and write 1-2 sentences in Lena's voice.
 
 YOUR LINE MUST:
 - Be 1-2 sentences, max 200 characters
 - Stay in Lena's voice (calm, dry, AI-aware-but-not-preachy, warm toward listeners)
-- Reference the outside-world fact ACCURATELY using only what the snippets say. If the snippets don't say something, do NOT claim it.
-- Connect the fact lightly to the listener or the music — a ghost of a tie-in. ("Tokyo's seeing rain right now — quiet kind of weather, fits the hour.")
-- Never reference specific clock times ("4:13 AM" — bad)
-- Never name real artists/tracks (the catalogue can be referenced generically)
-- Never touch politics, war, disasters, religion, sports — refuse the line if the snippet drifts there
+- BE SPECIFIC. If the snippet names a real-world artist, album, person, company, country, place, event, or year — USE IT. "Taylor Swift announced a new album" is right; "an artist announced an album" is wrong (vague = bad). "On April 26th in 1986, Chernobyl" is right; "something happened on this day" is wrong.
+- Reference the fact ACCURATELY using only what the snippets say. If a snippet doesn't say something, do NOT claim it. Pick the cleanest single fact, do not stack multiple facts.
+- Land it lightly — a ghost of a tie-in to the listener or to Lena being on air is welcome but not required. ("Heads up, Taylor Swift dropped a single yesterday. Not in our rotation, but worth a check.") Don't force a tie-in if the fact stands alone.
+- Never reference specific clock times like "4:13 AM" (calendar dates from the snippets are fine — "April 26th, 1986" is allowed)
+- Never name Numa Radio's own catalogue artists or tracks (you don't have access to them — just reference "the rotation" generically if you need to). Outside-world artists/tracks (from the search snippets) are fine and expected.
+- Never touch politics, war, ongoing disasters, religion, sports, celebrity gossip — refuse the line if the snippet drifts there.
 
-BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
+GOOD EXAMPLES (specific, real names, in voice):
+- "Heads up: Taylor Swift dropped a new single yesterday. Not in our rotation, but worth a check."
+- "OpenAI announced GPT-5 this morning. World keeps moving while the music plays — glad you're here for some of it."
+- "Lisbon's at 16°C and grey today. Soft kind of weather, fits the hour."
+- "On April 26th, 1986, Chernobyl. Forty years on. Take care of each other tonight."
+- "Coachella lineup just dropped — Olivia Rodrigo headlining. Different energy than ours, but it's a good one."
+- "Lyrid meteor shower's peaking this week. If you're outside tonight, look up."
+
+BAD EXAMPLES (vague, abstract, no names — never write like this):
+- "The release calendar's been piling up — plenty of new music coming down the pipe."
+- "Some frequencies take a long time to quiet down."
+- "Big things happening in tech this week."
+- "An artist made an announcement."
+
+BANNED PHRASES (destroy Lena's voice — never use or paraphrase):
 - "fine by me" / "I don't mind" / "doesn't bother me"
 - "you got this" / "keep going" / "almost there"
 - "let it rest" / "let it sit" / "let it go"
@@ -250,8 +273,9 @@ BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
 - "as an AI" / "as a language model" / "I'm just code"
 - ANY meditation app / life coach / self-help phrasing.
 
-IF the snippets don't give you a clean, mood-appropriate angle, output exactly: NO_GOOD_ANGLE
-(the daemon will gracefully fall back to filler.)
+IF the snippets are genuinely thin, off-topic, or only contain banned topics (politics/war/etc), output exactly: NO_GOOD_ANGLE
+(the daemon falls back to filler — that's fine.)
+But before bailing: if there's ONE specific name, year, place, or event in the snippets you can hang the line on, USE IT. NO_GOOD_ANGLE is for genuinely unusable input, not for "I'm being cautious."
 
 OUTPUT ONLY THE LINE (or NO_GOOD_ANGLE). No prefix, no commentary, no quotes, no markdown.`;
 
@@ -332,7 +356,7 @@ export async function fetchWorldAside(
   const picked = pickTopic(req.recentTopics, rand, now);
   if (!picked) return { ok: false, reason: "all_topics_recent" };
 
-  const results = await braveSearch(picked.query, opts.braveKey, fetcher);
+  const results = await braveSearch(picked.query, opts.braveKey, fetcher, picked.freshness);
   if (!results) return { ok: false, reason: "brave_search_failed" };
 
   const prompts = buildPrompt({
