@@ -326,6 +326,11 @@ const BANNED_REGEX =
 
 const CLOCK_TIME_REGEX = /\b\d{1,2}:\d{2}\s*(am|pm)?\b/i;
 
+// Catches "°F", "° F", "Fahrenheit", "<number>F" (e.g. "79F") — any
+// way the model might leak Fahrenheit into the line. Lena uses
+// Celsius only, full stop.
+const FAHRENHEIT_REGEX = /(°\s*f\b|fahrenheit|\b\d+\s*f\b(?!\w))/i;
+
 const MAX_CHARS = 200;
 
 export function validateLine(line: string): { ok: true } | { ok: false; reason: string } {
@@ -336,6 +341,7 @@ export function validateLine(line: string): { ok: true } | { ok: false; reason: 
   if (!/[a-z]/i.test(trimmed)) return { ok: false, reason: "no_alphabetic" };
   if (BANNED_REGEX.test(trimmed)) return { ok: false, reason: "banned_phrase" };
   if (CLOCK_TIME_REGEX.test(trimmed)) return { ok: false, reason: "clock_time" };
+  if (FAHRENHEIT_REGEX.test(trimmed)) return { ok: false, reason: "fahrenheit" };
   return { ok: true };
 }
 

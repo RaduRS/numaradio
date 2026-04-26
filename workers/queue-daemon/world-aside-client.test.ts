@@ -134,6 +134,25 @@ test("validateLine rejects clock times", () => {
   if (!r.ok) assert.equal(r.reason, "clock_time");
 });
 
+test("validateLine rejects Fahrenheit (°F, F suffix, Fahrenheit word)", () => {
+  for (const bad of [
+    "Lisbon's 79°F and sunny.",
+    "Tokyo at 65 °F right now.",
+    "Lisbon hitting 79F today.",
+    "Reading 26 in Fahrenheit, comfortable hour.",
+  ]) {
+    const r = validateLine(bad);
+    assert.equal(r.ok, false, `expected ban for: ${bad}`);
+    if (!r.ok) assert.equal(r.reason, "fahrenheit");
+  }
+});
+
+test("validateLine accepts Celsius even when text contains 'F' as artist initial", () => {
+  // "John F. Kennedy" / "Mac F" type phrases shouldn't false-trigger.
+  const r = validateLine("Lisbon's 26°C, sunny — fits the hour.");
+  assert.equal(r.ok, true);
+});
+
 // ─── fetchWorldAside (integration) ──────────────────────────────────
 
 const FIXED_NOW = new Date("2026-04-26T22:00:00Z");
