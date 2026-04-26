@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
+import { Skeleton } from "./Skeleton";
 
 type TrackSummary = {
   trackId: string;
@@ -81,6 +82,11 @@ function useBroadcastFeed() {
     justPlayed: [],
     shoutout: { active: false },
   });
+  // Distinguish "still loading the first response" from "loaded but
+  // queue is genuinely empty". Without this, the broadcast list can't
+  // show skeleton rows on first paint without also showing them in
+  // the (rare) genuinely-empty state.
+  const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState<number>(() => Date.now());
   const mounted = useRef(true);
   const dataRef = useRef<BroadcastPayload>(data);
@@ -103,6 +109,7 @@ function useBroadcastFeed() {
         const json = (await r.json()) as BroadcastPayload;
         if (!mounted.current) return;
         setData(json);
+        setLoaded(true);
 
         // Track-change detection: if the trackId just flipped, schedule
         // one extra fetch in a second to pick up any downstream updates
@@ -178,11 +185,11 @@ function useBroadcastFeed() {
     };
   }, []);
 
-  return { data, now };
+  return { data, now, loaded };
 }
 
 export function Broadcast() {
-  const { data, now } = useBroadcastFeed();
+  const { data, now, loaded } = useBroadcastFeed();
   const { nowPlaying, upNext, justPlayed } = data;
 
   const live = nowPlaying.isPlaying ? nowPlaying : null;
@@ -231,9 +238,15 @@ export function Broadcast() {
               }}
             />
             <div className="now-track-lg">
-              <div className="title">{title}</div>
+              <div className="title">
+                {live ? title : <Skeleton width="70%" height={42} radius={4} />}
+              </div>
               <div className="sub">
-                <span>{artist}</span>
+                {live ? (
+                  <span>{artist}</span>
+                ) : (
+                  <Skeleton width="50%" height={18} radius={4} />
+                )}
               </div>
             </div>
             <div className="progress">
@@ -305,7 +318,7 @@ export function Broadcast() {
                 </div>
               )}
 
-              {justPlayed.length === 0 && !upNext && (
+              {justPlayed.length === 0 && !upNext && loaded && (
                 <div
                   style={{
                     padding: "28px 18px",
@@ -315,6 +328,29 @@ export function Broadcast() {
                 >
                   Nothing logged yet — stay tuned.
                 </div>
+              )}
+
+              {!loaded && justPlayed.length === 0 && !upNext && (
+                <>
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div key={i} className="queue-item" aria-hidden="true">
+                      <div className="q-pos">
+                        <Skeleton width={20} height={11} radius={3} />
+                      </div>
+                      <div className="q-art">
+                        <Skeleton width={56} height={56} radius={6} />
+                      </div>
+                      <div className="q-info">
+                        <Skeleton width="65%" height={14} radius={4} style={{ marginBottom: 6 }} />
+                        <Skeleton width="40%" height={11} radius={3} />
+                      </div>
+                      <div className="q-dur">
+                        <Skeleton width={36} height={11} radius={3} />
+                      </div>
+                      <div />
+                    </div>
+                  ))}
+                </>
               )}
 
               {justPlayed.map((item, i) => (

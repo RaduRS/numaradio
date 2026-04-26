@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Skeleton } from "./Skeleton";
 
 // The ambient floor only changes at 6-min bucket boundaries; real listener
 // joins aren't urgent to reflect on the hero. 60s is plenty.
@@ -49,12 +50,20 @@ export function ListenerCount({
     };
   }, []);
 
-  // Until the first response, render an em-dash placeholder rather than 0,
-  // so a connection problem reads as "unknown" not "no listeners".
-  const display = n === null ? "—" : n.toLocaleString();
+  // Skeleton on first paint reserves a fixed inline width matching the
+  // typical 3-digit count so the surrounding text doesn't reflow when
+  // the number arrives.
+  if (n === null) {
+    return (
+      <span className={className}>
+        <Skeleton width={32} height={12} radius={3} />
+        {suffix}
+      </span>
+    );
+  }
   return (
     <span className={className}>
-      {display}
+      {n.toLocaleString()}
       {suffix}
     </span>
   );

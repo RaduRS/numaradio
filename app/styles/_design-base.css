@@ -296,6 +296,41 @@ section { position: relative; }
 .eq-lg { height: 28px; gap: 3px; }
 .eq-lg span { width: 3px; border-radius: 2px; }
 
+/* ============ SKELETON LOADING STATES ============ */
+
+/* Reusable placeholder for async-loading surfaces. Same-box height +
+   width as the real content, so when data arrives the page doesn't
+   shift. Two variants: shimmer (default — teal-tinted gradient sweep)
+   and static (used where many skeletons stack and the motion would be
+   loud, e.g. ShoutoutWall). The reduced-motion block below pauses the
+   sweep automatically. */
+
+.numa-skeleton {
+  display: inline-block;
+  background: var(--bg-2);
+  position: relative;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+.numa-skeleton.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(79, 209, 197, 0.10) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: numa-skeleton-sweep 1.6s linear infinite;
+}
+
+@keyframes numa-skeleton-sweep {
+  to { transform: translateX(100%); }
+}
+
 /* ============ REDUCED MOTION ============ */
 
 /* Honor OS-level "Reduce Motion" preference — continuous loops (EQ bars,

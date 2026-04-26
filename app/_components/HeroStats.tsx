@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Skeleton } from "./Skeleton";
 
 const POLL_MS = 60_000;
 
@@ -9,11 +10,6 @@ type Payload = {
   libraryCount: number;
   shoutoutCount: number;
 };
-
-function formatNumber(n: number | null): string {
-  if (n === null) return "—";
-  return n.toLocaleString();
-}
 
 export function HeroStats() {
   const [data, setData] = useState<Payload | null>(null);
@@ -43,20 +39,30 @@ export function HeroStats() {
     };
   }, []);
 
+  // While `data === null`, render skeletons matching the real number
+  // (.n: 32 px display) and label (.l: 10 px mono + 6 px margin-top)
+  // dimensions exactly. Once the fetch resolves, the same containers
+  // render the real values without shifting any neighbour.
+  const tiles: Array<{ value: number | null; label: string }> = [
+    { value: data?.tracksThisWeek ?? null, label: "Tracks this week" },
+    { value: data?.libraryCount ?? null, label: "In rotation" },
+    { value: data?.shoutoutCount ?? null, label: "Shoutouts on air" },
+  ];
+
   return (
     <div className="hero-stats">
-      <div className="hero-stat">
-        <div className="n">{formatNumber(data?.tracksThisWeek ?? null)}</div>
-        <div className="l">Tracks this week</div>
-      </div>
-      <div className="hero-stat">
-        <div className="n">{formatNumber(data?.libraryCount ?? null)}</div>
-        <div className="l">In rotation</div>
-      </div>
-      <div className="hero-stat">
-        <div className="n">{formatNumber(data?.shoutoutCount ?? null)}</div>
-        <div className="l">Shoutouts on air</div>
-      </div>
+      {tiles.map((t) => (
+        <div className="hero-stat" key={t.label}>
+          <div className="n">
+            {t.value === null ? (
+              <Skeleton width={86} height={30} radius={4} />
+            ) : (
+              t.value.toLocaleString()
+            )}
+          </div>
+          <div className="l">{t.label}</div>
+        </div>
+      ))}
     </div>
   );
 }

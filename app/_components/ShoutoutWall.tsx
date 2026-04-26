@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Skeleton } from "./Skeleton";
 
 const POLL_MS = 30_000;
 
@@ -140,10 +141,27 @@ export function ShoutoutWall() {
   }, []);
 
   if (items === null) {
+    // Skeleton cards while the wall fetches its first response. Static
+    // variant (no shimmer): three card-shaped skeletons per column
+    // would be visually loud against the shimmering hero stats above
+    // — quiet height-reservation is enough below the fold.
+    const col = (prefix: string) => (
+      <div className="shout-col" aria-hidden>
+        {[0, 1, 2].map((i) => (
+          <Skeleton
+            key={`${prefix}-${i}`}
+            variant="static"
+            width="100%"
+            height={120}
+            radius={12}
+          />
+        ))}
+      </div>
+    );
     return (
       <>
-        <div className="shout-col" aria-hidden />
-        <div className="shout-col" aria-hidden />
+        {col("L")}
+        {col("R")}
       </>
     );
   }
