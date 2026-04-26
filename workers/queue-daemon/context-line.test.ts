@@ -101,6 +101,19 @@ test("validateContextLine: banned phrase rejected", () => {
   if (!r.ok) assert.equal(r.reason, "banned_phrase");
 });
 
+test("validateContextLine: rejects 'fine by me' / aloof phrasing toward listeners", () => {
+  // Lena warms toward listeners — she never shrugs off a quiet wall.
+  for (const aloof of [
+    "The wall just went quiet again. Fine by me.",
+    "Quiet hour on the line. I don't mind.",
+    "Wall's slow. Doesn't bother me either way.",
+  ]) {
+    const r = validateContextLine(aloof, baseState);
+    assert.equal(r.ok, false, `expected ban for: ${aloof}`);
+    if (!r.ok) assert.equal(r.reason, "banned_phrase");
+  }
+});
+
 test("validateContextLine: clock time rejected", () => {
   const r = validateContextLine("It's 4:13 AM here and the wall is quiet.", baseState);
   assert.equal(r.ok, false);
