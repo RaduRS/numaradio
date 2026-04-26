@@ -6,14 +6,17 @@ import { useNowPlaying } from "./useNowPlaying";
 const BAR_COUNT = 64;
 
 // Deterministic pseudo-random based on bar index — must match between SSR
-// and client to avoid hydration warnings.
+// and client to avoid hydration warnings. Minimum height bumped from 20
+// to 38 so even the "valley" bars are visually present — at 20% the
+// shortest bars rendered at ~8 px next to ~40 px neighbours and read as
+// gaps in the teal fill ("patches of grey" inside the active region).
 function buildHeights(): number[] {
   const arr: number[] = [];
   for (let i = 0; i < BAR_COUNT; i++) {
     const h =
-      20 +
-      Math.abs(Math.sin(i * 0.38) * 60 + Math.sin(i * 0.15) * 30) +
-      Math.abs(Math.sin(i * 1.7) * 20);
+      38 +
+      Math.abs(Math.sin(i * 0.38) * 40 + Math.sin(i * 0.15) * 18) +
+      Math.abs(Math.sin(i * 1.7) * 12);
     arr.push(Math.min(100, h));
   }
   return arr;
