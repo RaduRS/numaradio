@@ -31,33 +31,28 @@ interface Attempt {
   recentTopics: string[];
 }
 
+// Saturate every category except the named target so the weighted-random
+// picker is forced to land on the one we want. weather has 5 cities, the
+// others use 3 dummy entries each (>= 3 triggers exclusion).
+function saturateAllExcept(target: "weather" | "music" | "ai-tech" | "on-this-day" | "culture" | "astro"): string[] {
+  const out: string[] = [];
+  if (target !== "weather") {
+    out.push("weather:lisbon", "weather:london", "weather:new york", "weather:tokyo", "weather:sydney");
+  }
+  for (const cat of ["music", "ai-tech", "on-this-day", "culture", "astro"] as const) {
+    if (cat === target) continue;
+    out.push(`${cat}:a`, `${cat}:b`, `${cat}:c`);
+  }
+  return out;
+}
+
 const ATTEMPTS: Attempt[] = [
   { label: "weather (Lisbon)", rand: () => 0.0, recentTopics: [] },
-  {
-    label: "music",
-    rand: () => 0.99,
-    // Saturate weather + non-music categories so the picker lands on music.
-    recentTopics: [
-      "weather:lisbon", "weather:london", "weather:new york",
-      "weather:tokyo", "weather:sydney",
-      "ai-tech:a", "ai-tech:b", "ai-tech:c",
-      "on-this-day:a", "on-this-day:b", "on-this-day:c",
-      "culture:a", "culture:b", "culture:c",
-      "astro:a", "astro:b", "astro:c",
-    ],
-  },
-  {
-    label: "on-this-day",
-    rand: () => 0.5,
-    recentTopics: [
-      "weather:lisbon", "weather:london", "weather:new york",
-      "weather:tokyo", "weather:sydney",
-      "music:a", "music:b", "music:c",
-      "ai-tech:a", "ai-tech:b", "ai-tech:c",
-      "culture:a", "culture:b", "culture:c",
-      "astro:a", "astro:b", "astro:c",
-    ],
-  },
+  { label: "music",            rand: () => 0.5, recentTopics: saturateAllExcept("music") },
+  { label: "ai-tech",          rand: () => 0.5, recentTopics: saturateAllExcept("ai-tech") },
+  { label: "on-this-day",      rand: () => 0.5, recentTopics: saturateAllExcept("on-this-day") },
+  { label: "culture",          rand: () => 0.5, recentTopics: saturateAllExcept("culture") },
+  { label: "astro",            rand: () => 0.5, recentTopics: saturateAllExcept("astro") },
 ];
 
 async function runAttempt(
@@ -121,16 +116,17 @@ async function main() {
   }
 
   console.log("");
+  const total = ATTEMPTS.length;
   if (successes.length > 0) {
-    console.log(green(`✓ ${successes.length}/3 attempts produced a real Lena line. Pipeline works end-to-end.`));
+    console.log(green(`✓ ${successes.length}/${total} attempts produced a real Lena line. Pipeline works end-to-end.`));
     if (fails.length > 0) {
-      console.log(yellow(`  ${fails.length} attempt(s) gracefully bailed — that's the spec'd "demote to filler" path, not a bug.`));
+      console.log(yellow(`  ${fails.length} attempt(s) gracefully bailed — spec'd "demote to filler" path, not a bug.`));
     }
     process.exit(0);
   } else {
-    console.log(red(`✗ 0/3 attempts produced a line.`));
+    console.log(red(`✗ 0/${total} attempts produced a line.`));
     if (fails.every((f) => f.endsWith("no_good_angle"))) {
-      console.log(yellow(`  All bailed with NO_GOOD_ANGLE. Brave returned results; the model just didn't bite. Often a same-day variability — re-run in 5-10 min.`));
+      console.log(yellow(`  All bailed with NO_GOOD_ANGLE. Brave returned results; the model just didn't bite. Re-run in 5-10 min.`));
       console.log(yellow(`  In production this means slots demote to filler. Pipeline is wired correctly.`));
     } else {
       console.log(red(`  Not all bailouts — there's a real issue:`));
