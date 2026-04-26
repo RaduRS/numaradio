@@ -170,6 +170,10 @@ export interface DaemonStatus {
   socket?: string;
   lastPushes: unknown[];
   lastFailures: unknown[];
+  /** Auto-chatter rotation pointer (0..19). Index of the slot the next
+   *  chatter break will use. Undefined when the daemon is unreachable
+   *  or running an older build. */
+  nextChatterSlot?: number;
 }
 
 const DAEMON_URL = process.env.NUMA_DAEMON_URL ?? "http://127.0.0.1:4000";
@@ -235,6 +239,8 @@ export async function fetchDaemonStatus(
       socket: json.socket,
       lastPushes: Array.isArray(json.lastPushes) ? json.lastPushes : [],
       lastFailures: Array.isArray(json.lastFailures) ? json.lastFailures : [],
+      nextChatterSlot:
+        typeof json.nextChatterSlot === "number" ? json.nextChatterSlot : undefined,
     };
   } catch {
     return { lastPushes: [], lastFailures: [] };

@@ -19,6 +19,10 @@ export interface DaemonFailure {
 export interface DaemonStatusResponse {
   lastPushes: DaemonPush[];
   lastFailures: DaemonFailure[];
+  /** Index 0..19 of the auto-chatter rotation slot the daemon will use
+   *  on the NEXT chatter break. Optional — undefined when daemon is
+   *  unreachable or on an older build. */
+  nextChatterSlot?: number;
 }
 
 export interface StatusSnapshot {

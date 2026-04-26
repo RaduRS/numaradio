@@ -495,6 +495,7 @@ function statusHandler(): StatusSnapshot {
     lastPushes: lastPushes.snapshot(),
     lastFailures: lastFailures.snapshot(),
     lastHydrationError,
+    nextChatterSlot: autoHost.state.slotCounter % 20,
   };
 }
 

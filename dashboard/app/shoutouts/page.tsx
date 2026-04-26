@@ -98,6 +98,27 @@ interface AutoHostState {
 
 const MODES = ["auto", "forced_on", "forced_off"] as const;
 
+// Mirror of workers/queue-daemon/chatter-prompts.ts ROTATION. Kept in
+// sync by hand — if the daemon's rotation changes, update both.
+const CHATTER_ROTATION = [
+  "shoutout_cta", "back_announce", "song_cta",     "back_announce",
+  "world_aside",  "back_announce", "shoutout_cta", "back_announce",
+  "song_cta",     "back_announce", "world_aside",  "back_announce",
+  "shoutout_cta", "back_announce", "filler",       "back_announce",
+  "world_aside",  "back_announce", "song_cta",     "back_announce",
+] as const;
+
+function shortSlotLabel(t: string): string {
+  switch (t) {
+    case "back_announce": return "back-announce";
+    case "shoutout_cta": return "shoutout CTA";
+    case "song_cta": return "song CTA";
+    case "filler": return "filler";
+    case "world_aside": return "world aside";
+    default: return t;
+  }
+}
+
 function formatRevertCountdown(forcedUntilIso: string | null, nowMs: number): string {
   if (!forcedUntilIso) return "reverting…";
   const ms = new Date(forcedUntilIso).getTime() - nowMs;
@@ -570,6 +591,55 @@ export default function ShoutoutsPage() {
           })}
         </div>
       </div>
+
+      {/* ── Next up in the rotation ─────────────────────────
+           Reads daemon /status nextChatterSlot. Renders the next 5
+           slot types so operators can see what's coming. The slot
+           pointer only advances when a chatter break completes
+           successfully — failed/skipped breaks keep the pointer.
+           When toggle B is forced_off, world_aside slots will demote
+           to filler, but the rotation array still shows them as W
+           (the listener won't hear that demotion). */}
+      {(() => {
+        const next = daemonPoll.data?.nextChatterSlot;
+        if (typeof next !== "number") return null;
+        const upcoming = Array.from({ length: 5 }, (_, i) => {
+          const idx = (next + i) % CHATTER_ROTATION.length;
+          return { idx, type: CHATTER_ROTATION[idx] };
+        });
+        const worldOff = worldAside?.mode === "forced_off";
+        return (
+          <div className="flex flex-col gap-2 rounded-md border border-line bg-bg-1 px-4 py-3 sm:flex-row sm:items-center">
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute shrink-0 sm:mr-3">
+              Next up
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {upcoming.map((s, i) => {
+                const label = shortSlotLabel(s.type);
+                // World asides demote to filler when toggle B is off — show
+                // that visually so the operator's not surprised.
+                const demoted = s.type === "world_aside" && worldOff;
+                const display = demoted ? `${label} → filler` : label;
+                const isFirst = i === 0;
+                const isWorld = s.type === "world_aside";
+                return (
+                  <span
+                    key={`${s.idx}-${i}`}
+                    className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${
+                      isFirst
+                        ? "border-accent text-accent bg-[var(--accent-soft)]"
+                        : "border-line text-fg-mute"
+                    } ${isWorld && !demoted ? "italic" : ""}`}
+                    title={`slot ${s.idx}`}
+                  >
+                    {isFirst ? "→ " : ""}{display}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Compose ──────────────────────────────────────── */}
       <Card>

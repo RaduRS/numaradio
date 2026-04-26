@@ -47,6 +47,13 @@ export type StatusSnapshot = {
    * rather than silently logging to stderr.
    */
   lastHydrationError: { at: string; message: string } | null;
+  /**
+   * Auto-chatter rotation pointer — the slot index (mod 20) that the
+   * NEXT chatter break will use. The dashboard renders the upcoming
+   * slot type ("next: world_aside") + a short preview of the next
+   * few slots so operators can see what's coming.
+   */
+  nextChatterSlot: number;
 };
 
 export interface ServerDeps {
