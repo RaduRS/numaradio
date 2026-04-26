@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
-import { parseBuffer } from "music-metadata";
+import { probeDurationSeconds } from "../../lib/probe-duration.ts";
 import { profanityPrefilter } from "../../lib/moderate.ts";
 import { showSlugFor, type ShowSlug } from "../../lib/show-slug.ts";
 import { loadFallbackArtwork } from "../../lib/fallback-artwork.ts";
@@ -192,18 +192,19 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
   if (!audioRes.ok) throw new Error(`minimax audio download ${audioRes.status}`);
   const audioBytes = Buffer.from(await audioRes.arrayBuffer());
 
-  // MiniMax's sync-mode response skips extra_info.duration, so fall back to
-  // probing the downloaded MP3 (same approach as scripts/ingest-seed.ts).
-  let durationSeconds = durationMs > 0 ? Math.round(durationMs / 1000) : null;
-  if (durationSeconds === null) {
-    try {
-      const probed = await parseBuffer(audioBytes, { mimeType: "audio/mpeg" });
-      if (probed.format.duration && probed.format.duration > 0) {
-        durationSeconds = Math.round(probed.format.duration);
-      }
-    } catch (err) {
-      console.warn(`[song-worker] duration probe failed for ${job.id}: ${String(err)}`);
-    }
+  // Frame-accurate probe via lib/probe-duration.ts — runs music-metadata
+  // with `{ duration: true }` so it counts every audio frame instead of
+  // trusting the (often-wrong) Xing/VBRI header. Falls back to MiniMax's
+  // own durationMs only if the probe fails entirely (corrupt MP3 etc.).
+  let durationSeconds: number | null = null;
+  const probed = await probeDurationSeconds(audioBytes);
+  if (probed) {
+    durationSeconds = Math.round(probed);
+  } else if (durationMs > 0) {
+    durationSeconds = Math.round(durationMs / 1000);
+    console.warn(`[song-worker] frame probe failed for ${job.id}; using MiniMax durationMs=${durationMs}`);
+  } else {
+    console.warn(`[song-worker] could not determine duration for ${job.id}`);
   }
 
   const trackId = randomUUID();

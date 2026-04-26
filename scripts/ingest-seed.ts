@@ -6,6 +6,7 @@ import { parseFile } from "music-metadata";
 import { prisma } from "../lib/db";
 import { fetchSunoMetadata } from "../lib/suno";
 import { ingestTrack } from "../lib/ingest.ts";
+import { probeDurationSeconds } from "../lib/probe-duration.ts";
 import { resolveShowFromHashtagOrSidecar } from "./ingest-seed-helpers.ts";
 
 const SEED_DIR = join(process.cwd(), "seed");
@@ -90,7 +91,16 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
   const hashtags = parseHashtags(commentText);
   let { genre, mood } = deriveGenreAndMood(hashtags);
   const lyrics = tags.lyrics?.[0]?.text;
-  const durationSec = meta.format.duration ? Math.round(meta.format.duration) : undefined;
+  // Frame-accurate duration via ffprobe. music-metadata's header-only
+  // estimate can be 30+ seconds off on VBR MP3s with bad/missing Xing
+  // headers — common on AI-generated tracks. Falling back to the
+  // music-metadata estimate only if ffprobe isn't installed.
+  const probedDurSec = await probeDurationSeconds(filePath);
+  const durationSec = probedDurSec
+    ? Math.round(probedDurSec)
+    : meta.format.duration
+      ? Math.round(meta.format.duration)
+      : undefined;
 
   const show = await resolveShowFromHashtagOrSidecar({ mp3Path: filePath, commentText });
 
