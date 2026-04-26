@@ -24,7 +24,6 @@ const baseState: StationState = {
   topGenreLastHour: "ambient",
   votesUpLast30Min: 8,
   votesDownLast30Min: 1,
-  currentListeners: 18,
   recentShoutoutSamples: ["happy birthday to my mum", "rainy lisbon vibe"],
 };
 
@@ -142,14 +141,20 @@ test("validateContextLine: false numerical claim rejected", () => {
 test("buildPrompt: trims null fields from JSON", () => {
   const state: StationState = {
     ...baseState,
-    currentListeners: null,
     topGenreLastHour: null,
     recentShoutoutSamples: [],
   };
   const prompts = buildPrompt(state);
-  assert.ok(!prompts.user.includes("currentListeners"));
   assert.ok(!prompts.user.includes("topGenreLastHour"));
   assert.ok(!prompts.user.includes("recentShoutoutSamples"));
+});
+
+test("buildPrompt: never includes a listener count (intentionally omitted from state)", () => {
+  const prompts = buildPrompt(baseState);
+  // No matter what state holds, listener count must NOT reach the model —
+  // it goes stale faster than Lena's quote refreshes.
+  assert.ok(!prompts.user.includes("currentListeners"));
+  assert.ok(!prompts.user.includes("listeners"));
 });
 
 test("buildPrompt: includes numeric state fields", () => {

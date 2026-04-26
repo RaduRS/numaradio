@@ -68,17 +68,21 @@ export function LenaLine({ className, layout = "card", avatarSize = 36 }: LenaLi
         className={`lena-avatar ${isFresh ? "lena-avatar--fresh" : ""}`}
         style={{ width: avatarSize, height: avatarSize }}
       >
-        <Image
-          src="/lena/portrait.png"
-          alt="Lena, Numa Radio's AI host"
-          width={avatarSize * 2}
-          height={avatarSize * 2}
-          // The portrait is 1024×768 with the face roughly centered
-          // horizontally and a touch above mid-height. object-position
-          // pins the face when the square crop kicks in.
-          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 30%" }}
-          priority={avatarSize >= 96}
-        />
+        {/* Inner frame holds the circular clip (overflow:hidden) so the
+            outer wrapper stays open for the live-dot to extend past
+            its corner. The image is scaled 1.5× with a face-anchored
+            origin so we get a tight head-and-shoulders crop without
+            chopping the top of the head. */}
+        <div className="lena-avatar-frame">
+          <Image
+            src="/lena/portrait.png"
+            alt="Lena, Numa Radio's AI host"
+            width={avatarSize * 2}
+            height={avatarSize * 2}
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 35%" }}
+            priority={avatarSize >= 96}
+          />
+        </div>
       </div>
       <div className="lena-content">
         <div className="lena-head">

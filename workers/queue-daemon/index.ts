@@ -272,8 +272,6 @@ const contextLine = new ContextLineOrchestrator({
       prisma,
       stationId: sid,
       now: new Date(),
-      fetchListeners: () =>
-        fetchListenerCount({ url: ICECAST_STATUS_URL, mount: ICECAST_MOUNT }),
     });
   },
   generateLine: (prompts) =>
