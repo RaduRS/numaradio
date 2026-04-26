@@ -137,6 +137,15 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
+/* Waveform width matches the cover so bars don't collapse under the
+   parent's `align-items: center`. Without an explicit width the .wave
+   inside .wave-wrap shrinks to min-content and the 64 flex:1 bars
+   render at width 0 — only the .wave-time row stays visible. */
+.ep-booth-left .wave-wrap {
+  width: 70%;
+  max-width: 420px;
+}
+
 .ep-booth-art-fallback {
   display: flex;
   align-items: center;
@@ -350,6 +359,13 @@
   background-size: cover;
   background-position: center;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* Mobile waveform width matches the cover. See .ep-booth-left
+   .wave-wrap above for why this scoped rule is needed. */
+.ep-listen .wave-wrap {
+  width: 78vw;
+  max-width: 340px;
 }
 
 /* Floating action pills anchored to the artwork's bottom corners so each
