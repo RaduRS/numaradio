@@ -26,7 +26,8 @@ export function ExpandedPlayerDesktop() {
       ? nowPlaying
       : null;
   const cover = live?.artworkUrl;
-  const coverBg = cover ? `url(${cover}), url(${fallback})` : `url(${fallback})`;
+  // Fallback only when cover is genuinely missing.
+  const coverBg = cover ? `url(${cover})` : `url(${fallback})`;
   const title = live?.title ?? "—";
   const artist = live?.artistDisplay ?? "—";
 

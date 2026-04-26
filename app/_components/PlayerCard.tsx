@@ -18,13 +18,14 @@ export function PlayerCard() {
   const title = np.title ?? "—";
   const artist = np.artistDisplay ?? "—";
   const cover = np.artworkUrl;
-  // CSS background-image stack: real cover on top, fallback underneath.
-  // While B2 downloads, browser shows the same-origin fallback; once
-  // the cover bytes arrive, they cover the fallback. No flash, no
-  // layout shift, no "—" initials placeholder.
-  const backgroundImage = cover
-    ? `url(${cover}), url(${fallback})`
-    : `url(${fallback})`;
+  // Fallback PNG is a TRUE failsafe — only shown when the track
+  // genuinely has no artworkUrl. Earlier we stacked it as a CSS
+  // background under the real cover so it filled the brief B2 load
+  // gap, but that meant every track-change flashed the placeholder
+  // while the new image fetched. Now: real artwork → real artwork
+  // only (brief dark box during loads is acceptable). Missing
+  // artwork → fallback.
+  const backgroundImage = cover ? `url(${cover})` : `url(${fallback})`;
 
   return (
     <div

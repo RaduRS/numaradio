@@ -169,10 +169,6 @@ export default async function RootLayout({
             fetchPriority="high"
           />
         ) : null}
-        {/* Preload the per-show fallback so it's in HTTP cache before
-            React hydrates — same-origin, ~400 KB, takes < 50 ms. Shows
-            instantly under the real artwork while B2 catches up. */}
-        <link rel="preload" as="image" href={fallbackArtUrl} fetchPriority="high" />
         {/* Inline in <head> (not via next/script) so the structured
             data is in the initial SSR HTML. `<` escape defends
             against a payload smuggling a `</script>` if the data

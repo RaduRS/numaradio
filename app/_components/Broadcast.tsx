@@ -213,7 +213,10 @@ export function Broadcast() {
   const artist = live?.artistDisplay ?? "Numa Radio";
   const art = live?.artworkUrl;
   const fallback = useFallbackArtworkUrl();
-  const artBg = art ? `url(${art}), url(${fallback})` : `url(${fallback})`;
+  // Fallback only when art is genuinely missing — see PlayerCard for
+  // the rationale. Stacking the fallback under live artwork made
+  // every track change flash the placeholder.
+  const artBg = art ? `url(${art})` : `url(${fallback})`;
 
   return (
     <section className="broadcast" id="now">
