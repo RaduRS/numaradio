@@ -10,6 +10,7 @@
 // Spec: docs/superpowers/specs/2026-04-26-lena-context-lines-design.md.
 
 import type { PromptPair } from "./chatter-prompts.ts";
+import { ambientFloor } from "../../lib/ambient-floor.ts";
 
 export type ShowSlug =
   | "night_shift"
@@ -307,14 +308,17 @@ export interface GatherStateOpts {
   stationId: string;
   now: Date;
   fetchListeners: () => Promise<number | null>;
-  /** Marketing offset added to the raw Icecast count to match what the
-   *  public site displays. Defaults to 15. Set to 0 to use raw count only. */
-  listenerFloor?: number;
+  /** Override for the listener-floor function. Defaults to the same
+   *  `ambientFloor(nowMs)` the public-site `/api/station/listeners`
+   *  route uses, so Lena's count matches what listeners see in the
+   *  hero. Pass a constant function for tests. */
+  listenerFloorFn?: (nowMs: number) => number;
 }
 
 export async function buildStationState(opts: GatherStateOpts): Promise<StationState> {
   const { prisma, stationId, now, fetchListeners } = opts;
-  const floor = opts.listenerFloor ?? 15;
+  const floorFn = opts.listenerFloorFn ?? ambientFloor;
+  const floor = floorFn(now.getTime());
   const showSlug = showForHour(now.getHours());
   const shift = shiftStart(now);
   const cutoff10m = new Date(now.getTime() - 10 * 60 * 1000);
