@@ -74,23 +74,43 @@ async function main() {
     });
 
     const window = recentWindowFor(library.length);
-    const recent = await prisma.playHistory.findMany({
-      where: { stationId: station.id, trackId: { not: null } },
-      orderBy: { startedAt: "desc" },
-      take: window,
-      select: { trackId: true },
-    });
-    const recentIds = new Set(recent.map((r) => r.trackId!).filter(Boolean));
+    const readExclusion = async (): Promise<Set<string>> => {
+      const [recent, nowPlaying] = await Promise.all([
+        prisma.playHistory.findMany({
+          where: { stationId: station.id, trackId: { not: null } },
+          orderBy: { startedAt: "desc" },
+          take: window,
+          select: { trackId: true },
+        }),
+        prisma.nowPlaying.findUnique({
+          where: { stationId: station.id },
+          select: { currentTrackId: true },
+        }),
+      ]);
+      const s = new Set(recent.map((r) => r.trackId!).filter(Boolean));
+      if (nowPlaying?.currentTrackId) s.add(nowPlaying.currentTrackId);
+      return s;
+    };
 
-    // Belt-and-braces: always exclude the currently-playing track, even
-    // if its PlayHistory row hasn't propagated yet (sub-second race
-    // between Liquidsoap on_track → Vercel /api/internal/track-started
-    // → Neon write → this script's query).
-    const nowPlaying = await prisma.nowPlaying.findUnique({
-      where: { stationId: station.id },
-      select: { currentTrackId: true },
-    });
-    if (nowPlaying?.currentTrackId) recentIds.add(nowPlaying.currentTrackId);
+    // Race-guard: a `track-started` transaction (Liquidsoap → Vercel →
+    // Neon: NowPlaying upsert + PlayHistory insert in one tx) takes
+    // ~100-500 ms to commit. If the refresher reads in that window,
+    // both NowPlaying *and* recent PlayHistory still show the previous
+    // track — so the just-started track isn't excluded and Fisher-Yates
+    // can land it at position 0, producing back-to-back airings when
+    // Liquidsoap loops the playlist. Reading twice with a 300 ms gap
+    // closes that window: any commit landing between the two reads
+    // shows up in the second one, and we union the results.
+    const before = await readExclusion();
+    await new Promise((r) => setTimeout(r, 300));
+    const after = await readExclusion();
+    const recentIds = new Set([...before, ...after]);
+    const newlyVisible = [...after].filter((id) => !before.has(id));
+    if (newlyVisible.length > 0) {
+      console.log(
+        `[refresh-rotation] race-guard caught fresh track(s): ${newlyVisible.join(",")}`,
+      );
+    }
 
     const content = buildPlaylist(library, recentIds);
 
