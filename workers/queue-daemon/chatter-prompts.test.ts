@@ -7,15 +7,15 @@ import {
   type ChatterType,
 } from "./chatter-prompts.ts";
 
-test("slotTypeFor matches the hand-crafted 20-slot rotation", () => {
-  // slot:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
-  // type:  A SO  A  B  A SG  A  B  A SO  A SG  A  B  A SO  A  B  A SG
+test("slotTypeFor matches the hand-crafted 20-slot rotation (with world_aside)", () => {
+  // World asides at slots 4, 10, 16 — perfectly even spacing (gap 6/6/6).
+  // Filler safety net at slot 14. BA preserved at 10/20.
   const expected: ChatterType[] = [
-    "back_announce", "shoutout_cta", "back_announce", "filler",
-    "back_announce", "song_cta",     "back_announce", "filler",
-    "back_announce", "shoutout_cta", "back_announce", "song_cta",
-    "back_announce", "filler",       "back_announce", "shoutout_cta",
-    "back_announce", "filler",       "back_announce", "song_cta",
+    "shoutout_cta", "back_announce", "song_cta",     "back_announce",
+    "world_aside",  "back_announce", "shoutout_cta", "back_announce",
+    "song_cta",     "back_announce", "world_aside",  "back_announce",
+    "shoutout_cta", "back_announce", "filler",       "back_announce",
+    "world_aside",  "back_announce", "song_cta",     "back_announce",
   ];
   for (let i = 0; i < 20; i++) assert.equal(slotTypeFor(i), expected[i]);
 });
@@ -26,9 +26,9 @@ test("slotTypeFor wraps with modulo 20", () => {
   assert.equal(slotTypeFor(999), slotTypeFor(999 % 20));
 });
 
-test("slot distribution over one full cycle is 10/3/3/4", () => {
+test("slot distribution over one full cycle is BA=10 / SC=3 / SG=3 / F=1 / W=3", () => {
   const tally: Record<ChatterType, number> = {
-    back_announce: 0, shoutout_cta: 0, song_cta: 0, filler: 0,
+    back_announce: 0, shoutout_cta: 0, song_cta: 0, filler: 0, world_aside: 0,
     // listener_song_announce is event-driven, never in the rotation.
     listener_song_announce: 0,
   };
@@ -36,16 +36,29 @@ test("slot distribution over one full cycle is 10/3/3/4", () => {
   assert.equal(tally.back_announce, 10);
   assert.equal(tally.shoutout_cta, 3);
   assert.equal(tally.song_cta, 3);
-  assert.equal(tally.filler, 4);
+  assert.equal(tally.filler, 1);
+  assert.equal(tally.world_aside, 3);
   assert.equal(tally.listener_song_announce, 0,
     "listener_song_announce must never appear in the 20-slot rotation");
 });
 
-test("no same-type adjacency in the 20-slot pattern", () => {
+test("world_aside slots are at positions 4, 10, 16 (even spacing)", () => {
+  const wIndices: number[] = [];
+  for (let i = 0; i < 20; i++) {
+    if (slotTypeFor(i) === "world_aside") wIndices.push(i);
+  }
+  assert.deepEqual(wIndices, [4, 10, 16]);
+});
+
+test("no same-type adjacency in the 20-slot pattern (incl. wrap)", () => {
   for (let i = 0; i < 20; i++) {
     assert.notEqual(slotTypeFor(i), slotTypeFor((i + 1) % 20),
       `slots ${i} and ${(i + 1) % 20} share a type`);
   }
+});
+
+test("promptFor(world_aside) throws — externally supplied by NanoClaw", () => {
+  assert.throws(() => promptFor("world_aside", {}), /externally supplied|NanoClaw/i);
 });
 
 test("promptFor(back_announce) includes title and artist in the user prompt", () => {

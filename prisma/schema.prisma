@@ -160,10 +160,13 @@ model Station {
   defaultVoiceProfile String?
   defaultArtStyle     String?
   timezone            String        @default("Europe/London")
-  autoHostMode        AutoHostMode  @default(auto)
-  autoHostForcedUntil DateTime?
-  autoHostForcedBy    String?
-  createdAt           DateTime      @default(now())
+  autoHostMode          AutoHostMode @default(auto)
+  autoHostForcedUntil   DateTime?
+  autoHostForcedBy      String?
+  worldAsideMode        AutoHostMode @default(auto)
+  worldAsideForcedUntil DateTime?
+  worldAsideForcedBy    String?
+  createdAt             DateTime     @default(now())
   updatedAt           DateTime      @updatedAt
 
   tracks       Track[]

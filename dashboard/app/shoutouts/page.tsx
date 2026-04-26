@@ -122,9 +122,12 @@ export default function ShoutoutsPage() {
   const [composing, setComposing] = useState(false);
   const [autoHost, setAutoHost] = useState<AutoHostState | null>(null);
   const [autoHostPending, setAutoHostPending] = useState(false);
+  const [worldAside, setWorldAside] = useState<AutoHostState | null>(null);
+  const [worldAsidePending, setWorldAsidePending] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
   const [logFilter, setLogFilter] = useState<LogFilter>("all");
   const modeButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  const worldModeButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Raw Icecast listener count (not the +15 boosted public value) for
   // the "Auto — currently On (7 listeners)" display. usePolling gives
@@ -165,13 +168,38 @@ export default function ShoutoutsPage() {
     return () => { cancel = true; };
   }, []);
 
-  // Tick every second while a forced state has a countdown, so the
-  // "reverts in 18 min" label updates without a full refresh.
+  // World chatter (toggle B) — same load + tick pattern.
   useEffect(() => {
-    if (!autoHost?.forcedUntil) return;
+    let cancel = false;
+    async function load() {
+      try {
+        const r = await fetch("/api/shoutouts/world-chatter");
+        const d = (await r.json()) as {
+          ok?: boolean;
+          mode?: AutoHostMode;
+          forcedUntil?: string | null;
+        };
+        if (cancel) return;
+        if (d.ok && d.mode) {
+          setWorldAside({ mode: d.mode, forcedUntil: d.forcedUntil ?? null });
+        } else {
+          setWorldAside({ mode: "auto", forcedUntil: null });
+        }
+      } catch {
+        if (cancel) return;
+        setWorldAside({ mode: "auto", forcedUntil: null });
+      }
+    }
+    void load();
+    return () => { cancel = true; };
+  }, []);
+
+  // Tick every second while EITHER toggle has a forced-state countdown.
+  useEffect(() => {
+    if (!autoHost?.forcedUntil && !worldAside?.forcedUntil) return;
     const id = setInterval(() => setNowTick(Date.now()), 1_000);
     return () => clearInterval(id);
-  }, [autoHost?.forcedUntil]);
+  }, [autoHost?.forcedUntil, worldAside?.forcedUntil]);
 
   async function setAutoHostMode(next: AutoHostMode) {
     setAutoHostPending(true);
@@ -212,6 +240,47 @@ export default function ShoutoutsPage() {
     e.preventDefault();
     modeButtonsRef.current[nextIdx]?.focus();
     void setAutoHostMode(MODES[nextIdx]);
+  }
+
+  async function setWorldAsideMode(next: AutoHostMode) {
+    setWorldAsidePending(true);
+    try {
+      const r = await fetch("/api/shoutouts/world-chatter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: next }),
+      });
+      const d = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        mode?: AutoHostMode;
+        forcedUntil?: string | null;
+        error?: string;
+      };
+      if (!r.ok || !d.ok || !d.mode) {
+        toast.error(d.error ?? "Failed to update world-chatter mode.");
+        return;
+      }
+      setWorldAside({ mode: d.mode, forcedUntil: d.forcedUntil ?? null });
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Network error updating world-chatter mode.",
+      );
+    } finally {
+      setWorldAsidePending(false);
+    }
+  }
+
+  function onWorldModeKey(e: React.KeyboardEvent<HTMLButtonElement>, idx: number) {
+    if (worldAside === null || worldAsidePending) return;
+    let nextIdx = idx;
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") nextIdx = (idx - 1 + MODES.length) % MODES.length;
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") nextIdx = (idx + 1) % MODES.length;
+    else if (e.key === "Home") nextIdx = 0;
+    else if (e.key === "End") nextIdx = MODES.length - 1;
+    else return;
+    e.preventDefault();
+    worldModeButtonsRef.current[nextIdx]?.focus();
+    void setWorldAsideMode(MODES[nextIdx]);
   }
 
   async function compose() {
@@ -424,6 +493,76 @@ export default function ShoutoutsPage() {
                     ? "bg-[var(--accent-soft)] text-accent"
                     : "text-fg-mute hover:text-fg"
                 } ${autoHostPending ? "opacity-60 cursor-wait" : ""}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── World chatter mode strip (toggle B) ──────────────────────
+           When auto-chatter is silent (forced_off, or auto with <5
+           listeners), world chatter is silent too. When auto-chatter
+           is active and toggle B is auto/forced_on, ~3 of every 20
+           voice breaks become world asides via Brave + MiniMax.
+           Spec: docs/superpowers/specs/2026-04-26-lena-world-aside-design.md */}
+      <div className="flex flex-col gap-2 rounded-md border border-line bg-bg-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <span
+            className={`h-2 w-2 rounded-full shrink-0 ${
+              worldAside?.mode === "forced_off" ? "bg-fg-mute/30"
+                : autoHost?.mode === "forced_off" ? "bg-fg-mute/30"
+                : autoHost?.mode === "auto" && (listenerCount ?? 0) < 5 ? "bg-fg-mute/30"
+                : "bg-accent"
+            }`}
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute">
+              World chatter
+            </div>
+            <div className="truncate text-sm">
+              {worldAside === null ? (
+                "Loading…"
+              ) : worldAside.mode === "forced_off" ? (
+                `Disabled · ${formatRevertCountdown(worldAside.forcedUntil, nowTick)} · slots fall back to filler`
+              ) : autoHost?.mode === "forced_off" ? (
+                "Silent — auto-chatter is off"
+              ) : autoHost?.mode === "auto" && listenerCount !== null && listenerCount < 5 ? (
+                `Silent — auto-chatter waiting for 5+ listeners (${listenerCount} now)`
+              ) : worldAside.mode === "forced_on" ? (
+                `Forced On · ${formatRevertCountdown(worldAside.forcedUntil, nowTick)} · 3 of 20 slots become asides`
+              ) : (
+                "Active — 3 of 20 slots become asides"
+              )}
+            </div>
+          </div>
+        </div>
+        <div
+          className="flex shrink-0 rounded-full border border-line overflow-hidden font-mono text-[11px] uppercase tracking-[0.15em]"
+          role="radiogroup"
+          aria-label="World chatter mode"
+        >
+          {MODES.map((m, i) => {
+            const selected = worldAside?.mode === m;
+            const label = m === "auto" ? "Auto" : m === "forced_on" ? "Forced On" : "Forced Off";
+            return (
+              <button
+                ref={(el) => { worldModeButtonsRef.current[i] = el; }}
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                tabIndex={selected || (worldAside === null && i === 0) ? 0 : -1}
+                disabled={worldAside === null || worldAsidePending}
+                onClick={() => setWorldAsideMode(m)}
+                onKeyDown={(e) => onWorldModeKey(e, i)}
+                className={`px-3 py-1.5 transition ${
+                  selected
+                    ? "bg-[var(--accent-soft)] text-accent"
+                    : "text-fg-mute hover:text-fg"
+                } ${worldAsidePending ? "opacity-60 cursor-wait" : ""}`}
               >
                 {label}
               </button>

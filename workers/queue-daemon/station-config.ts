@@ -1,9 +1,18 @@
 export type AutoHostMode = "auto" | "forced_on" | "forced_off";
 
-export interface StationConfig {
+/** Common shape for any 3-state forced-toggle block on the Station row. */
+export interface StationConfigBlock {
   mode: AutoHostMode;
   forcedUntil: Date | null;
   forcedBy: string | null;
+}
+
+/** Snapshot of all daemon-relevant Station settings. Single Prisma fetch
+ *  covers every block, then the cache hands the same object out for the
+ *  TTL so we don't hammer Neon under chatter load. */
+export interface StationConfig {
+  autoHost: StationConfigBlock;
+  worldAside: StationConfigBlock;
 }
 
 export interface StationConfigCacheOpts {
@@ -12,10 +21,15 @@ export interface StationConfigCacheOpts {
   now?: () => number;
 }
 
-const AUTO_FALLBACK: StationConfig = {
+const BLOCK_FALLBACK: StationConfigBlock = {
   mode: "auto",
   forcedUntil: null,
   forcedBy: null,
+};
+
+const FALLBACK: StationConfig = {
+  autoHost: BLOCK_FALLBACK,
+  worldAside: BLOCK_FALLBACK,
 };
 
 export class StationConfigCache {
@@ -44,7 +58,7 @@ export class StationConfigCache {
         "[station-config] fetch failed, using previous value:",
         err instanceof Error ? err.message : err,
       );
-      return this.cached ?? AUTO_FALLBACK;
+      return this.cached ?? FALLBACK;
     }
   }
 

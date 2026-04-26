@@ -125,23 +125,35 @@ test("onMusicTrackStart with empty-string artist does not push", () => {
 });
 
 import { AutoHostOrchestrator } from "./auto-host.ts";
-import type { StationConfig } from "./station-config.ts";
+import type { StationConfig, StationConfigBlock } from "./station-config.ts";
 
 interface RecordedFailure { reason: string; detail?: string }
 interface RecordedPush { url: string }
-interface RecordedRevert { fromMode: "forced_on" | "forced_off"; forcedUntil: Date }
+interface RecordedRevert {
+  block: "autoHost" | "worldAside";
+  fromMode: "forced_on" | "forced_off";
+  forcedUntil: Date;
+}
 
-const AUTO_CFG: StationConfig = { mode: "auto", forcedUntil: null, forcedBy: null };
+const AUTO_BLOCK: StationConfigBlock = { mode: "auto", forcedUntil: null, forcedBy: null };
+const AUTO_CFG: StationConfig = { autoHost: AUTO_BLOCK, worldAside: AUTO_BLOCK };
 
-function configFor(
+function blockFor(
   mode: "auto" | "forced_on" | "forced_off",
   forcedUntilIso?: string,
-): StationConfig {
+): StationConfigBlock {
   return {
     mode,
     forcedUntil: forcedUntilIso ? new Date(forcedUntilIso) : null,
     forcedBy: forcedUntilIso ? "op@example.com" : null,
   };
+}
+
+function configFor(
+  mode: "auto" | "forced_on" | "forced_off",
+  forcedUntilIso?: string,
+): StationConfig {
+  return { autoHost: blockFor(mode, forcedUntilIso), worldAside: AUTO_BLOCK };
 }
 
 function fakeDeps(overrides: Partial<Parameters<typeof AutoHostOrchestrator.prototype.constructor>[0]> = {}) {
@@ -450,11 +462,15 @@ test("generateAsset includes currentShow + recentArtists + slotsSinceOpening in 
     },
   });
   const orch = new AutoHostOrchestrator(deps);
+  // Advance to slot 1 (back_announce in the new rotation — slot 0 is
+  // shoutout_cta which doesn't slice recentArtists).
+  orch.state.markInFlight();
+  orch.state.markSuccess();
   // Simulate three music-track boundaries to populate the ring.
   orch.onMusicTrackStart("Russell Ross");
   orch.onMusicTrackStart("Russell Ross");
   orch.onMusicTrackStart("Numa Radio");
-  // Now runChatter — slot 0 = back_announce. For back_announce we slice
+  // Now runChatter — slot 1 = back_announce. For back_announce we slice
   // ring[0] (the currently-announcing artist, already named in the "by X"
   // clause), so the Context block should list only the 2 artists BEFORE
   // "Numa Radio": Russell Ross, Russell Ross.
@@ -465,8 +481,8 @@ test("generateAsset includes currentShow + recentArtists + slotsSinceOpening in 
   assert.match(capturedUser!, /Last 2 artists aired.*Russell Ross, Russell Ross/);
   assert.doesNotMatch(capturedUser!, /Numa Radio, Russell Ross, Russell Ross/,
     "currently-announcing artist (Numa Radio) must not duplicate in the recentArtists list");
-  // slotsSinceOpening for slot 0 is 0
-  assert.match(capturedUser!, /Position in the 20-slot rotation: 0/);
+  // slotsSinceOpening for slot 1 is 1
+  assert.match(capturedUser!, /Position in the 20-slot rotation: 1/);
 });
 
 test("generateAsset omits currentShow when the 15% throttle gate rolls above threshold", async () => {
@@ -534,4 +550,146 @@ test("generateAsset always passes localTime + timeOfDay derived from deps.now", 
   await orch.runChatter();
   assert.ok(capturedUser, "generateScript should have been called");
   assert.match(capturedUser!, /Local time: 08:40 \(morning\)/);
+});
+
+// ─── world_aside (Tier 2.5) ─────────────────────────────────────────
+
+/** Advance the orchestrator state machine to a target slot via paired
+ *  markInFlight/markSuccess calls. Used by world_aside tests since slots
+ *  4/10/16 are the world_aside slots in the new rotation. */
+function advanceToSlot(orch: AutoHostOrchestrator, target: number) {
+  while (orch.state.slotCounter % 20 !== target) {
+    orch.state.markInFlight();
+    orch.state.markSuccess();
+  }
+}
+
+test("world_aside slot: NanoClaw returns ok → uses external line, skips MiniMax", async () => {
+  let scriptCalls = 0;
+  const { deps, pushes } = fakeDeps({
+    fetchWorldAside: async () => ({ ok: true, topic: "weather:tokyo", line: "Tokyo's wet right now." }),
+    generateScript: async () => { scriptCalls += 1; return "should not be called"; },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  advanceToSlot(orch, 4); // first world_aside slot
+  await orch.runChatter();
+  assert.equal(pushes.length, 1, "should push the world_aside audio");
+  assert.equal(scriptCalls, 0, "MiniMax should be bypassed when NanoClaw returns a line");
+  assert.deepEqual(orch.recentWorldTopics.snapshot(), ["weather:tokyo"]);
+});
+
+test("world_aside slot: toggle B forced_off → demote to filler (MiniMax fires)", async () => {
+  let scriptCalls = 0;
+  let fetchCalls = 0;
+  const { deps, pushes } = fakeDeps({
+    config: async () => ({
+      autoHost: { mode: "auto", forcedUntil: null, forcedBy: null },
+      worldAside: { mode: "forced_off", forcedUntil: new Date("2099-01-01"), forcedBy: "op" },
+    }),
+    fetchWorldAside: async () => { fetchCalls += 1; return { ok: false, reason: "should-not-be-called" }; },
+    generateScript: async () => { scriptCalls += 1; return "Filler line."; },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  advanceToSlot(orch, 4);
+  await orch.runChatter();
+  assert.equal(fetchCalls, 0, "world_aside fetch must not fire when toggle B is forced_off");
+  assert.equal(scriptCalls, 1, "MiniMax should fire for the demoted filler");
+  assert.equal(pushes.length, 1, "still pushes — listener hears chatter");
+});
+
+test("world_aside slot: NanoClaw returns ok:false → demote, log failure, MiniMax fills in", async () => {
+  let scriptCalls = 0;
+  const { deps, pushes, failures } = fakeDeps({
+    fetchWorldAside: async () => ({ ok: false, reason: "no_good_topic" }),
+    generateScript: async () => { scriptCalls += 1; return "Filler."; },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  advanceToSlot(orch, 4);
+  await orch.runChatter();
+  assert.equal(scriptCalls, 1, "MiniMax fires for the demoted filler");
+  assert.equal(pushes.length, 1);
+  assert.ok(failures.some((f) => f.reason === "world_aside_no_good_topic"),
+    "world_aside failure should be logged with reason prefix");
+});
+
+test("world_aside slot: HTTP throw caught → demote, log unexpected error", async () => {
+  const { deps, pushes, failures } = fakeDeps({
+    fetchWorldAside: async () => { throw new Error("ECONNREFUSED"); },
+    generateScript: async () => "Filler.",
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  advanceToSlot(orch, 4);
+  await orch.runChatter();
+  assert.equal(pushes.length, 1, "still pushes filler");
+  assert.ok(failures.some((f) => f.reason === "world_aside_unexpected_error"));
+});
+
+test("world_aside slot: no fetchWorldAside dep wired → demote silently", async () => {
+  const { deps, pushes, failures } = fakeDeps({
+    // fetchWorldAside intentionally omitted
+    generateScript: async () => "Filler.",
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  advanceToSlot(orch, 4);
+  await orch.runChatter();
+  assert.equal(pushes.length, 1);
+  // No failure should be logged — toggle off / no client is a benign demotion.
+  assert.equal(
+    failures.filter((f) => f.reason.startsWith("world_aside_")).length,
+    0,
+  );
+});
+
+test("world_aside slot: recentTopics snapshot is sent on each call", async () => {
+  let captured: string[] | null = null;
+  const { deps } = fakeDeps({
+    fetchWorldAside: async (req) => {
+      captured = req.recentTopics;
+      return { ok: true, topic: "weather:lisbon", line: "Lisbon's grey." };
+    },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  // Pre-populate the ring buffer manually (e.g. simulating prior calls).
+  orch.recentWorldTopics.push("weather:tokyo");
+  orch.recentWorldTopics.push("music:lineup");
+  advanceToSlot(orch, 4);
+  await orch.runChatter();
+  assert.deepEqual(captured, ["music:lineup", "weather:tokyo"]);
+});
+
+test("world_aside slot: topic NOT recorded if upload fails (don't poison anti-repeat)", async () => {
+  const { deps } = fakeDeps({
+    fetchWorldAside: async () => ({ ok: true, topic: "weather:tokyo", line: "Tokyo's wet." }),
+    uploadChatter: async () => { throw new Error("b2 down"); },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  advanceToSlot(orch, 4);
+  await orch.runChatter();
+  assert.deepEqual(orch.recentWorldTopics.snapshot(), [],
+    "failed upload must not record the topic");
+});
+
+test("world_aside slot: expired forced state is reverted then call proceeds", async () => {
+  const { deps, reverts, pushes } = fakeDeps({
+    config: async () => ({
+      autoHost: { mode: "auto", forcedUntil: null, forcedBy: null },
+      worldAside: {
+        mode: "forced_off",
+        forcedUntil: new Date("2000-01-01"), // expired
+        forcedBy: "op",
+      },
+    }),
+    fetchWorldAside: async () => ({ ok: true, topic: "music:x", line: "Hi." }),
+    generateScript: async () => "Filler.",
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  advanceToSlot(orch, 4);
+  await orch.runChatter();
+  // Revert was called for the expired worldAside forced state
+  assert.ok(
+    reverts.some((r) => r.block === "worldAside" && r.fromMode === "forced_off"),
+    "expected a worldAside revert",
+  );
+  // Effective mode is now auto → world_aside fires (NanoClaw mocked ok)
+  assert.equal(pushes.length, 1);
 });

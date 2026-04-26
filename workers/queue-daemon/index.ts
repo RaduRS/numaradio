@@ -14,6 +14,7 @@ import { generateChatterScript } from "./minimax-script.ts";
 import { synthesizeChatter } from "./deepgram-tts.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
 import { ContextLineOrchestrator, buildStationState } from "./context-line.ts";
+import { fetchWorldAside } from "./world-aside-client.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -76,12 +77,22 @@ const stationConfig = new StationConfigCache({
         autoHostMode: true,
         autoHostForcedUntil: true,
         autoHostForcedBy: true,
+        worldAsideMode: true,
+        worldAsideForcedUntil: true,
+        worldAsideForcedBy: true,
       },
     });
     return {
-      mode: s.autoHostMode as AutoHostMode,
-      forcedUntil: s.autoHostForcedUntil,
-      forcedBy: s.autoHostForcedBy,
+      autoHost: {
+        mode: s.autoHostMode as AutoHostMode,
+        forcedUntil: s.autoHostForcedUntil,
+        forcedBy: s.autoHostForcedBy,
+      },
+      worldAside: {
+        mode: s.worldAsideMode as AutoHostMode,
+        forcedUntil: s.worldAsideForcedUntil,
+        forcedBy: s.worldAsideForcedBy,
+      },
     };
   },
 });
@@ -90,26 +101,38 @@ const autoHost = new AutoHostOrchestrator({
   config: () => stationConfig.read(),
   getListenerCount: () =>
     fetchListenerCount({ url: ICECAST_STATUS_URL, mount: ICECAST_MOUNT }),
-  revertExpired: async ({ fromMode, forcedUntil }) => {
+  revertExpired: async ({ block, fromMode, forcedUntil }) => {
     // Atomic UPDATE: only revert if forcedUntil hasn't moved (operator may
     // have just set a new forced state in the same window). updateMany
     // returns count=0 in that case; we invalidate the cache either way so
-    // the next read picks up the authoritative state.
+    // the next read picks up the authoritative state. `block` selects
+    // which trio of columns we touch.
     try {
-      await prisma.station.updateMany({
-        where: { slug: STATION_SLUG, autoHostForcedUntil: forcedUntil },
-        data: {
-          autoHostMode: "auto",
-          autoHostForcedUntil: null,
-          autoHostForcedBy: null,
-        },
-      });
+      if (block === "autoHost") {
+        await prisma.station.updateMany({
+          where: { slug: STATION_SLUG, autoHostForcedUntil: forcedUntil },
+          data: {
+            autoHostMode: "auto",
+            autoHostForcedUntil: null,
+            autoHostForcedBy: null,
+          },
+        });
+      } else {
+        await prisma.station.updateMany({
+          where: { slug: STATION_SLUG, worldAsideForcedUntil: forcedUntil },
+          data: {
+            worldAsideMode: "auto",
+            worldAsideForcedUntil: null,
+            worldAsideForcedBy: null,
+          },
+        });
+      }
       console.info(
-        `action=auto_host_auto_revert from=${fromMode} user=daemon reason=20m_elapsed`,
+        `action=${block}_auto_revert from=${fromMode} user=daemon reason=20m_elapsed`,
       );
     } catch (err) {
       console.warn(
-        "[auto-host] revertExpired failed:",
+        `[${block}] revertExpired failed:`,
         err instanceof Error ? err.message : err,
       );
     } finally {
@@ -143,6 +166,11 @@ const autoHost = new AutoHostOrchestrator({
   },
   generateScript: (prompts) =>
     generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+  fetchWorldAside: (req) =>
+    fetchWorldAside(req, {
+      braveKey: process.env.BRAVE_API_KEY ?? "",
+      minimaxKey: process.env.MINIMAX_API_KEY ?? "",
+    }),
   synthesizeSpeech: (text) =>
     synthesizeChatter(text, { apiKey: process.env.DEEPGRAM_API_KEY ?? "" }),
   uploadChatter: (body, id) => {

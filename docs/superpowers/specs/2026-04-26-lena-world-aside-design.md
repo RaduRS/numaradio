@@ -2,6 +2,26 @@
 
 Date: 2026-04-26
 
+## ⚠ Architecture amendment (2026-04-26 evening)
+
+The original design routed world_aside generation through NanoClaw
+(agent picks topic + writes line). During implementation we switched
+to a simpler **direct path**: queue-daemon owns the topic picker
+(weighted random + anti-repeat), calls Brave Search directly, and
+prompts MiniMax (single call) for the Lena line. NanoClaw is no
+longer involved in this tier.
+
+Why: agent orchestration via NanoClaw's chat HTTP channel would have
+required a synchronous request/response on top of an SSE-based
+fire-and-forget loop. The simpler direct path ships in fewer files,
+single repo, fully testable in queue-daemon, and the editorial value
+NanoClaw would have added is replaceable by deterministic
+category-specific query templates.
+
+Sections below mentioning NanoClaw / `groups/world_aside/` are
+historical. The actual implementation lives in
+`workers/queue-daemon/world-aside-client.ts`.
+
 ## Problem
 
 Auto-chatter (LIVE since Apr) gives Lena a voice between songs. The

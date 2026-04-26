@@ -5,20 +5,31 @@ export type ChatterType =
   | "shoutout_cta"
   | "song_cta"
   | "filler"
+  // Tier 2.5 — short Lena aside about a real outside-world fact (weather,
+  // music news, AI news, on-this-day, light culture trend, astronomical
+  // event). Externally supplied by NanoClaw via Brave Search; promptFor()
+  // throws for this type since no local prompt is built. Gated by the
+  // worldAside toggle in StationConfig — when the toggle says no or the
+  // NanoClaw call fails, the slot is demoted to "filler" before generation.
+  // Spec: docs/superpowers/specs/2026-04-26-lena-world-aside-design.md.
+  | "world_aside"
   // Event-driven — fires on the FIRST air of a listener-generated song.
   // Not part of the ROTATION table below; used by the daemon's announce
   // flow, not the auto-chatter orchestrator.
   | "listener_song_announce";
 
 // Hand-crafted 20-slot rotation: 10 back-announce, 3 shoutout CTA,
-// 3 song CTA, 4 filler, no same-type adjacency.
+// 3 song CTA, 1 filler, 3 world-aside, no same-type adjacency
+// (verified across the slot-19 → slot-0 wrap). World asides land at
+// 4 / 10 / 16 — perfectly even spacing. Filler safety net at 14 keeps
+// listeners covered if every world_aside slot fails for a full cycle.
 //   slot:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
 const ROTATION: readonly ChatterType[] = [
-  "back_announce", "shoutout_cta", "back_announce", "filler",
-  "back_announce", "song_cta",     "back_announce", "filler",
-  "back_announce", "shoutout_cta", "back_announce", "song_cta",
-  "back_announce", "filler",       "back_announce", "shoutout_cta",
-  "back_announce", "filler",       "back_announce", "song_cta",
+  "shoutout_cta", "back_announce", "song_cta",     "back_announce",
+  "world_aside",  "back_announce", "shoutout_cta", "back_announce",
+  "song_cta",     "back_announce", "world_aside",  "back_announce",
+  "shoutout_cta", "back_announce", "filler",       "back_announce",
+  "world_aside",  "back_announce", "song_cta",     "back_announce",
 ];
 
 export function slotTypeFor(slotCounter: number): ChatterType {
@@ -163,6 +174,10 @@ Good example shapes (write a fresh one — do NOT copy verbatim; vary the skelet
 - "You're listening to Numa Radio. More music coming up, stay close." [time-neutral]
 - "Numa Radio, I'm Lena — hope you're having a decent one. More ahead." [time-neutral]${renderContextBlock(ctx)}`,
       };
+    case "world_aside":
+      throw new Error(
+        "world_aside is externally supplied by NanoClaw — promptFor() must not be called for it",
+      );
     case "listener_song_announce":
       throw new Error(
         "listener_song_announce uses announcementPrompt(), not promptFor()",

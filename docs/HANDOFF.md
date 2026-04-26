@@ -1,11 +1,92 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-25
+Last updated: 2026-04-26
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
 deployed, and the evergreen conventions. When picking up work: read
 this, then fall back to the archive if a reference here points there.
+
+---
+
+## Lena Tier 2.5 — world_aside chatter — CODE READY, NEEDS BRAVE KEY (2026-04-26)
+
+Lena's "ears and eyes" — 3 of every 20 auto-chatter slots become
+short asides about real outside-world facts (weather in 5 cities,
+music news, AI/tech news, on-this-day, trending culture, astro events).
+queue-daemon picks a category, hits Brave Search, prompts MiniMax for
+a Lena-voice line, validates, broadcasts. Same pipeline as auto-chatter
+from TTS onward.
+
+**Spec:** `docs/superpowers/specs/2026-04-26-lena-world-aside-design.md`
+(see the "Architecture amendment" at the top — final implementation
+is direct Brave + MiniMax, not via NanoClaw).
+
+**Schema change (already applied to Neon, migration
+`20260426191605_add_world_aside_mode`):** three new columns on
+`Station`: `worldAsideMode`, `worldAsideForcedUntil`,
+`worldAsideForcedBy`. Mirror the existing autoHost trio. Reuses the
+existing `AutoHostMode` enum.
+
+**New files / edits:**
+- `workers/queue-daemon/world-aside-client.ts` — topic picker
+  (weighted random + anti-repeat), Brave search client, prompt
+  builder, validator, `fetchWorldAside()` entry point
+- `workers/queue-daemon/world-aside-client.test.ts` — 20 tests
+- `workers/queue-daemon/auto-host.ts` — new `world_aside` branch in
+  `generateAsset()`, `recentWorldTopics` ring buffer (cap 10),
+  graceful demote-to-filler on any failure
+- `workers/queue-daemon/chatter-prompts.ts` — rotation rewritten so
+  W slots land at 4/10/16 (perfectly even), filler safety net at 14,
+  BA preserved at 10/20
+- `workers/queue-daemon/station-config.ts` — config shape gains
+  `worldAside` block alongside `autoHost`
+- `workers/queue-daemon/index.ts` — `fetchWorldAside` dep wired,
+  `revertExpired` extended to cover both blocks
+- `dashboard/app/api/shoutouts/world-chatter/route.ts` — GET + POST
+  for the second toggle, mirrors auto-host route
+- `dashboard/app/shoutouts/page.tsx` — second segmented control,
+  status row composes with toggle A's gate
+
+**Deploy steps** (once Brave key is in hand — get a free 2k/month
+key at <https://api.search.brave.com/app/keys>):
+
+1. Add `BRAVE_API_KEY` to `/etc/numa/env` on Orion:
+   ```
+   sudo nano /etc/numa/env
+   # add: BRAVE_API_KEY=BSA...your-key-here
+   sudo chmod 0600 /etc/numa/env
+   ```
+2. Pull and restart the daemon:
+   ```
+   cd /home/marku/saas/numaradio && git pull
+   sudo systemctl restart numa-queue-daemon
+   ```
+   The migration is already applied; no `prisma migrate deploy` needed.
+3. Deploy the dashboard (auto-host UI + new world-chatter UI + API):
+   ```
+   cd dashboard && npm run deploy
+   ```
+4. Toggle World chatter to Auto on `dashboard.numaradio.com/shoutouts`.
+
+**Watch after deploy:**
+```
+journalctl --user -u numa-queue-daemon -f | grep -E "auto-chatter|world_aside"
+```
+Expect ~3 world asides per cycle (every ~60 min at full pelt).
+Failures show as `[auto-chatter] fail world_aside_<reason>`. Reasons:
+`no_brave_key`, `brave_search_failed`, `no_good_angle`, `banned_phrase`,
+`too_long`, `clock_time`, `minimax_failed:...`.
+
+**Verify on the public site:**
+The world_aside row writes a Chatter row with `chatterType="world_aside"`
++ a real audio URL. The existing `/api/station/lena-line` route returns
+these as `live` source (it filters out `context_line` only) — listeners
+see "Host · Live · just now: 'Tokyo's seeing rain right now…'".
+Bonus surface, no extra wiring.
+
+**Cost / budget:** ~24 calls/day at full pelt against Brave's free
+2000/month tier (~36% utilisation, comfortable headroom).
 
 ---
 

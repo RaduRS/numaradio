@@ -87,6 +87,8 @@ export class AutoHostStateMachine {
 import { slotTypeFor, promptFor, type ChatterType, type PromptContext } from "./chatter-prompts.ts";
 import { showForHour, timeOfDayFor, formatLocalTime } from "../../lib/schedule.ts";
 import type { StationConfig } from "./station-config.ts";
+import { RingBuffer } from "./status-buffers.ts";
+import type { WorldAsideResult } from "./world-aside-client.ts";
 
 export interface CurrentTrackInfo {
   title: string;
@@ -116,6 +118,8 @@ export interface AutoHostDeps {
    * and invalidates the config cache. Must not rethrow.
    */
   revertExpired: (entry: {
+    /** Which forced-state block on the Station row to revert. */
+    block: "autoHost" | "worldAside";
     fromMode: "forced_on" | "forced_off";
     forcedUntil: Date;
   }) => Promise<void>;
@@ -130,6 +134,16 @@ export interface AutoHostDeps {
    */
   resolveCurrentTrack: () => Promise<CurrentTrackInfo | null>;
   generateScript: (prompts: { system: string; user: string }) => Promise<string>;
+  /**
+   * Tier 2.5 — fetch a world_aside line from NanoClaw. Optional dep:
+   * if not provided, every world_aside slot demotes to filler. Returns
+   * a discriminated union — never throws. Caller demotes to filler on
+   * any non-ok response.
+   */
+  fetchWorldAside?: (req: {
+    show: string;
+    recentTopics: string[];
+  }) => Promise<WorldAsideResult>;
   synthesizeSpeech: (text: string) => Promise<Buffer>;
   uploadChatter: (body: Buffer, chatterId: string) => Promise<string>;
   pushToOverlay: (url: string) => Promise<void>;
@@ -176,6 +190,14 @@ export class AutoHostOrchestrator {
    * pushing; a mismatch means a shoutout took the slot while we waited.
    */
   #currentRun: symbol | null = null;
+  /**
+   * Last 10 world_aside topic identifiers (e.g. "weather:tokyo", "music:x").
+   * Sent to NanoClaw on each world_aside fetch so the agent can weight
+   * away from recent topics. Lives only in-process; on daemon restart the
+   * buffer empties and NanoClaw's own conversation history provides a
+   * softer second layer of repeat-avoidance.
+   */
+  readonly recentWorldTopics = new RingBuffer<string>(10);
 
   constructor(deps: AutoHostDeps) {
     this.deps = deps;
@@ -209,18 +231,23 @@ export class AutoHostOrchestrator {
       // Expired forced_* lazy-reverts to auto then evaluates.
       const gateNow = (this.deps.now ?? Date.now)();
       let cfg = await this.deps.config();
-      if (cfg.mode !== "auto" && cfg.forcedUntil && cfg.forcedUntil.getTime() <= gateNow) {
+      const auto = cfg.autoHost;
+      if (auto.mode !== "auto" && auto.forcedUntil && auto.forcedUntil.getTime() <= gateNow) {
         await this.deps.revertExpired({
-          fromMode: cfg.mode,
-          forcedUntil: cfg.forcedUntil,
+          block: "autoHost",
+          fromMode: auto.mode,
+          forcedUntil: auto.forcedUntil,
         });
-        cfg = { mode: "auto", forcedUntil: null, forcedBy: null };
+        cfg = {
+          ...cfg,
+          autoHost: { mode: "auto", forcedUntil: null, forcedBy: null },
+        };
       }
-      if (cfg.mode === "forced_off") {
+      if (cfg.autoHost.mode === "forced_off") {
         this.state.markFailure();
         return;
       }
-      if (cfg.mode === "auto") {
+      if (cfg.autoHost.mode === "auto") {
         const listeners = await this.deps.getListenerCount();
         if (listeners === null || listeners < 5) {
           this.state.markFailure();
@@ -318,23 +345,81 @@ export class AutoHostOrchestrator {
   ): Promise<ReadyAsset | null> {
     const slot = this.state.slotCounter % 20;
     const rotationType = slotTypeFor(slot);
+    const now = (this.deps.now ?? Date.now)();
+    const nowDate = new Date(now);
+
+    // ── Tier 2.5: world_aside ─────────────────────────────────────
+    // If the rotation lands on a world_aside slot, check toggle B and
+    // try NanoClaw. On any failure (toggle off, no fetch dep, NanoClaw
+    // returns ok:false, HTTP error, banned phrase, etc.) we DEMOTE the
+    // slot to filler so listeners always hear chatter — never silence
+    // where chatter would have spoken.
+    let externalScript: string | null = null;
+    let externalTopic: string | null = null;
+    if (rotationType === "world_aside") {
+      const cfg = await this.deps.config();
+      const worldMode = cfg.worldAside.mode;
+      // Lazy-revert expired forced state, mirroring the autoHost block.
+      const wForcedUntil = cfg.worldAside.forcedUntil;
+      if (worldMode !== "auto" && wForcedUntil && wForcedUntil.getTime() <= now) {
+        await this.deps.revertExpired({
+          block: "worldAside",
+          fromMode: worldMode,
+          forcedUntil: wForcedUntil,
+        });
+        // Treat as auto for the rest of this run; cache will refresh on next call.
+      }
+      const effectiveMode =
+        worldMode !== "auto" && wForcedUntil && wForcedUntil.getTime() <= now
+          ? "auto"
+          : worldMode;
+      if (effectiveMode === "forced_off" || !this.deps.fetchWorldAside) {
+        // Demote silently — toggle off / no client wired.
+      } else {
+        try {
+          const result = await this.deps.fetchWorldAside({
+            show: showForHour(nowDate.getHours()).name,
+            recentTopics: this.recentWorldTopics.snapshot(),
+          });
+          if (result.ok) {
+            externalScript = result.line;
+            externalTopic = result.topic;
+          } else {
+            this.deps.logFailure({
+              reason: `world_aside_${result.reason}`,
+            });
+          }
+        } catch (e) {
+          // fetchWorldAside is contractually non-throwing, but defense.
+          this.deps.logFailure({
+            reason: "world_aside_unexpected_error",
+            detail: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
+
     // If back_announce lands but we can't resolve the current track, fall
     // back to filler — the "that one" / "the artist" default-substitution in
     // promptFor would otherwise air literally ("That was 'that one' by the
     // artist. Good one."), which is worse than a generic station-ID line.
-    const type: ChatterType =
-      rotationType === "back_announce" && !current ? "filler" : rotationType;
+    // World_aside that didn't return a line also demotes to filler.
+    const type: ChatterType = externalScript
+      ? "world_aside"
+      : rotationType === "back_announce" && !current
+        ? "filler"
+        : rotationType === "world_aside"
+          ? "filler"
+          : rotationType;
 
     // All variants get the optional context channel (show / recent artists /
     // slot position) so Lena can weave station-aware texture when it fits.
-    const now = (this.deps.now ?? Date.now)();
     // Throttle show-name context to 15% of breaks. MiniMax anchors on
     // whatever's in the Context block — passing `currentShow` on every call
     // produces a "Prime Hours in here" opener every ~6 min, which gets
     // grating over a multi-hour listening session. 15% means roughly one
     // show-name reference per ~40 min of airtime — frequent enough to
     // establish station identity, rare enough to not feel canned.
-    const nowDate = new Date(now);
     const includeShow = (this.deps.randomGate ?? Math.random)() < 0.15;
     const currentShow = includeShow
       ? showForHour(nowDate.getHours()).name
@@ -362,16 +447,21 @@ export class AutoHostOrchestrator {
       timeOfDay: timeOfDayFor(nowDate.getHours()),
     };
 
-    const prompts = promptFor(type, context);
     let script: string;
-    try {
-      script = await this.deps.generateScript(prompts);
-    } catch (e) {
-      this.deps.logFailure({
-        reason: "auto_chatter_script_failed",
-        detail: e instanceof Error ? e.message : String(e),
-      });
-      return null;
+    if (externalScript) {
+      // World_aside: NanoClaw already wrote the line. Skip MiniMax.
+      script = externalScript;
+    } else {
+      const prompts = promptFor(type, context);
+      try {
+        script = await this.deps.generateScript(prompts);
+      } catch (e) {
+        this.deps.logFailure({
+          reason: "auto_chatter_script_failed",
+          detail: e instanceof Error ? e.message : String(e),
+        });
+        return null;
+      }
     }
 
     let audio: Buffer;
@@ -395,6 +485,13 @@ export class AutoHostOrchestrator {
         detail: e instanceof Error ? e.message : String(e),
       });
       return null;
+    }
+
+    // Track the topic only after upload succeeds — failed uploads
+    // shouldn't poison the anti-repeat memory (we'll retry the topic next
+    // tick if Brave/NanoClaw are still suggesting it).
+    if (externalTopic) {
+      this.recentWorldTopics.push(externalTopic);
     }
 
     return { chatterId, type, slot, url, script };
