@@ -368,17 +368,20 @@
 }
 .lena-avatar {
   width: 36px; height: 36px;
-  border-radius: 50%;
   flex-shrink: 0;
   position: relative;
-  overflow: hidden;
-  /* The portrait already carries a teal/orange rim against deep black,
-     so we want the bezel to feel like a thin precision ring rather than
-     a heavy frame. Single-pixel inner ring, no shadow at this size. */
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  /* NOTE: no overflow:hidden here — the live-dot lives in ::after at
+     bottom-right and needs to extend slightly beyond the wrapper's
+     bounds to read as a presence indicator. Circular cropping happens
+     on the <img> below, not on this wrapper. */
 }
 .lena-avatar img {
   display: block;
+  border-radius: 50%;
+  /* Subtle precision ring on the image itself — the portrait already
+     carries a teal/orange rim against deep black, so the bezel stays
+     minimal. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 /* Live-dot indicator. Static by default (pool lines = evergreen),
    pulses when the line source is "live" or "context" — i.e. Lena
@@ -460,8 +463,10 @@
     radial-gradient(circle at 20% 50%, rgba(79, 209, 197, 0.08), transparent 60%),
     rgba(79, 209, 197, 0.03);
 }
-.lena-card--feature .lena-avatar {
-  /* The teal halo only kicks in at feature size — at 36px it'd be busy. */
+.lena-card--feature .lena-avatar img {
+  /* The teal halo only kicks in at feature size — at 36px it'd be busy.
+     Lives on the <img> (not the wrapper) so the live-dot in ::after
+     stays visible beyond the wrapper's bounds. */
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.1),
     0 0 0 1px rgba(79, 209, 197, 0.28),
