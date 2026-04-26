@@ -594,46 +594,81 @@ export default function ShoutoutsPage() {
 
       {/* ── Next up in the rotation ─────────────────────────
            Reads daemon /status nextChatterSlot. Renders the next 5
-           slot types so operators can see what's coming. The slot
-           pointer only advances when a chatter break completes
-           successfully — failed/skipped breaks keep the pointer.
-           When toggle B is forced_off, world_aside slots will demote
-           to filler, but the rotation array still shows them as W
-           (the listener won't hear that demotion). */}
+           slot types so operators can see what's coming.
+
+           Clickable: tap a chip → POST /api/shoutouts/next-chatter-override
+           sets the daemon's one-shot override for the NEXT chatter break.
+           Once consumed, the rotation resumes normally. The currently-
+           pending override (if any) shows on the first chip as "→ queued".
+
+           Demotions: when toggle B is forced_off, world_aside slots show
+           "world aside → filler" so the operator sees what listeners will
+           actually hear. */}
       {(() => {
         const next = daemonPoll.data?.nextChatterSlot;
         if (typeof next !== "number") return null;
+        const pendingOverride = daemonPoll.data?.pendingChatterOverride ?? null;
         const upcoming = Array.from({ length: 5 }, (_, i) => {
           const idx = (next + i) % CHATTER_ROTATION.length;
           return { idx, type: CHATTER_ROTATION[idx] };
         });
         const worldOff = worldAside?.mode === "forced_off";
+
+        async function pickOverride(type: string) {
+          try {
+            const r = await fetch("/api/shoutouts/next-chatter-override", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ type }),
+            });
+            const d = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+            if (r.ok && d.ok) {
+              toast.success(`Next chatter: ${shortSlotLabel(type)}.`);
+              daemonPoll.refresh?.();
+            } else {
+              toast.error(d.error ?? "Failed to set override.");
+            }
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Network error setting override.");
+          }
+        }
+
         return (
           <div className="flex flex-col gap-2 rounded-md border border-line bg-bg-1 px-4 py-3 sm:flex-row sm:items-center">
             <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute shrink-0 sm:mr-3">
               Next up
+              <span className="block normal-case tracking-normal text-[10px] text-fg-mute/70 mt-0.5">
+                click to queue
+              </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               {upcoming.map((s, i) => {
                 const label = shortSlotLabel(s.type);
-                // World asides demote to filler when toggle B is off — show
-                // that visually so the operator's not surprised.
                 const demoted = s.type === "world_aside" && worldOff;
                 const display = demoted ? `${label} → filler` : label;
                 const isFirst = i === 0;
                 const isWorld = s.type === "world_aside";
+                const isPending = isFirst && pendingOverride !== null;
+                const pendingLabel =
+                  isPending && pendingOverride
+                    ? shortSlotLabel(pendingOverride)
+                    : null;
                 return (
-                  <span
+                  <button
                     key={`${s.idx}-${i}`}
-                    className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${
-                      isFirst
-                        ? "border-accent text-accent bg-[var(--accent-soft)]"
-                        : "border-line text-fg-mute"
+                    type="button"
+                    onClick={() => pickOverride(s.type)}
+                    title={`Click to make this the next chatter type · slot ${s.idx}`}
+                    className={`font-mono text-[11px] px-2 py-0.5 rounded-full border transition cursor-pointer ${
+                      isPending
+                        ? "border-accent text-accent bg-[var(--accent-soft)] ring-1 ring-accent/40"
+                        : isFirst
+                          ? "border-accent text-accent bg-[var(--accent-soft)]"
+                          : "border-line text-fg-mute hover:text-fg hover:border-fg-mute/40"
                     } ${isWorld && !demoted ? "italic" : ""}`}
-                    title={`slot ${s.idx}`}
                   >
-                    {isFirst ? "→ " : ""}{display}
-                  </span>
+                    {isPending && pendingLabel ? `→ ${pendingLabel} (queued)` : `${isFirst ? "→ " : ""}${display}`}
+                  </button>
                 );
               })}
             </div>

@@ -669,6 +669,68 @@ test("world_aside slot: topic NOT recorded if upload fails (don't poison anti-re
     "failed upload must not record the topic");
 });
 
+// ─── pendingOverride (operator chip-click) ───────────────────────────
+
+test("setPendingOverride: pending type replaces next slot type", async () => {
+  let scriptCalls = 0;
+  const { deps, pushes } = fakeDeps({
+    fetchWorldAside: async () => ({ ok: true, topic: "weather:lisbon", line: "Lisbon's 26°C." }),
+    generateScript: async () => { scriptCalls += 1; return "should not be called"; },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  // Slot 0 in the new rotation = shoutout_cta. Override to world_aside.
+  orch.setPendingOverride("world_aside");
+  await orch.runChatter();
+  assert.equal(pushes.length, 1, "override fires");
+  assert.equal(scriptCalls, 0, "world_aside path skips MiniMax — Brave + opt.generate stays in client");
+  // Override consumed
+  assert.equal(orch.pendingOverride, null);
+});
+
+test("setPendingOverride: consumed even on failure", async () => {
+  const { deps } = fakeDeps({
+    fetchWorldAside: async () => ({ ok: false, reason: "no_good_topic" }),
+    generateScript: async () => { throw new Error("boom"); },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  orch.setPendingOverride("world_aside");
+  await orch.runChatter();
+  // Override was consumed (read+clear) at start of generateAsset, before
+  // the demote-to-filler path ran. So next run goes back to rotation.
+  assert.equal(orch.pendingOverride, null);
+});
+
+test("setPendingOverride: rejects listener_song_announce", () => {
+  const { deps } = fakeDeps({});
+  const orch = new AutoHostOrchestrator(deps);
+  assert.throws(() => orch.setPendingOverride("listener_song_announce"));
+});
+
+test("setPendingOverride: second call overwrites first (latest wins)", () => {
+  const { deps } = fakeDeps({});
+  const orch = new AutoHostOrchestrator(deps);
+  orch.setPendingOverride("filler");
+  orch.setPendingOverride("world_aside");
+  assert.equal(orch.pendingOverride, "world_aside");
+});
+
+test("setPendingOverride: filler override at slot that was world_aside still uses MiniMax", async () => {
+  let scriptCalls = 0;
+  const { deps, pushes } = fakeDeps({
+    generateScript: async () => { scriptCalls += 1; return "Filler line."; },
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  // Advance to a world_aside slot then override to filler.
+  while (orch.state.slotCounter % 20 !== 4) {
+    orch.state.markInFlight();
+    orch.state.markSuccess();
+  }
+  orch.setPendingOverride("filler");
+  await orch.runChatter();
+  assert.equal(scriptCalls, 1, "filler path goes through MiniMax");
+  assert.equal(pushes.length, 1);
+});
+
 test("world_aside slot: expired forced state is reverted then call proceeds", async () => {
   const { deps, reverts, pushes } = fakeDeps({
     config: async () => ({

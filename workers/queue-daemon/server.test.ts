@@ -4,11 +4,16 @@ import type { AddressInfo } from "node:net";
 import { createServer } from "node:http";
 import { createHandler, type ServerDeps } from "./server.ts";
 
-type TestDeps = ServerDeps & { __pushed: unknown[]; __onTrack: unknown[] };
+type TestDeps = ServerDeps & {
+  __pushed: unknown[];
+  __onTrack: unknown[];
+  __overrides: unknown[];
+};
 
 function mkDeps(over: Partial<ServerDeps> = {}): TestDeps {
   const __pushed: unknown[] = [];
   const __onTrack: unknown[] = [];
+  const __overrides: unknown[] = [];
   const base: ServerDeps = {
     pushHandler: async (body) => {
       __pushed.push(body);
@@ -17,10 +22,21 @@ function mkDeps(over: Partial<ServerDeps> = {}): TestDeps {
     onTrackHandler: async (body) => {
       __onTrack.push(body);
     },
-    statusHandler: () => ({ socket: "connected", lastPushes: [], lastFailures: [] }),
+    statusHandler: () => ({
+      socket: "connected",
+      lastPushes: [],
+      lastFailures: [],
+      lastHydrationError: null,
+      nextChatterSlot: 0,
+      pendingChatterOverride: null,
+    }),
+    chatterOverrideHandler: (body) => {
+      __overrides.push(body);
+      return { ok: true };
+    },
     ...over,
   };
-  return Object.assign(base, { __pushed, __onTrack }) as TestDeps;
+  return Object.assign(base, { __pushed, __onTrack, __overrides }) as TestDeps;
 }
 
 async function hit(port: number, path: string, body?: unknown): Promise<{ status: number; json: any }> {
@@ -105,13 +121,58 @@ test("POST /on-track invokes handler and returns 200", async () => {
 
 test("GET /status returns the status snapshot", async () => {
   const deps = mkDeps({
-    statusHandler: () => ({ socket: "reconnecting", lastPushes: [{ a: 1 }], lastFailures: [] }),
+    statusHandler: () => ({
+      socket: "reconnecting",
+      lastPushes: [{ a: 1 }],
+      lastFailures: [],
+      lastHydrationError: null,
+      nextChatterSlot: 7,
+      pendingChatterOverride: null,
+    }),
   });
   await withServer(deps, async (port) => {
     const { status, json } = await hit(port, "/status");
     assert.equal(status, 200);
     assert.deepEqual(json.socket, "reconnecting");
     assert.equal(json.lastPushes.length, 1);
+  });
+});
+
+test("POST /chatter-override forwards a valid type to the handler", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/chatter-override", { type: "world_aside" });
+    assert.equal(status, 200);
+    assert.equal(json.ok, true);
+    assert.deepEqual(deps.__overrides[0], { type: "world_aside" });
+  });
+});
+
+test("POST /chatter-override returns 400 for unknown type", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/chatter-override", { type: "bogus" });
+    assert.equal(status, 400);
+    assert.match(json.error, /invalid type/);
+    assert.ok(Array.isArray(json.allowed));
+    assert.equal(deps.__overrides.length, 0);
+  });
+});
+
+test("POST /chatter-override returns 400 when type is missing", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/chatter-override", {});
+    assert.equal(status, 400);
+    assert.match(json.error, /missing type/);
+  });
+});
+
+test("POST /chatter-override rejects listener_song_announce (event-driven, not in rotation)", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status } = await hit(port, "/chatter-override", { type: "listener_song_announce" });
+    assert.equal(status, 400);
   });
 });
 

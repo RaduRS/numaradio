@@ -23,6 +23,9 @@ export interface DaemonStatusResponse {
    *  on the NEXT chatter break. Optional — undefined when daemon is
    *  unreachable or on an older build. */
   nextChatterSlot?: number;
+  /** Operator-set override consumed on the next chatter break (string
+   *  ChatterType), or null when none is pending. */
+  pendingChatterOverride?: string | null;
 }
 
 export interface StatusSnapshot {

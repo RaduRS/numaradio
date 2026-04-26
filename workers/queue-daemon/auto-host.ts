@@ -198,9 +198,36 @@ export class AutoHostOrchestrator {
    * softer second layer of repeat-avoidance.
    */
   readonly recentWorldTopics = new RingBuffer<string>(10);
+  /**
+   * Operator-set one-shot override. When non-null, the next chatter
+   * break uses this type instead of the rotation's slot type. Consumed
+   * (cleared) when generateAsset reads it. Allowed types are the
+   * rotation members; listener_song_announce is event-driven only.
+   * Lives in-process; survives only until the next break or daemon
+   * restart.
+   */
+  #pendingOverride: ChatterType | null = null;
 
   constructor(deps: AutoHostDeps) {
     this.deps = deps;
+  }
+
+  /** Operator dashboard sets this from the "Next up" chip click. */
+  setPendingOverride(type: ChatterType): void {
+    if (type === "listener_song_announce") {
+      throw new Error("listener_song_announce cannot be set as pending override");
+    }
+    this.#pendingOverride = type;
+  }
+  /** Read-only peek for tests + status surfaces. */
+  get pendingOverride(): ChatterType | null {
+    return this.#pendingOverride;
+  }
+  /** Atomic read+clear; called once per generateAsset run. */
+  consumePendingOverride(): ChatterType | null {
+    const t = this.#pendingOverride;
+    this.#pendingOverride = null;
+    return t;
   }
 
   /**
@@ -344,7 +371,13 @@ export class AutoHostOrchestrator {
     current: CurrentTrackInfo | null,
   ): Promise<ReadyAsset | null> {
     const slot = this.state.slotCounter % 20;
-    const rotationType = slotTypeFor(slot);
+    // Operator one-shot override (from dashboard "Next up" chip click)
+    // takes precedence over the rotation's slot type. Override is
+    // consumed (read+clear) so the NEXT chatter run goes back to normal
+    // rotation. slotCounter still advances on success — the override
+    // "uses up" this slot.
+    const override = this.consumePendingOverride();
+    const rotationType: ChatterType = override ?? slotTypeFor(slot);
     const now = (this.deps.now ?? Date.now)();
     const nowDate = new Date(now);
 

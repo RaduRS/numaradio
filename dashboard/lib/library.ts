@@ -174,6 +174,9 @@ export interface DaemonStatus {
    *  chatter break will use. Undefined when the daemon is unreachable
    *  or running an older build. */
   nextChatterSlot?: number;
+  /** Operator one-shot override (string ChatterType, or null when none
+   *  is pending). Surfaces on the dashboard as a "→ queued" pill. */
+  pendingChatterOverride?: string | null;
 }
 
 const DAEMON_URL = process.env.NUMA_DAEMON_URL ?? "http://127.0.0.1:4000";
@@ -241,6 +244,8 @@ export async function fetchDaemonStatus(
       lastFailures: Array.isArray(json.lastFailures) ? json.lastFailures : [],
       nextChatterSlot:
         typeof json.nextChatterSlot === "number" ? json.nextChatterSlot : undefined,
+      pendingChatterOverride:
+        typeof json.pendingChatterOverride === "string" ? json.pendingChatterOverride : null,
     };
   } catch {
     return { lastPushes: [], lastFailures: [] };

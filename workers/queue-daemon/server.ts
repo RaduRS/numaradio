@@ -54,13 +54,36 @@ export type StatusSnapshot = {
    * few slots so operators can see what's coming.
    */
   nextChatterSlot: number;
+  /**
+   * Operator-set one-shot override (set via POST /chatter-override).
+   * When non-null, the next chatter break uses this type instead of
+   * the rotation. Cleared automatically once the next break consumes
+   * it. Surfaced so the dashboard can show "→ world_aside (queued)"
+   * on the corresponding chip.
+   */
+  pendingChatterOverride: string | null;
 };
+
+/** Operator-set one-shot override: {type: ChatterType-like-string}. */
+export interface ChatterOverrideBody {
+  type: string;
+}
 
 export interface ServerDeps {
   pushHandler(body: PushBody): Promise<{ queueItemId: string }>;
   onTrackHandler(body: OnTrackBody): Promise<void>;
   statusHandler(): StatusSnapshot;
+  /** Set the next chatter type. Validates the type or throws. */
+  chatterOverrideHandler(body: ChatterOverrideBody): { ok: true };
 }
+
+const VALID_OVERRIDE_TYPES = new Set([
+  "back_announce",
+  "shoutout_cta",
+  "song_cta",
+  "filler",
+  "world_aside",
+]);
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -130,6 +153,25 @@ export function createHandler(deps: ServerDeps): RequestListener {
       }
       if (req.method === "GET" && req.url === "/status") {
         return sendJson(res, 200, deps.statusHandler());
+      }
+      if (req.method === "POST" && req.url === "/chatter-override") {
+        const text = await readBody(req);
+        let body: ChatterOverrideBody;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          return sendJson(res, 400, { error: "invalid json" });
+        }
+        if (!body?.type || typeof body.type !== "string") {
+          return sendJson(res, 400, { error: "missing type" });
+        }
+        if (!VALID_OVERRIDE_TYPES.has(body.type)) {
+          return sendJson(res, 400, {
+            error: "invalid type",
+            allowed: [...VALID_OVERRIDE_TYPES],
+          });
+        }
+        return sendJson(res, 200, deps.chatterOverrideHandler(body));
       }
       sendJson(res, 404, { error: "not found" });
     } catch (err) {

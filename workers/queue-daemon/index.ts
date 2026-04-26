@@ -496,7 +496,15 @@ function statusHandler(): StatusSnapshot {
     lastFailures: lastFailures.snapshot(),
     lastHydrationError,
     nextChatterSlot: autoHost.state.slotCounter % 20,
+    pendingChatterOverride: autoHost.pendingOverride,
   };
+}
+
+function chatterOverrideHandler(body: { type: string }): { ok: true } {
+  // Server already validated the string; cast is safe.
+  autoHost.setPendingOverride(body.type as Parameters<typeof autoHost.setPendingOverride>[0]);
+  console.info(`action=chatter_override type=${body.type}`);
+  return { ok: true };
 }
 
 async function runHydrate(): Promise<void> {
@@ -525,6 +533,7 @@ async function main() {
       pushHandler,
       onTrackHandler,
       statusHandler,
+      chatterOverrideHandler,
     }),
   );
   server.listen(HTTP_PORT, "127.0.0.1", () => {

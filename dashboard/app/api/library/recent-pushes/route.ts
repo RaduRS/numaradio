@@ -10,6 +10,7 @@ export async function GET(): Promise<NextResponse> {
       lastPushes: status.lastPushes,
       lastFailures: status.lastFailures,
       nextChatterSlot: status.nextChatterSlot,
+      pendingChatterOverride: status.pendingChatterOverride,
     },
     { headers: { "Cache-Control": "no-store" } },
   );
