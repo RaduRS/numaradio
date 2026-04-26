@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getDbPool } from "@/lib/db";
 import { generateArtwork } from "@/lib/openrouter";
+import { loadFallbackArtwork, fallbackShowOr } from "@/lib/fallback-artwork";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -89,28 +90,37 @@ export async function POST(
     : { rows: [] };
   const oldAsset = oldAssetRes.rows[0];
 
-  // Generate new image
+  // Generate new image. On Flux failure (most often "no credits") we
+  // fall back to the per-show brand PNG instead of 502'ing — operator
+  // gets a real cover and a `fallback: true` flag in the response so
+  // the UI can flag it.
   const prompt = buildPrompt(track, body.hint ?? null);
   let imgBuf: Buffer;
-  try { imgBuf = await generateArtwork(prompt); }
-  catch (err) {
-    return NextResponse.json(
-      { error: `image generation failed: ${err instanceof Error ? err.message : String(err)}` },
-      { status: 502 },
-    );
+  let mimeType = "image/jpeg";
+  let extension = "jpg";
+  let usedFallback = false;
+  try {
+    imgBuf = await generateArtwork(prompt);
+  } catch (err) {
+    const show = fallbackShowOr(track.show);
+    console.warn(`[artwork-regen] flux failed for track ${id}; using fallback ${show}: ${err instanceof Error ? err.message : String(err)}`);
+    imgBuf = await loadFallbackArtwork(show);
+    mimeType = "image/png";
+    extension = "png";
+    usedFallback = true;
   }
 
   // Upload to a NEW key (timestamp suffix) so CDN doesn't serve stale,
   // and so we can roll back by leaving the old asset/object in place if
   // the DB swap fails later.
   const ts = Date.now();
-  const key = `stations/${STATION_SLUG}/tracks/${id}/artwork/regen-${ts}-${randomUUID().slice(0, 8)}.jpg`;
+  const key = `stations/${STATION_SLUG}/tracks/${id}/artwork/regen-${ts}-${randomUUID().slice(0, 8)}.${extension}`;
   try {
     await getS3().send(new PutObjectCommand({
       Bucket: process.env.B2_BUCKET_NAME,
       Key: key,
       Body: imgBuf,
-      ContentType: "image/jpeg",
+      ContentType: mimeType,
       CacheControl: IMMUTABLE_CACHE,
     }));
   } catch (err) {
@@ -129,8 +139,8 @@ export async function POST(
     await client.query(
       `INSERT INTO "TrackAsset" (id, "trackId", "assetType", "storageProvider", "storageKey",
                                   "publicUrl", "mimeType", "byteSize", "createdAt")
-         VALUES ($1, $2, 'artwork_primary', 'b2', $3, $4, 'image/jpeg', $5, NOW())`,
-      [newAssetId, id, key, url, imgBuf.byteLength],
+         VALUES ($1, $2, 'artwork_primary', 'b2', $3, $4, $5, $6, NOW())`,
+      [newAssetId, id, key, url, mimeType, imgBuf.byteLength],
     );
     await client.query(
       `UPDATE "Track" SET "primaryArtAssetId" = $1, "updatedAt" = NOW() WHERE id = $2`,
@@ -165,5 +175,6 @@ export async function POST(
     url,
     bytes: imgBuf.byteLength,
     prompt,
+    fallback: usedFallback,
   });
 }

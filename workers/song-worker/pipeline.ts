@@ -1,11 +1,10 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
 import { parseBuffer } from "music-metadata";
 import { profanityPrefilter } from "../../lib/moderate.ts";
 import { showForHour } from "../../lib/schedule.ts";
+import { loadFallbackArtwork } from "../../lib/fallback-artwork.ts";
 import {
   startMusicGeneration,
   pollMusicGeneration,
@@ -82,11 +81,6 @@ async function uploadToB2(
     }),
   );
   return b2PublicUrl(key);
-}
-
-async function loadDefaultArtwork(): Promise<Buffer> {
-  const here = path.dirname(new URL(import.meta.url).pathname);
-  return fs.readFile(path.join(here, "assets", "default-artwork.png"));
 }
 
 async function pollUntilDone(taskId: string): Promise<{ audioUrl: string; durationMs: number }> {
@@ -217,11 +211,18 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
   }
 
   const trackId = randomUUID();
+  const show = showEnumFor(new Date());
   const audioKey = `stations/${STATION_SLUG}/tracks/${trackId}/audio/stream.mp3`;
   const artworkKey = `stations/${STATION_SLUG}/tracks/${trackId}/artwork/primary.png`;
   const audioUrl = await uploadToB2(audioKey, audioBytes, "audio/mpeg");
 
-  const artworkBuf = artworkBytesOrNull ?? (await loadDefaultArtwork());
+  let artworkBuf: Buffer;
+  if (artworkBytesOrNull) {
+    artworkBuf = artworkBytesOrNull;
+  } else {
+    console.warn(`[song-worker] using fallback artwork for ${job.id} (show=${show})`);
+    artworkBuf = await loadFallbackArtwork(show);
+  }
   const artworkUrl = await uploadToB2(artworkKey, artworkBuf, "image/png");
 
   // Step 5: create Track + TrackAssets.
@@ -238,7 +239,7 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
       // 'last 20 played' filter pins it out of rotation until it ages out.
       airingPolicy: "priority_request",
       safetyStatus: "approved",
-      show: showEnumFor(new Date()),
+      show,
       trackStatus: "ready",
       durationSeconds,
       assets: {
