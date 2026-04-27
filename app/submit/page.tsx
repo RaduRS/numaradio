@@ -277,30 +277,6 @@ export default function SubmitPage() {
         </div>
       </section>
 
-      <section className="cta-footer">
-        <div className="shell">
-          <h2>
-            Ready?<br />
-            <span className="accent">send it.</span>
-          </h2>
-          <p>One email. One track per submission.</p>
-          <a
-            href={`mailto:${SUBMIT_EMAIL}`}
-            className="btn btn-primary"
-            style={{ padding: "16px 28px", fontSize: 15 }}
-          >
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              style={{ width: 14, height: 14 }}
-            >
-              <path d="M2 10l16-7-4 17-4-7-8-3z" />
-            </svg>
-            Email {SUBMIT_EMAIL}
-          </a>
-        </div>
-      </section>
-
       <Footer />
     </>
   );

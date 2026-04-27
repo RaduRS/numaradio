@@ -3042,3 +3042,548 @@
 @media (prefers-reduced-motion: reduce) {
   .error-hero--500 .error-tuner-needle { animation: none; }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   SUBMIT FORM — editorial console
+   The form for /submit. Numbered fields read like channels on a
+   broadcast deck; custom dropzones replace browser default file
+   inputs; airing radios become side-by-side cards; the vouch
+   checkbox sits in a dashed signing-panel; submit button has a
+   travel-arrow + animated dots state. Confirmation card lands with
+   a "RECEIVED · timestamp" stamp.
+   ───────────────────────────────────────────────────────────────── */
+
+.submit-form-shell {
+  position: relative;
+  max-width: 760px;
+  background: linear-gradient(180deg, var(--bg-1), var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 44px 44px 36px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 24px 60px -20px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sprocket / film-strip stripe on the left edge so the panel reads
+   as broadcast equipment rather than a generic form. */
+.submit-form-shell::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent) 0%, transparent 70%);
+  opacity: 0.55;
+}
+
+.submit-form-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 0% 0%, rgba(79, 209, 197, 0.05), transparent 60%);
+}
+
+.submit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  padding-top: 28px;
+}
+.submit-field + .submit-field {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.submit-field--first { padding-top: 0; }
+
+.submit-field-label {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  flex-wrap: wrap;
+}
+.submit-field-label .num {
+  color: var(--accent);
+  font-weight: 600;
+}
+.submit-field-label .name {
+  color: var(--fg);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+.submit-field-label .hint {
+  color: var(--fg-mute);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  margin-left: auto;
+}
+
+.submit-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--fg);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+  outline: none;
+}
+.submit-input::placeholder { color: var(--fg-mute); }
+.submit-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.submit-input.is-error { border-color: var(--red-live); }
+
+.submit-error {
+  font-size: 12px;
+  color: var(--red-live);
+  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  margin-top: -2px;
+}
+
+/* ── Dropzone ──────────────────────────────────────────── */
+.submit-dropzone {
+  position: relative;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  padding: 22px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 200ms ease, background-color 200ms ease, transform 200ms ease;
+  min-height: 96px;
+}
+.submit-dropzone:hover {
+  border-color: var(--accent);
+  background: rgba(79, 209, 197, 0.04);
+}
+.submit-dropzone.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  border-style: solid;
+  transform: scale(1.005);
+}
+.submit-dropzone.has-file {
+  border-style: solid;
+  border-color: rgba(79, 209, 197, 0.4);
+  background: rgba(79, 209, 197, 0.04);
+  justify-content: space-between;
+  cursor: default;
+}
+
+.submit-dropzone-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+.submit-dropzone-prompt .lead {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+}
+.submit-dropzone-prompt .sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+
+.submit-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+}
+.submit-file-chip .icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid rgba(79, 209, 197, 0.2);
+}
+.submit-file-chip .meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.submit-file-chip .name {
+  font-size: 14px;
+  color: var(--fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.submit-file-chip .size {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+.submit-file-chip .remove {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--fg-mute);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  transition: color 160ms, border-color 160ms;
+}
+.submit-file-chip .remove:hover {
+  color: var(--red-live);
+  border-color: var(--red-live);
+}
+
+/* ── Airing radio cards ────────────────────────────────── */
+.submit-airing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.submit-airing-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 18px 16px;
+  cursor: pointer;
+  transition: border-color 160ms, background-color 160ms, transform 200ms;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+.submit-airing-card:hover { border-color: var(--line-strong); }
+.submit-airing-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.submit-airing-card.is-selected::after {
+  content: '✓';
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+}
+.submit-airing-card .label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--fg);
+  letter-spacing: -0.005em;
+}
+.submit-airing-card .desc {
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  line-height: 1.5;
+  padding-right: 24px;
+}
+@media (max-width: 540px) {
+  .submit-airing-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Vouch panel ───────────────────────────────────────── */
+.submit-vouch {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: rgba(232, 217, 176, 0.025);
+  cursor: pointer;
+  transition: border-color 160ms, background-color 160ms;
+}
+.submit-vouch:hover { border-color: var(--accent); }
+.submit-vouch.is-error {
+  border-color: var(--red-live);
+  background: rgba(255, 77, 77, 0.04);
+}
+.submit-vouch input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--bg);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: border-color 160ms, background-color 160ms;
+}
+.submit-vouch input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.submit-vouch input[type="checkbox"]:checked::after {
+  content: '✓';
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 700;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.submit-vouch-text {
+  font-size: 13px;
+  color: var(--fg-dim);
+  line-height: 1.6;
+}
+.submit-vouch-text a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 160ms;
+}
+.submit-vouch-text a:hover { border-bottom-color: var(--accent); }
+
+/* ── Submit row ────────────────────────────────────────── */
+.submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.submit-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+.submit-meta.is-ready { color: var(--accent); }
+
+.submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 28px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 200ms, color 200ms, transform 200ms, box-shadow 200ms;
+  position: relative;
+}
+.submit-btn:not(:disabled):hover {
+  background: var(--accent);
+  color: var(--bg);
+  box-shadow: 0 8px 30px -8px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.submit-btn:not(:disabled):active { transform: translateY(0); }
+.submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.submit-btn .arrow {
+  display: inline-block;
+  transition: transform 200ms ease;
+}
+.submit-btn:not(:disabled):hover .arrow { transform: translateX(4px); }
+.submit-btn .dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.submit-btn .dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: submitDots 1.2s ease-in-out infinite;
+}
+.submit-btn .dots span:nth-child(2) { animation-delay: 0.2s; }
+.submit-btn .dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes submitDots {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+/* ── Server error banner ───────────────────────────────── */
+.submit-server-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 77, 77, 0.4);
+  background: rgba(255, 77, 77, 0.06);
+  color: var(--red-live);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 24px;
+  animation: submitErrorIn 320ms cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+@keyframes submitErrorIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Confirmation card ─────────────────────────────────── */
+.confirm-card {
+  position: relative;
+  background: linear-gradient(180deg, var(--bg-1), var(--bg));
+  border: 1px solid rgba(79, 209, 197, 0.2);
+  border-radius: 14px;
+  padding: 56px 48px;
+  max-width: 760px;
+  overflow: hidden;
+  animation: confirmCardIn 700ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 24px 60px -20px rgba(0, 0, 0, 0.6);
+}
+.confirm-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(79, 209, 197, 0.10), transparent 60%);
+  pointer-events: none;
+}
+.confirm-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--accent);
+  padding: 7px 14px;
+  border-radius: 6px;
+  margin-bottom: 28px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  animation: confirmStampIn 900ms cubic-bezier(0.16, 1.2, 0.3, 1);
+  position: relative;
+}
+.confirm-stamp .pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: confirmStampPulse 1.6s ease-in-out infinite;
+}
+.confirm-card h2 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 125%;
+  font-size: clamp(28px, 3.4vw, 44px);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--fg);
+  margin-bottom: 16px;
+  position: relative;
+}
+.confirm-card .lead {
+  font-size: 17px;
+  color: var(--fg-dim);
+  line-height: 1.55;
+  max-width: 560px;
+  margin-bottom: 24px;
+  position: relative;
+}
+.confirm-card .meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-mute);
+  letter-spacing: 0.04em;
+  position: relative;
+}
+.confirm-card .meta a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 160ms;
+}
+.confirm-card .meta a:hover { border-bottom-color: var(--accent); }
+@keyframes confirmCardIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes confirmStampIn {
+  0%   { opacity: 0; transform: scale(0.5) rotate(-3deg); }
+  60%  { opacity: 1; transform: scale(1.08) rotate(0deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes confirmStampPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 209, 197, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(79, 209, 197, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-card,
+  .confirm-stamp,
+  .confirm-stamp .pulse,
+  .submit-server-error,
+  .submit-btn .dots span {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .submit-form-shell { padding: 32px 24px 28px; }
+  .confirm-card { padding: 36px 28px; }
+}
