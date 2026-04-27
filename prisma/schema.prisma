@@ -565,6 +565,8 @@ model MusicSubmission {
   createdAt        DateTime                     @default(now())
   reviewedAt       DateTime?
   reviewedBy       String?
+  withdrawnAt      DateTime?
+  withdrawnReason  String?
 
   station Station @relation(fields: [stationId], references: [id])
   track   Track?  @relation(fields: [trackId], references: [id])

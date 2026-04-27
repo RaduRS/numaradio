@@ -18,8 +18,12 @@ type Pending = {
 type Reviewed = {
   id: string;
   artistName: string;
+  email: string;
+  airingPreference: "one_off" | "permanent";
   status: "approved" | "rejected" | "withdrawn";
   rejectReason: string | null;
+  withdrawnAt: string | null;
+  withdrawnReason: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
 };
@@ -50,6 +54,7 @@ export function SubmissionsPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -102,6 +107,49 @@ export function SubmissionsPanel() {
       await refresh();
     } catch (err) {
       toast.error(`Reject failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function withdraw(id: string) {
+    setBusy(id);
+    try {
+      const r = await fetch(`/api/submissions/${id}/withdraw`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "artist requested withdrawal" }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string; keptContact?: boolean };
+      if (!r.ok) throw new Error(j.message ?? j.error ?? `HTTP ${r.status}`);
+      toast.success(
+        j.keptContact
+          ? "Withdrawn — track pulled, email retained (permanent rotation)."
+          : "Withdrawn — track pulled, email + name scrubbed (one-off).",
+      );
+      await refresh();
+    } catch (err) {
+      toast.error(`Withdraw failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function fullDelete(id: string) {
+    setBusy(id);
+    try {
+      const r = await fetch(`/api/submissions/${id}/full-delete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "artist requested full deletion" }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
+      if (!r.ok) throw new Error(j.message ?? j.error ?? `HTTP ${r.status}`);
+      toast.success("Fully deleted — row, track, assets all removed.");
+      setConfirmDelete(null);
+      await refresh();
+    } catch (err) {
+      toast.error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(null);
     }
@@ -213,33 +261,111 @@ export function SubmissionsPanel() {
         </ul>
 
         {data.reviewed.length > 0 && (
-          <details className="mt-2">
+          <details className="mt-2" open>
             <summary className="text-xs uppercase tracking-widest text-fg-mute cursor-pointer">
-              Recently reviewed (last {data.reviewed.length})
+              Recently reviewed ({data.reviewed.length})
             </summary>
-            <ul className="mt-2 flex flex-col gap-1 text-xs">
-              {data.reviewed.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex items-center justify-between gap-2 border-b border-line py-1"
-                >
-                  <span className="text-fg">{r.artistName}</span>
-                  <span
-                    className={
-                      r.status === "approved"
-                        ? "text-accent"
-                        : r.status === "rejected"
-                        ? "text-bad"
-                        : "text-fg-mute"
-                    }
+            <ul className="mt-3 flex flex-col gap-2 text-xs">
+              {data.reviewed.map((r) => {
+                const ts = r.withdrawnAt ?? r.reviewedAt;
+                return (
+                  <li
+                    key={r.id}
+                    className="border border-line rounded p-2.5 flex flex-col gap-1.5 bg-bg"
                   >
-                    {r.status}
-                  </span>
-                  <span className="text-fg-dim">
-                    {r.reviewedAt ? relativeTime(r.reviewedAt) : "—"}
-                  </span>
-                </li>
-              ))}
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                      <div className="flex flex-col">
+                        <span className="text-sm text-fg font-medium">{r.artistName}</span>
+                        <span className="text-[10px] text-fg-mute" title={r.email}>
+                          {r.email}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em]">
+                        <span
+                          className={
+                            r.status === "approved"
+                              ? "text-accent"
+                              : r.status === "rejected"
+                              ? "text-bad"
+                              : "text-fg-mute"
+                          }
+                        >
+                          {r.status}
+                        </span>
+                        <span className="text-fg-dim">{ts ? relativeTime(ts) : "—"}</span>
+                      </div>
+                    </div>
+                    {r.status === "rejected" && r.rejectReason && (
+                      <p className="text-[11px] text-fg-mute italic">{r.rejectReason}</p>
+                    )}
+                    {r.status === "withdrawn" && r.withdrawnReason && (
+                      <p className="text-[11px] text-fg-mute italic">
+                        Withdrawn — {r.withdrawnReason}
+                      </p>
+                    )}
+                    {r.status === "approved" && (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span
+                          className={`px-1.5 py-0.5 rounded border text-[9px] ${
+                            r.airingPreference === "permanent"
+                              ? "border-accent text-accent"
+                              : "border-line text-fg-mute"
+                          }`}
+                        >
+                          {r.airingPreference === "permanent" ? "Perm" : "One-off"}
+                        </span>
+                        {confirmDelete === r.id ? (
+                          <>
+                            <span className="text-[10px] text-bad uppercase tracking-widest">
+                              Delete everything?
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => fullDelete(r.id)}
+                              disabled={busy === r.id}
+                              className="text-[10px] px-2 py-1 h-auto"
+                            >
+                              {busy === r.id ? "…" : "Yes, wipe"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setConfirmDelete(null)}
+                              className="text-[10px] px-2 py-1 h-auto"
+                            >
+                              No
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => withdraw(r.id)}
+                              disabled={busy !== null}
+                              className="text-[10px] px-2 py-1 h-auto"
+                              title="Pull from rotation. Permanent → keep email, One-off → scrub email."
+                            >
+                              Withdraw
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setConfirmDelete(r.id)}
+                              disabled={busy !== null}
+                              className="text-[10px] px-2 py-1 h-auto border-bad/40 text-bad"
+                              title="Wipe everything (track + row + assets). Use only if artist explicitly asks for total deletion."
+                            >
+                              Full delete
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </details>
         )}

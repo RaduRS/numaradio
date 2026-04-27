@@ -25,8 +25,12 @@ interface PendingRow {
 interface ReviewedRow {
   id: string;
   artistName: string;
+  email: string;
+  airingPreference: "one_off" | "permanent";
   status: "approved" | "rejected" | "withdrawn";
   rejectReason: string | null;
+  withdrawnAt: Date | null;
+  withdrawnReason: string | null;
   reviewedAt: Date | null;
   reviewedBy: string | null;
 }
@@ -43,12 +47,16 @@ export async function GET(): Promise<NextResponse> {
           ORDER BY "createdAt" DESC`,
       ),
       pool.query<ReviewedRow>(
-        `SELECT id, "artistName", status, "rejectReason",
+        `SELECT id, "artistName", email, "airingPreference", status,
+                "rejectReason", "withdrawnAt", "withdrawnReason",
                 "reviewedAt", "reviewedBy"
            FROM "MusicSubmission"
           WHERE status IN ('approved', 'rejected', 'withdrawn')
-          ORDER BY "reviewedAt" DESC NULLS LAST
-          LIMIT 10`,
+          ORDER BY GREATEST(
+            COALESCE("reviewedAt", '1970-01-01'::timestamp),
+            COALESCE("withdrawnAt", '1970-01-01'::timestamp)
+          ) DESC
+          LIMIT 20`,
       ),
     ]);
 
@@ -65,8 +73,12 @@ export async function GET(): Promise<NextResponse> {
       reviewed: reviewedRes.rows.map((r) => ({
         id: r.id,
         artistName: r.artistName,
+        email: r.email,
+        airingPreference: r.airingPreference,
         status: r.status,
         rejectReason: r.rejectReason,
+        withdrawnAt: r.withdrawnAt?.toISOString() ?? null,
+        withdrawnReason: r.withdrawnReason,
         reviewedAt: r.reviewedAt?.toISOString() ?? null,
         reviewedBy: r.reviewedBy,
       })),
