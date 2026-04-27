@@ -402,12 +402,20 @@
 .lena-avatar::after {
   content: '';
   position: absolute;
-  bottom: 0; right: 0;
   width: 28%; height: 28%;
   min-width: 8px; min-height: 8px;
   max-width: 12px; max-height: 12px;
   border-radius: 50%;
   background: var(--red-live);
+  /* Pin the dot's CENTER on the avatar's circular edge at the 4:30
+     position. The wrapper is square, but the visible avatar is the
+     inscribed circle — anchoring at bottom:0; right:0 of the square
+     drifts the dot ~50px off the visible edge at the 240px feature
+     size. 85.36% comes from (1 + cos45°)/2 — the position where a
+     point sits on the circle of an inscribed circle. Combined with
+     translate(-50%) the dot lands tangent to the avatar at any size. */
+  top: 85.36%; left: 85.36%;
+  transform: translate(-50%, -50%);
   /* Outer ring matches the surrounding card bg so the dot punches
      out of the avatar circle cleanly at any size. */
   box-shadow: 0 0 0 2px var(--bg-1);
@@ -539,6 +547,29 @@
   font-size: 17px;
   line-height: 1.6;
   color: var(--fg);
+}
+/* Live-dot needs to scale with the 240px feature avatar — the default
+   12px max looks like a pinprick at this size. Bigger dot + thicker
+   ring + a wider pulse spread so the presence cue actually reads. */
+.lena-card--feature .lena-avatar::after {
+  width: 22px; height: 22px;
+  max-width: 22px; max-height: 22px;
+  box-shadow: 0 0 0 3px var(--bg-1);
+}
+.lena-card--feature .lena-avatar--fresh::after {
+  animation-name: lenaLivePulseFeature;
+}
+@keyframes lenaLivePulseFeature {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px var(--bg-1),
+      0 0 0 0 rgba(255, 79, 87, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px var(--bg-1),
+      0 0 0 12px rgba(255, 79, 87, 0);
+  }
 }
 @media (max-width: 640px) {
   .lena-card--feature {
@@ -2685,7 +2716,7 @@
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background:
-    radial-gradient(ellipse 60% 80% at 85% 50%, rgba(79, 209, 197, 0.06), transparent 70%),
+    radial-gradient(ellipse 60% 80% at 50% 50%, rgba(79, 209, 197, 0.06), transparent 70%),
     var(--bg);
 }
 .about-pull p {
@@ -2697,6 +2728,8 @@
   letter-spacing: -0.025em;
   text-transform: uppercase;
   max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
   color: var(--fg);
 }
 .about-pull p .accent {
@@ -2815,6 +2848,54 @@
   color: var(--fg-mute);
   font-size: 18px;
   font-family: var(--font-mono);
+}
+
+/* About page — 4-show grid (Night Shift / Morning Room / Daylight /
+   Prime). Visually a sibling of .submit-timeline but one row of four
+   cards instead of three with arrows. Each card reuses .submit-step's
+   inner type rhythm via .about-show-card. */
+.about-shows {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+.about-show-card {
+  padding: 20px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.about-show-card .show-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.about-show-card .show-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-stretch: 115%;
+  font-size: 18px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+.about-show-card .show-blurb {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
+@media (max-width: 960px) {
+  .about-shows { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 540px) {
+  .about-shows { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
