@@ -30,6 +30,38 @@ type Reviewed = {
 
 type ListResponse = { pending: Pending[]; reviewed: Reviewed[] };
 
+type SweepStatus = {
+  lastRun: string | null;
+  counts: {
+    shoutoutsDeleted: number;
+    songRequestsDeleted: number;
+    rejectedSubmissionsDeleted: number;
+  } | null;
+};
+
+/**
+ * Compute the next 04:00 UTC after the given timestamp. Cron schedule
+ * is "0 4 * * *" — daily at 04:00 UTC. Stay in sync with vercel.json.
+ */
+function nextSweepAt(now: Date = new Date()): Date {
+  const next = new Date(now);
+  next.setUTCHours(4, 0, 0, 0);
+  if (next <= now) {
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  return next;
+}
+
+function fmtSweepIn(d: Date): string {
+  const ms = d.getTime() - Date.now();
+  if (ms < 0) return "imminent";
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `in ${hrs}h`;
+  return `in ${Math.floor(hrs / 24)}d`;
+}
+
 const PUBLIC_SITE = "https://numaradio.com";
 
 function relativeTime(iso: string): string {
@@ -58,12 +90,16 @@ export function SubmissionsPanel() {
   const [findEmail, setFindEmail] = useState("");
   const [findRows, setFindRows] = useState<Reviewed[] | null>(null);
   const [findLoading, setFindLoading] = useState(false);
+  const [sweepStatus, setSweepStatus] = useState<SweepStatus | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const r = await fetch("/api/submissions/list", { cache: "no-store" });
-      if (!r.ok) return;
-      setData((await r.json()) as ListResponse);
+      const [listRes, sweepRes] = await Promise.all([
+        fetch("/api/submissions/list", { cache: "no-store" }),
+        fetch("/api/sweep-status", { cache: "no-store" }),
+      ]);
+      if (listRes.ok) setData((await listRes.json()) as ListResponse);
+      if (sweepRes.ok) setSweepStatus((await sweepRes.json()) as SweepStatus);
     } catch {
       /* keep previous */
     }
@@ -297,6 +333,11 @@ export function SubmissionsPanel() {
             {data.pending.length} pending · {data.reviewed.length} recent
           </span>
         </div>
+        {/* Privacy retention sweep — runs daily at 04:00 UTC via Vercel
+            Cron. Shows last run + cleanup counts + ETA on next. Helps
+            operator confirm the schedule is alive without checking
+            Vercel logs. */}
+        <PrivacySweepChip status={sweepStatus} />
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {data.pending.length === 0 && (
@@ -455,5 +496,31 @@ export function SubmissionsPanel() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function PrivacySweepChip({ status }: { status: SweepStatus | null }) {
+  if (!status) return null;
+  const next = nextSweepAt();
+  const lastRunIso = status.lastRun;
+  const totalCleaned = status.counts
+    ? status.counts.shoutoutsDeleted +
+      status.counts.songRequestsDeleted +
+      status.counts.rejectedSubmissionsDeleted
+    : 0;
+  return (
+    <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono uppercase tracking-[0.14em]">
+      <span className="px-2 py-1 rounded border border-line text-fg-mute">
+        Privacy sweep
+      </span>
+      <span className="text-fg-dim">
+        {lastRunIso
+          ? `Last run · ${relativeTime(lastRunIso)} · cleaned ${totalCleaned}`
+          : "Never run yet"}
+      </span>
+      <span className="text-fg-mute">
+        Next · {fmtSweepIn(next)}
+      </span>
+    </div>
   );
 }
