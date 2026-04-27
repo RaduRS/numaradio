@@ -106,8 +106,7 @@ export default function AboutPage() {
           reachable anywhere with a browser. At launch the catalog is small
           and entirely built around{" "}
           <strong style={{ color: "var(--fg)" }}>Russell Ross</strong> — an
-          artist we believe in, about 50 tracks deep. New artists join as the
-          station grows.
+          artist we believe in. New artists join as the station grows.
         </p>
         <p>
           The rhythm of the day is loose but real: quieter tones late at

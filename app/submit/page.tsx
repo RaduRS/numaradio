@@ -197,8 +197,8 @@ export default function SubmitPage() {
               maxWidth: 620,
             }}
           >
-            We&apos;re small on purpose. Numa launched with ~50 tracks from one
-            artist — we&apos;ll grow it carefully. That&apos;s the whole point.
+            We&apos;re small on purpose. Numa launched around one artist
+            — we&apos;ll grow it carefully. That&apos;s the whole point.
           </p>
         </div>
       </section>
