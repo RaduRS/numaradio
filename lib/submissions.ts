@@ -32,13 +32,15 @@ export function sniffMp3(buf: Buffer): boolean {
   if (buf.length < 3) return false;
   if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return true; // 'ID3'
   // Accept MPEG-1 Layer III (FB / FA / F3 / F2) AND MPEG-2.5 Layer III
-  // (E3 / E2 / E0). LAME-encoded low-bitrate files (e.g. mobile recordings
+  // (E3 / E2). LAME-encoded low-bitrate files (e.g. mobile recordings
   // at 24 kbps) use the MPEG-2.5 sync words and would otherwise be
   // rejected at upload time.
+  // NOTE: 0xE0 has layer bits = 00 (RESERVED/INVALID) and is NOT a
+  // valid MPEG-2.5 Layer III sync word — only 0xE2 and 0xE3 are valid.
   if (
     buf[0] === 0xFF &&
     (buf[1] === 0xFB || buf[1] === 0xFA || buf[1] === 0xF3 || buf[1] === 0xF2 ||
-      buf[1] === 0xE3 || buf[1] === 0xE2 || buf[1] === 0xE0)
+      buf[1] === 0xE3 || buf[1] === 0xE2)
   ) return true;
   return false;
 }

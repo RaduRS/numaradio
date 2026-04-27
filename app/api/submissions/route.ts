@@ -17,7 +17,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { putObject } from "@/lib/storage";
+import { putObject, deleteObject } from "@/lib/storage";
 import { probeDurationSeconds } from "@/lib/probe-duration";
 import {
   isValidEmail,
@@ -150,12 +150,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 
   const audioKey = audioStorageKey(submission.id);
-  await putObject(audioKey, audioBuffer, "audio/mpeg");
-
   let artKey: string | null = null;
-  if (artworkBuffer && artworkKind) {
-    artKey = artworkStorageKey(submission.id, artworkKind);
-    await putObject(artKey, artworkBuffer, artworkKind === "png" ? "image/png" : "image/jpeg");
+
+  try {
+    await putObject(audioKey, audioBuffer, "audio/mpeg");
+    if (artworkBuffer && artworkKind) {
+      artKey = artworkStorageKey(submission.id, artworkKind);
+      await putObject(
+        artKey,
+        artworkBuffer,
+        artworkKind === "png" ? "image/png" : "image/jpeg",
+      );
+    }
+  } catch (err) {
+    // B2 upload failed — roll back the DB row so the artist isn't
+    // blocked by the per-email rate-limit and we don't accumulate
+    // orphan pending rows.
+    await prisma.musicSubmission.delete({ where: { id: submission.id } }).catch(() => undefined);
+    if (artKey) await deleteObject(artKey).catch(() => undefined);
+    return fail(
+      "storage_failed",
+      "Could not store the file. Please try again.",
+      502,
+    );
   }
 
   await prisma.musicSubmission.update({

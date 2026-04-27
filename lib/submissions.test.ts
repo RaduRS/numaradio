@@ -84,8 +84,12 @@ test("sniffMp3 accepts MPEG-1 Layer III with CRC (FF FA)", () => {
   assert.equal(sniffMp3(Buffer.from([0xFF, 0xFA, 0x90, 0x00])), true);
 });
 
-test("sniffMp3 accepts MPEG-2.5 Layer III (FF E3 / E2 / E0)", () => {
+test("sniffMp3 accepts MPEG-2.5 Layer III (FF E3 / E2)", () => {
   assert.equal(sniffMp3(Buffer.from([0xFF, 0xE3, 0x90, 0x00])), true);
   assert.equal(sniffMp3(Buffer.from([0xFF, 0xE2, 0x90, 0x00])), true);
-  assert.equal(sniffMp3(Buffer.from([0xFF, 0xE0, 0x90, 0x00])), true);
+});
+
+test("sniffMp3 rejects invalid layer-bits second byte (FF E0)", () => {
+  // 0xE0 has layer bits = 00 which is RESERVED — not a real MP3 frame
+  assert.equal(sniffMp3(Buffer.from([0xFF, 0xE0, 0x90, 0x00])), false);
 });
