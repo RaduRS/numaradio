@@ -15,6 +15,7 @@ import { synthesizeChatter } from "./deepgram-tts.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
 import { ContextLineOrchestrator, buildStationState } from "./context-line.ts";
 import { fetchWorldAside } from "./world-aside-client.ts";
+import { runRefresh as refreshRotation } from "../../scripts/refresh-rotation.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -435,6 +436,18 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
   };
   const resolved = await resolveTrackId(body, lookup);
   if (!resolved) return;
+
+  // Push-based rotation refresh: regenerate playlist.m3u immediately on
+  // every track-started so the just-started track is excluded before
+  // Liquidsoap exhausts its in-memory shuffle and reshuffles. Without
+  // this, the 2-min systemd timer leaves a window where Liquidsoap can
+  // pick the same track at the boundary of two shuffle passes (1-in-pool
+  // probability per cycle — bit listeners as back-to-back airings).
+  // Race-guard inside runRefresh handles the case where this fires
+  // before the Vercel track-started transaction has committed.
+  refreshRotation(prisma).catch((err) =>
+    console.error("[on-track] rotation refresh threw:", err),
+  );
 
   // Music-track boundary → count it for auto-chatter (fires for both
   // rotation and priority-queue tracks). Fire-and-forget, non-blocking
