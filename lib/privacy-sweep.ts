@@ -12,6 +12,7 @@
 // Aired shoutouts, approved submissions, and withdrawn rows are NOT
 // touched here — they have their own lifecycles.
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 
 export const SHOUTOUT_UNAIRED_DAYS = 90;
@@ -86,12 +87,15 @@ export async function runSweep(): Promise<SweepCounts> {
   };
 
   // Audit row — used by the dashboard to render "last sweep" status.
+  // Prisma's JSON input type requires an index signature; SweepCounts
+  // is a closed interface, so cast to InputJsonObject. Values are all
+  // primitive numbers — guaranteed JSON-safe.
   await prisma.systemEvent.create({
     data: {
       eventType: "privacy_sweep",
       sourceType: "cron",
       sourceId: "privacy-sweep",
-      payloadJson: counts,
+      payloadJson: counts as unknown as Prisma.InputJsonObject,
       processedAt: new Date(),
     },
   });
