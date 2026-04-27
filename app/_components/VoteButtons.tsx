@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ThumbsUpIcon, ThumbsDownIcon } from "./Icons";
 import { getSessionId } from "./session-id";
 
@@ -16,57 +16,119 @@ type Props = {
   trackId: string | undefined;
 };
 
-export function VoteButtons({ trackId }: Props) {
-  const [state, setState] = useState<VoteState>({ up: 0, down: 0, mine: null });
-  const [pending, setPending] = useState<Vote | null>(null);
-  const trackIdRef = useRef<string | undefined>(trackId);
-  trackIdRef.current = trackId;
+const EMPTY: VoteState = { up: 0, down: 0, mine: null };
 
-  // Fetch current counts + this session's existing vote on mount /
-  // whenever the track changes. The fetch is a cheap Neon count pair.
+// ─── Module-level singleton store keyed by trackId ──────────────
+//
+// Multiple VoteButtons instances render the same now-playing artwork
+// across the page (PlayerCard, Broadcast section 04, ExpandedPlayer
+// mobile + desktop). Without a shared store, each instance keeps its
+// own local count; clicking thumbs-up on one only updated that one,
+// the others stayed stale until the next page poll. The store fixes
+// that — any successful publish broadcasts to every subscriber for
+// that trackId so all instances flip together instantly.
+
+const stateCache = new Map<string, VoteState>();
+const subscribers = new Map<string, Set<(s: VoteState) => void>>();
+const pendingFetches = new Map<string, Promise<void>>();
+
+function publish(trackId: string, next: VoteState): void {
+  stateCache.set(trackId, next);
+  subscribers.get(trackId)?.forEach((sub) => sub(next));
+}
+
+function ensureFetched(trackId: string): void {
+  if (stateCache.has(trackId)) return;
+  if (pendingFetches.has(trackId)) return;
+  const sessionId = getSessionId();
+  const url = `/api/vote?trackId=${encodeURIComponent(trackId)}&sessionId=${encodeURIComponent(sessionId)}`;
+  const p = fetch(url, { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data: VoteState | null) => {
+      if (data) publish(trackId, data);
+    })
+    .catch(() => {
+      /* ignore — UI stays at EMPTY until next fetch */
+    })
+    .finally(() => {
+      pendingFetches.delete(trackId);
+    });
+  pendingFetches.set(trackId, p);
+}
+
+function subscribe(trackId: string, fn: (s: VoteState) => void): () => void {
+  let set = subscribers.get(trackId);
+  if (!set) {
+    set = new Set();
+    subscribers.set(trackId, set);
+  }
+  set.add(fn);
+  const cached = stateCache.get(trackId);
+  if (cached) fn(cached);
+  ensureFetched(trackId);
+  return () => {
+    subscribers.get(trackId)?.delete(fn);
+  };
+}
+
+function optimistic(prev: VoteState, value: Vote): VoteState {
+  if (prev.mine === value) return prev;
+  let { up, down } = prev;
+  if (prev.mine === 1) up = Math.max(0, up - 1);
+  if (prev.mine === -1) down = Math.max(0, down - 1);
+  if (value === 1) up += 1;
+  else down += 1;
+  return { up, down, mine: value };
+}
+
+async function submitVote(trackId: string, value: Vote): Promise<void> {
+  // Optimistic publish — every subscriber updates instantly. Server
+  // response corrects it on return (or we keep the optimistic state
+  // on a transient network failure; the next track-change refetch
+  // repairs).
+  const prev = stateCache.get(trackId) ?? EMPTY;
+  publish(trackId, optimistic(prev, value));
+  try {
+    const r = await fetch("/api/vote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        trackId,
+        sessionId: getSessionId(),
+        value,
+      }),
+    });
+    if (r.ok) {
+      const data = (await r.json()) as VoteState;
+      publish(trackId, data);
+    }
+  } catch {
+    /* keep optimistic */
+  }
+}
+
+// ─── React hook glue ─────────────────────────────────────────────
+
+export function VoteButtons({ trackId }: Props) {
+  const [state, setState] = useState<VoteState>(
+    () => (trackId && stateCache.get(trackId)) || EMPTY,
+  );
+  const [pending, setPending] = useState<Vote | null>(null);
+
   useEffect(() => {
     if (!trackId) {
-      setState({ up: 0, down: 0, mine: null });
+      setState(EMPTY);
       return;
     }
-    const ctrl = new AbortController();
-    const sessionId = getSessionId();
-    const url = `/api/vote?trackId=${encodeURIComponent(trackId)}&sessionId=${encodeURIComponent(sessionId)}`;
-    fetch(url, { signal: ctrl.signal, cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: VoteState | null) => {
-        // Guard against late responses from a previous track.
-        if (data && trackIdRef.current === trackId) setState(data);
-      })
-      .catch(() => {
-        /* ignore */
-      });
-    return () => ctrl.abort();
+    return subscribe(trackId, setState);
   }, [trackId]);
 
   const submit = useCallback(
     async (value: Vote) => {
       if (!trackId || pending) return;
       setPending(value);
-      // Optimistic: bump the count, flip mine. The server response
-      // corrects it if we guessed wrong.
-      setState((prev) => optimistic(prev, value));
       try {
-        const r = await fetch("/api/vote", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            trackId,
-            sessionId: getSessionId(),
-            value,
-          }),
-        });
-        if (r.ok) {
-          const data = (await r.json()) as VoteState;
-          if (trackIdRef.current === trackId) setState(data);
-        }
-      } catch {
-        /* network blip — optimistic UI stays; next track fetch repairs */
+        await submitVote(trackId, value);
       } finally {
         setPending(null);
       }
@@ -102,14 +164,4 @@ export function VoteButtons({ trackId }: Props) {
       </button>
     </div>
   );
-}
-
-function optimistic(prev: VoteState, value: Vote): VoteState {
-  if (prev.mine === value) return prev;
-  let { up, down } = prev;
-  if (prev.mine === 1) up = Math.max(0, up - 1);
-  if (prev.mine === -1) down = Math.max(0, down - 1);
-  if (value === 1) up += 1;
-  else down += 1;
-  return { up, down, mine: value };
 }
