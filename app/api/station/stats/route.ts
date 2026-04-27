@@ -4,7 +4,9 @@
 //
 //   {
 //     tracksThisWeek: number,   // PlayHistory rows with segmentType=audio_track,
-//                               // startedAt within the last 7 days
+//                               // startedAt >= the most recent Monday 00:00 UTC
+//                               // (i.e. resets every Monday at 00:00 UTC, not a
+//                               // rolling 168h window).
 //     libraryCount:   number,   // Track rows with airingPolicy=library and
 //                               // trackStatus=ready (i.e. actually in rotation)
 //     shoutoutCount:  number,   // Shoutout rows with deliveryStatus=aired
@@ -15,7 +17,21 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Most recent Monday 00:00 UTC at or before `now`. Sunday counts as the
+ * tail of the previous week, so a Sunday-23:59 viewer still sees the
+ * stats from that calendar week.
+ */
+function startOfWeekUTC(now: Date = new Date()): Date {
+  const out = new Date(now);
+  out.setUTCHours(0, 0, 0, 0);
+  // getUTCDay: Sunday=0, Monday=1 … Saturday=6
+  // Distance back to Monday: Mon→0, Tue→1, …, Sun→6
+  const daysSinceMonday = (out.getUTCDay() + 6) % 7;
+  out.setUTCDate(out.getUTCDate() - daysSinceMonday);
+  return out;
+}
 
 const HEADERS = {
   // Numbers tick up slowly — a minute of cache is fine and shields the DB.
@@ -44,14 +60,14 @@ export async function GET() {
     return new Response(JSON.stringify(EMPTY), { status: 200, headers: HEADERS });
   }
 
-  const weekAgo = new Date(Date.now() - WEEK_MS);
+  const weekStart = startOfWeekUTC();
 
   const [tracksThisWeek, libraryCount, shoutoutCount] = await Promise.all([
     prisma.playHistory.count({
       where: {
         stationId: station.id,
         segmentType: "audio_track",
-        startedAt: { gte: weekAgo },
+        startedAt: { gte: weekStart },
       },
     }),
     prisma.track.count({
