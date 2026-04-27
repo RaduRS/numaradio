@@ -252,7 +252,7 @@ export default function PrivacyPage() {
       {/* 05 — Your rights */}
       <PrivacyBlock
         eyebrow="05 — Your rights"
-        title="Access. Erasure. Done within 5 working days."
+        title="Access. Erasure. Done within 7 days."
       >
         <p>
           You can ask us to:
@@ -281,7 +281,7 @@ export default function PrivacyPage() {
           <a href="mailto:hello@numaradio.com" style={{ color: "var(--accent)" }}>
             hello@numaradio.com
           </a>{" "}
-          for any of the above. We aim for a five-working-day turnaround.
+          for any of the above. We aim to respond within 7 days.
         </p>
         <p>
           If you&apos;re in the EU/UK and unhappy with how we&apos;ve
@@ -341,7 +341,7 @@ export default function PrivacyPage() {
                 <a href="mailto:hello@numaradio.com" style={{ color: "var(--accent)" }}>
                   hello@numaradio.com
                 </a>{" "}
-                and we&apos;ll pull it from rotation within 24 hours. What
+                and we&apos;ll pull it from rotation within 48 hours. What
                 happens to your contact info depends on the lane you
                 chose at submit time:
               </p>
