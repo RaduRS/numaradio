@@ -169,10 +169,13 @@
 }
 
 /* Floating action pills on the cover — share on the left, vote on the
-   right. Mirrors the expanded-player overlay so the compact card and
-   the open card share the same vocabulary. */
+   right. Mirrors the expanded-player overlay so every artwork surface
+   on the site (compact PlayerCard, Broadcast section 04, expanded
+   player) shares the same vocabulary. */
 .now-art .art-share,
-.now-art .art-vote {
+.now-art .art-vote,
+.broadcast-art .art-share,
+.broadcast-art .art-vote {
   position: absolute;
   bottom: 10px;
   z-index: 2;
@@ -184,15 +187,19 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   display: inline-flex;
 }
-.now-art .art-share { left: 10px; }
-.now-art .art-vote  { right: 10px; }
+.now-art .art-share,
+.broadcast-art .art-share { left: 10px; }
+.now-art .art-vote,
+.broadcast-art .art-vote  { right: 10px; }
 /* Reset the share-pill's own border/background so the floating chrome
    above provides the only contrast — keeps the icon clean on the cover. */
-.now-art .art-share .share-pill {
+.now-art .art-share .share-pill,
+.broadcast-art .art-share .share-pill {
   border: none;
   background: transparent;
 }
-.now-art .art-share .share-pill:hover {
+.now-art .art-share .share-pill:hover,
+.broadcast-art .art-share .share-pill:hover {
   background: rgba(79, 209, 197, 0.1);
 }
 

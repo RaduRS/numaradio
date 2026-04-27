@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
 import { Skeleton } from "./Skeleton";
 import { Waveform } from "./Waveform";
+import { ShareControls } from "./ShareControls";
+import { VoteButtons } from "./VoteButtons";
 
 type TrackSummary = {
   trackId: string;
@@ -240,7 +242,14 @@ export function Broadcast() {
                 backgroundSize: "cover",
                 backgroundPosition: "center",
               }}
-            />
+            >
+              <span className="art-share">
+                <ShareControls />
+              </span>
+              <span className="art-vote">
+                <VoteButtons trackId={live?.trackId} />
+              </span>
+            </div>
             <div className="now-track-lg">
               <div className="title">
                 {live ? title : <Skeleton width="70%" height={42} radius={4} />}
