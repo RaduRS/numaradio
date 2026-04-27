@@ -50,23 +50,45 @@ export async function POST(
       { status: 409 },
     );
   }
+  if (submission.trackId) {
+    return NextResponse.json(
+      { ok: true, trackId: submission.trackId, alreadyApproved: true },
+      { status: 200 },
+    );
+  }
 
   const station = await prisma.station.findUniqueOrThrow({
     where: { slug: STATION_SLUG },
     select: { id: true },
   });
 
-  const audioBuffer = await getObject(submission.audioStorageKey);
+  let audioBuffer: Buffer;
+  try {
+    audioBuffer = await getObject(submission.audioStorageKey);
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: "audio_fetch_failed",
+        message: "Could not retrieve the audio from storage. Try again in a moment.",
+      },
+      { status: 502 },
+    );
+  }
 
   // Artwork cascade — tier 1 (uploaded) and tier 2 (ID3) only
   let artwork: { buffer: Buffer; mimeType: string } | undefined;
   let artworkSource: "upload" | "id3" | null = null;
   if (submission.artworkStorageKey) {
-    const buf = await getObject(submission.artworkStorageKey);
-    const mt = submission.artworkStorageKey.endsWith(".png") ? "image/png" : "image/jpeg";
-    artwork = { buffer: buf, mimeType: mt };
-    artworkSource = "upload";
-  } else {
+    try {
+      const buf = await getObject(submission.artworkStorageKey);
+      const mt = submission.artworkStorageKey.endsWith(".png") ? "image/png" : "image/jpeg";
+      artwork = { buffer: buf, mimeType: mt };
+      artworkSource = "upload";
+    } catch {
+      // Artwork fetch failed — fall through to ID3 or generation
+    }
+  }
+  if (!artwork) {
     const fromId3 = await extractId3Artwork(audioBuffer);
     if (fromId3) {
       artwork = { buffer: fromId3.buffer, mimeType: fromId3.mimeType };
@@ -95,16 +117,41 @@ export async function POST(
     return NextResponse.json({ error: "ingest_failed", reason: result }, { status: 500 });
   }
 
-  await prisma.musicSubmission.update({
-    where: { id: submission.id },
-    data: {
-      status: "approved",
-      trackId: result.trackId,
-      artworkSource: artworkSource ?? null,
-      reviewedAt: new Date(),
-      reviewedBy: operatorEmail,
-    },
-  });
+  let updateOk = false;
+  let updateErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await prisma.musicSubmission.update({
+        where: { id: submission.id },
+        data: {
+          status: "approved",
+          trackId: result.trackId,
+          artworkSource: artworkSource ?? null,
+          reviewedAt: new Date(),
+          reviewedBy: operatorEmail,
+        },
+      });
+      updateOk = true;
+      break;
+    } catch (err) {
+      updateErr = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+    }
+  }
+  if (!updateOk) {
+    console.error(
+      `[approve] CRITICAL: Track ${result.trackId} ingested but submission ${submission.id} update failed after retries`,
+      updateErr,
+    );
+    return NextResponse.json(
+      {
+        error: "post_ingest_update_failed",
+        trackId: result.trackId,
+        message: "Track was ingested but the submission record didn't update. The track is live; manually mark the submission approved or remove the orphaned track.",
+      },
+      { status: 500 },
+    );
+  }
 
   await deleteObject(submission.audioStorageKey).catch(() => undefined);
   if (submission.artworkStorageKey) {

@@ -186,7 +186,7 @@ export default function SubmitPage() {
             <div className="submit-step">
               <span className="step-tag">Step 01</span>
               <span className="step-label">You send</span>
-              <span className="step-note">Email + file</span>
+              <span className="step-note">Form + file</span>
             </div>
             <div className="submit-arrow">→</div>
             <div className="submit-step">

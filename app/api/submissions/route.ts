@@ -133,21 +133,40 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // Insert row first (id is generated server-side via cuid default), then
   // upload to B2 using that id as the key. Order keeps the DB authoritative.
-  const submission = await prisma.musicSubmission.create({
-    data: {
-      stationId: station.id,
-      artistName: normalizeName(name),
-      email: normEmail,
-      ipHash: ipHashOf(req),
-      audioStorageKey: "", // filled after upload
-      artworkStorageKey: null,
-      durationSeconds,
-      airingPreference,
-      status: "pending",
-      vouched: true,
-    },
-    select: { id: true },
-  });
+  let submission: { id: string };
+  try {
+    submission = await prisma.musicSubmission.create({
+      data: {
+        stationId: station.id,
+        artistName: normalizeName(name),
+        email: normEmail,
+        ipHash: ipHashOf(req),
+        audioStorageKey: "", // filled after upload
+        artworkStorageKey: null,
+        durationSeconds,
+        airingPreference,
+        status: "pending",
+        vouched: true,
+      },
+      select: { id: true },
+    });
+  } catch (err) {
+    // P2002 = unique constraint violation. Race-condition path: a
+    // simultaneous request from the same email hit the same partial
+    // unique index. Treat it the same as the explicit rate-limit check
+    // above — caller sees a clear 429.
+    if (
+      typeof err === "object" && err !== null &&
+      "code" in err && (err as { code: string }).code === "P2002"
+    ) {
+      return fail(
+        "pending_exists",
+        "You've already got a submission pending. We'll respond before you can send another.",
+        429,
+      );
+    }
+    throw err;
+  }
 
   const audioKey = audioStorageKey(submission.id);
   let artKey: string | null = null;
