@@ -65,7 +65,7 @@ export function Mobile() {
               </div>
             </div>
             <div className="hero-ctas" style={{ marginBottom: 0 }}>
-              <ListenLiveButton label="Open numaradio.com" />
+              <ListenLiveButton />
               <Link className="btn btn-ghost" href="/add-to-home-screen">
                 <ChevronUpRightArrow className="btn-icon" />
                 How to Add to Home Screen

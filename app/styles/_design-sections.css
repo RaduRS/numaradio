@@ -168,6 +168,34 @@
   letter-spacing: 0.15em;
 }
 
+/* Floating action pills on the cover — share on the left, vote on the
+   right. Mirrors the expanded-player overlay so the compact card and
+   the open card share the same vocabulary. */
+.now-art .art-share,
+.now-art .art-vote {
+  position: absolute;
+  bottom: 10px;
+  z-index: 2;
+  background: rgba(10, 13, 14, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+}
+.now-art .art-share { left: 10px; }
+.now-art .art-vote  { right: 10px; }
+/* Reset the share-pill's own border/background so the floating chrome
+   above provides the only contrast — keeps the icon clean on the cover. */
+.now-art .art-share .share-pill {
+  border: none;
+  background: transparent;
+}
+.now-art .art-share .share-pill:hover {
+  background: rgba(79, 209, 197, 0.1);
+}
+
 .now-info {
   margin-bottom: 20px;
 }

@@ -55,7 +55,20 @@ export function PlayerCard() {
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
-      />
+      >
+        <span
+          className="art-share"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ShareControls />
+        </span>
+        <span
+          className="art-vote"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <VoteButtons trackId={np.trackId} />
+        </span>
+      </div>
 
       <div className="now-info">
         {np.shoutout?.active && (
@@ -66,14 +79,6 @@ export function PlayerCard() {
         )}
         <div className="track">{title}</div>
         <div className="artist">{artist.toUpperCase()}</div>
-        <div className="now-actions">
-          <span onClick={(e) => e.stopPropagation()}>
-            <VoteButtons trackId={np.trackId} />
-          </span>
-          <span onClick={(e) => e.stopPropagation()}>
-            <ShareControls />
-          </span>
-        </div>
       </div>
 
       <Waveform

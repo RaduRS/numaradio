@@ -21,7 +21,7 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
-const HISTORY_LIMIT = 4;
+const HISTORY_LIMIT = 5;
 // Grace window between "track expected end" and flipping the public
 // site to isPlaying:false. Set tight (30s) now that durations are
 // frame-accurate via lib/probe-duration.ts + the 2026-04-26 backfill.
