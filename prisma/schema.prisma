@@ -148,6 +148,18 @@ enum WorkflowStatus {
   aborted
 }
 
+enum SubmissionStatus {
+  pending
+  approved
+  rejected
+  withdrawn
+}
+
+enum SubmissionAiringPreference {
+  one_off
+  permanent
+}
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 
 model Station {
@@ -169,14 +181,15 @@ model Station {
   createdAt             DateTime     @default(now())
   updatedAt           DateTime      @updatedAt
 
-  tracks       Track[]
-  requests     Request[]
-  shoutouts    Shoutout[]
-  queueItems   QueueItem[]
-  segments     BroadcastSegment[]
-  playHistory  PlayHistory[]
-  songRequests SongRequest[]
-  chatter      Chatter[]
+  tracks            Track[]
+  requests          Request[]
+  shoutouts         Shoutout[]
+  queueItems        QueueItem[]
+  segments          BroadcastSegment[]
+  playHistory       PlayHistory[]
+  songRequests      SongRequest[]
+  chatter           Chatter[]
+  musicSubmissions  MusicSubmission[]
 }
 
 /// One row per auto-chatter push by the queue daemon. Captures the
@@ -227,13 +240,14 @@ model Track {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
-  station      Station       @relation(fields: [stationId], references: [id])
-  request      Request?      @relation(fields: [requestId], references: [id])
-  assets       TrackAsset[]
-  queueItems   QueueItem[]
-  playHistory  PlayHistory[]
-  votes        TrackVote[]
-  songRequests SongRequest[]
+  station          Station           @relation(fields: [stationId], references: [id])
+  request          Request?          @relation(fields: [requestId], references: [id])
+  assets           TrackAsset[]
+  queueItems       QueueItem[]
+  playHistory      PlayHistory[]
+  votes            TrackVote[]
+  songRequests     SongRequest[]
+  musicSubmissions MusicSubmission[]
 
   @@index([stationId, trackStatus, airingPolicy])
   @@index([stationId, show, trackStatus, airingPolicy])
@@ -531,4 +545,30 @@ model SongRequest {
 
   @@index([status, createdAt])
   @@index([ipHash, createdAt])
+}
+
+model MusicSubmission {
+  id               String                       @id @default(cuid())
+  stationId        String
+  artistName       String
+  email            String
+  ipHash           String
+  audioB2Key       String
+  artworkB2Key     String?
+  artworkSource    String?
+  durationSeconds  Int?
+  airingPreference SubmissionAiringPreference   @default(one_off)
+  status           SubmissionStatus             @default(pending)
+  vouched          Boolean
+  rejectReason     String?
+  trackId          String?
+  createdAt        DateTime                     @default(now())
+  reviewedAt       DateTime?
+  reviewedBy       String?
+
+  station Station @relation(fields: [stationId], references: [id])
+  track   Track?  @relation(fields: [trackId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([email, status])
 }
