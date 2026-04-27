@@ -155,6 +155,49 @@ export default function PrivacyPage() {
         </p>
       </PrivacyBlock>
 
+      <section id="submissions" style={{ padding: "60px 0", borderTop: "1px solid var(--line)" }}>
+        <div className="shell" style={{ maxWidth: 760 }}>
+          <div className="eyebrow" style={{ marginBottom: 16 }}>Submitting music</div>
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontStretch: "125%",
+              fontSize: "clamp(28px, 3.4vw, 44px)",
+              lineHeight: 0.95,
+              letterSpacing: "-0.02em",
+              textTransform: "uppercase",
+              marginBottom: 18,
+            }}
+          >
+            What you&apos;re agreeing to
+          </h2>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              color: "var(--fg-dim)",
+              fontSize: 16,
+              lineHeight: 1.6,
+            }}
+          >
+            <p>When you upload a track to Numa Radio you confirm:</p>
+            <ul style={{ paddingLeft: 22, display: "flex", flexDirection: "column", gap: 8 }}>
+              <li>The recording and the composition are your work, or you have all rights to broadcast them.</li>
+              <li>You authorise Numa Radio to air the track on its 24/7 stream.</li>
+              <li>You can request removal at any time by emailing <a href="mailto:hello@numaradio.com" style={{ color: "var(--accent)" }}>hello@numaradio.com</a> — we&apos;ll pull it from rotation within 24 hours.</li>
+              <li>You&apos;re solely responsible for the rights status of what you submit. Numa Radio is not liable for disputes arising from material you upload that turns out not to be yours to share.</li>
+            </ul>
+            <p style={{ marginTop: 8 }}>
+              We store the audio file, your name, and your email only. The audio is removed from
+              our submission storage on approval (it moves into the broadcast catalog) or on rejection
+              (deleted). Email and name are kept on the submission record so we can reach you.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <Footer />
     </>
   );
