@@ -33,6 +33,7 @@ export type IngestInput = {
   sourceType?: TrackSourceType;
   genre?: string;
   mood?: string;
+  airingPolicy?: "library" | "request_only" | "priority_request" | "hold";
 };
 
 export type IngestResult =
@@ -126,7 +127,7 @@ export async function _ingestTrackImpl(deps: IngestDeps): Promise<IngestResult> 
             ingestedAt: new Date().toISOString(),
             ingestVersion: 3,
           },
-          airingPolicy: "library",
+          airingPolicy: input.airingPolicy ?? "library",
           safetyStatus: "approved",
           trackStatus: "processing",
         },
