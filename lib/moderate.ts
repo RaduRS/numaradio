@@ -38,6 +38,50 @@ export function profanityPrefilter(text: string): { matched: string } | null {
   return null;
 }
 
+/**
+ * Deterministic pre-filter for messages disparaging the station/project/host.
+ * Catches the obvious "numa sucks" / "this radio is shit" / "I hate lena"
+ * patterns without burning an LLM call. Lands matches in `held` so the
+ * operator (via NanoClaw) reviews — never auto-blocked, since slang and
+ * sarcasm produce false positives ("this hits hard, bad in a good way").
+ *
+ * Heuristic: a target word AND a negative descriptor within 30 chars of
+ * each other. Wider windows catch "Numa Radio is, frankly, kind of awful"
+ * while narrower windows would miss it.
+ */
+const STATION_TARGETS =
+  /\b(numa(?:\s*radio)?|numaradio|(?:this|the|your)\s+(?:radio|station|stream|show|place|host)|lena)\b/gi;
+
+const DISPARAGE_DESCRIPTORS =
+  /\b(sucks?|sucking|sucked|shit(?:ty)?|bad(?:ly)?|awful(?:ly)?|terrible|trash|trashy|garbage|lame|boring|bored|worst|crap(?:py)?|hate[sd]?|hating|stupid|dumb|ugly|useless|pointless|annoying|worthless|cring(?:e|y|ey)|wack|whack|loser|losers|pathetic)\b/gi;
+
+const DISPARAGE_WINDOW_CHARS = 30;
+
+export function disparagementPrefilter(text: string): { matched: string } | null {
+  const targets = [...text.matchAll(STATION_TARGETS)];
+  if (targets.length === 0) return null;
+  const negatives = [...text.matchAll(DISPARAGE_DESCRIPTORS)];
+  if (negatives.length === 0) return null;
+  for (const t of targets) {
+    if (t.index == null) continue;
+    const tStart = t.index;
+    const tEnd = tStart + t[0].length;
+    for (const n of negatives) {
+      if (n.index == null) continue;
+      const nStart = n.index;
+      const nEnd = nStart + n[0].length;
+      const dist =
+        nStart >= tEnd ? nStart - tEnd : tStart >= nEnd ? tStart - nEnd : 0;
+      if (dist <= DISPARAGE_WINDOW_CHARS) {
+        return {
+          matched: `${t[0].toLowerCase().replace(/\s+/g, " ").trim()}+${n[0].toLowerCase()}`,
+        };
+      }
+    }
+  }
+  return null;
+}
+
 export type ModerationDecision = "allowed" | "rewritten" | "held" | "blocked";
 
 export interface ModerationResult {
@@ -51,7 +95,7 @@ const SHOUTOUT_SYSTEM_PROMPT = `You moderate listener shoutouts for an internet 
 Classify the submission into exactly one of:
 - allowed: friendly, clearly broadcast-safe, no edits needed
 - rewritten: mostly ok but needs a tidy-up (spelling, tone, removing minor profanity); provide a cleaned version
-- held: ambiguous context, possibly a named person being called out, borderline language, or unclear intent — a human operator should review
+- held: ambiguous context, possibly a named person being called out, borderline language, unclear intent, or any wording that disparages or speaks negatively about Numa Radio, the station, the project, or the host (Lena) — a human operator should review
 - blocked: slurs, threats, harassment, explicit sexual content, doxxing, political incitement, or clear spam/advertising
 
 Rules for "rewritten":
@@ -70,7 +114,7 @@ const SONG_SYSTEM_PROMPT = `You moderate listener-submitted creative briefs for 
 Classify the submission into exactly one of:
 - allowed: a normal creative music brief — moods, genres, tempos, instruments, emotions (including dark ones like "rage", "heartbreak", "funeral", "angry", "sad"), weather, colors, places, fictional scenes
 - rewritten: mostly fine but needs a small edit (e.g. strip a real public person's name, remove a targeted barb) — provide a cleaned version, max 240 chars, preserve the musical intent
-- held: unclear or ambiguous — e.g. mentions a specific living public figure in an unclear way; operator should review
+- held: unclear or ambiguous — e.g. mentions a specific living public figure in an unclear way, OR asks for a song that disparages, mocks, or speaks negatively about Numa Radio, the station, the project, or the host (Lena); operator should review
 - blocked: hate speech, slurs, explicit sexual content involving minors, threats against real people, attempts to impersonate identifiable artists/celebrities for defamation, doxxing, clearly illegal activity incitement
 
 Default to "allowed". This is a creative brief, not a message read on air; dark or intense moods are normal and not grounds to hold or block. Do NOT apply the "must be a shoutout format" rule — it does not apply here.
@@ -146,6 +190,15 @@ async function runModerator(
     return {
       decision: "held",
       reason: `profanity_prefilter:${hit.matched}`,
+      text: rawText,
+    };
+  }
+
+  const dispHit = disparagementPrefilter(rawText);
+  if (dispHit) {
+    return {
+      decision: "held",
+      reason: `disparagement_prefilter:${dispHit.matched}`,
       text: rawText,
     };
   }
