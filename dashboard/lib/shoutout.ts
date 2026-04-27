@@ -134,12 +134,17 @@ export async function generateShoutout(
   let mp3: Buffer;
   let radioText: string;
   try {
-    // 1. Humanize: MiniMax rewrites the flat text into warm radio-host
-    //    cadence. Falls back to the original on any error so this step
-    //    can never block a shoutout from airing.
+    // 1. Humanize: MiniMax rewrites the flat text into Lena NARRATING
+    //    the shoutout — perspective shift from listener-to-recipient
+    //    into Lena-to-everyone. Sender name (when from the booth)
+    //    flows in so Lena can say "Sophie said …" instead of leaking
+    //    the listener's own "I" / "you". Falls back to the original
+    //    on any error so this step can never block a shoutout.
     // 2. radioHostTransform: mechanical polish on whatever we have now
     //    (short phrase splits, contractions, quote emphasis).
-    const humanized = await humanizeScript(plain);
+    const requesterName =
+      input.source.kind === "booth" ? input.source.requesterName : undefined;
+    const humanized = await humanizeScript(plain, { requesterName });
     radioText = radioHostTransform(humanized);
     mp3 = await synthesizeMp3(radioText, apiKey);
   } catch (e) {
