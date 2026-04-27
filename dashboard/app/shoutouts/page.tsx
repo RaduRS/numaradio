@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { fmtRelative } from "@/lib/fmt";
 import type { ShoutoutRow } from "@/lib/shoutouts";
 import type { DaemonStatusResponse } from "@/lib/types";
+import { SubmissionsPanel } from "./SubmissionsPanel";
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -765,6 +766,8 @@ export default function ShoutoutsPage() {
               )}
             </CardContent>
           </Card>
+
+      <SubmissionsPanel />
     </main>
   );
 }
