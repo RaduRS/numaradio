@@ -17,11 +17,50 @@ const HUMANIZE_MODEL = process.env.MINIMAX_HUMANIZE_MODEL ?? "MiniMax-M2.7";
 const MAX_EXPANSION_RATIO = 2.0;
 const MIN_CONTRACTION_RATIO = 0.5;
 
+// Mirrors lib/moderate.ts::profanityPrefilter from the main numaradio
+// repo. Duplicated here because the dashboard is a separate Next app
+// and doesn't import from the public site's lib. Any name containing
+// one of these gets treated as anonymous so we never let listener-
+// supplied profanity into Lena's voice via the requesterName field.
+const NAME_PROFANITY_PATTERNS: ReadonlyArray<RegExp> = [
+  /\bmotherfuck(ing|ed|er|ers|s)?\b/i,
+  /\bfuck(ing|ed|er|ers|s)?\b/i,
+  /\bbullshit\b/i,
+  /\bshit(ty|s|ting|ted|head|heads)?\b/i,
+  /\bass(es|hole|holes|wipe|wipes|hat|hats)?\b/i,
+  /\bbitch(es|ing|y)?\b/i,
+  /\bcunt(s)?\b/i,
+  /\bdick(head|s|heads)?\b/i,
+  /\bcock(sucker|suckers|s)?\b/i,
+  /\bpussy\b/i,
+  /\bbastard(s)?\b/i,
+];
+
+const ANONYMOUS_TOKENS = /^(anon|anonymous|n\/a|none|null|undefined)$/i;
+
+/**
+ * Sanitise the booth's requesterName before it reaches the humaniser.
+ * Returns null when the name is missing, profanity-laced, or an
+ * obvious "no name" placeholder — the humaniser then frames the
+ * shoutout as "A listener said …" instead of "Fuckface said …" or
+ * "Anonymous said …".
+ */
+export function sanitiseRequesterName(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().slice(0, 60);
+  if (!trimmed) return null;
+  if (ANONYMOUS_TOKENS.test(trimmed)) return null;
+  for (const re of NAME_PROFANITY_PATTERNS) {
+    if (re.test(trimmed)) return null;
+  }
+  return trimmed;
+}
+
 const SYSTEM_PROMPT = `You're rewriting a listener shoutout so Lena (the warm late-night radio host) can deliver it on air. The listener wrote a message TO someone — your job is to reframe it as Lena NARRATING the shoutout to the whole listener pool, NOT reading the listener's words verbatim.
 
 The user message you receive is formatted as:
 
-Sender: <name or anonymous>
+Sender: <name, location, or anonymous>
 Message: <the shoutout text>
 
 CRITICAL — perspective shift (the whole point of this rewrite):
@@ -30,6 +69,13 @@ The listener wrote in first person to a recipient. Lena is a third-party narrato
 - The sender's "you / your" addressed to a named recipient → that recipient's name (or "him" / "her" / "them")
 - The shoutout NEVER goes out to "you" — it goes out to the recipient by name, or "someone special" if no name is in the message.
 - Lena never says "I" or "me" — she's the host, not the sender.
+
+Sender-field interpretation — the value isn't always a clean name. Decide which it is:
+- A personal name (one or two capitalised words like "Sophie", "Alex M") → use it directly: "Sophie said …"
+- A location ("Bucharest", "From London", "London listener", "NYC") → reframe as "A listener in <place>" or "Someone in <place>": "A listener in Bucharest said …"
+- "anonymous", empty, or unclear → "A listener" / "Someone": "A listener said …"
+- A nickname / handle that reads naturally → keep it: "deadhound said …"
+Never read the literal Sender field if it doesn't make sense as a speaker (numbers, single letters, gibberish) — fall back to "A listener".
 
 Try to follow this shape:
   Line 1: This one's going out to <recipient>.   (or "Going out to <recipient>.")
@@ -124,7 +170,10 @@ export async function humanizeScript(
   const original = text.trim();
   if (!original) return text;
 
-  const senderLabel = opts.requesterName?.trim() || "anonymous";
+  // Sanitise INSIDE the humaniser so every call site is automatically
+  // protected — no chance a future caller forgets to clean the name.
+  const cleanName = sanitiseRequesterName(opts.requesterName);
+  const senderLabel = cleanName ?? "anonymous";
   const userMessage = `Sender: ${senderLabel}\nMessage: ${original}`;
 
   let res: Response;
