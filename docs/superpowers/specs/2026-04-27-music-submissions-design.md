@@ -90,7 +90,7 @@ Replace the existing "Where to send it / hello@numaradio.com / Email now" card w
 1. Generate `id` (cuid).
 2. Upload audio buffer to B2 at `submissions/<id>.mp3`.
 3. Upload artwork (if present) to B2 at `submissions/<id>.<png|jpg>`.
-4. Insert `MusicSubmission` row with status = `pending`, `audioB2Key`, `artworkB2Key` (nullable), `durationSeconds`, `vouched=true`, `ipHash`.
+4. Insert `MusicSubmission` row with status = `pending`, `audioStorageKey`, `artworkStorageKey` (nullable), `durationSeconds`, `vouched=true`, `ipHash`.
 5. Return `{ ok: true, id }`.
 
 ### Errors
@@ -121,13 +121,13 @@ model MusicSubmission {
   artistName       String
   email            String                       // lowercased + trimmed on insert
   ipHash           String                       // forensics only, never displayed
-  audioB2Key       String                       // submissions/<id>.mp3
-  artworkB2Key     String?                      // submissions/<id>.<ext>
+  audioStorageKey  String                       // submissions/<id>.mp3
+  artworkStorageKey String?                     // submissions/<id>.<ext>
   artworkSource    String?                      // "upload" | "id3" | "generated", set on approve
   durationSeconds  Int?
   airingPreference SubmissionAiringPreference   @default(one_off)
   status           SubmissionStatus             @default(pending)
-  vouched          Boolean
+  vouched          Boolean                      @default(false)
   rejectReason     String?
   trackId          String?                      // FK to Track, populated on approve
   createdAt        DateTime                     @default(now())

@@ -553,13 +553,13 @@ model MusicSubmission {
   artistName       String
   email            String
   ipHash           String
-  audioB2Key       String
-  artworkB2Key     String?
+  audioStorageKey  String
+  artworkStorageKey String?
   artworkSource    String?
   durationSeconds  Int?
   airingPreference SubmissionAiringPreference   @default(one_off)
   status           SubmissionStatus             @default(pending)
-  vouched          Boolean
+  vouched          Boolean                      @default(false)
   rejectReason     String?
   trackId          String?
   createdAt        DateTime                     @default(now())

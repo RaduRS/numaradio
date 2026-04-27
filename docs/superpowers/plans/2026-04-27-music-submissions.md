@@ -72,13 +72,13 @@ model MusicSubmission {
   artistName       String
   email            String
   ipHash           String
-  audioB2Key       String
-  artworkB2Key     String?
+  audioStorageKey       String
+  artworkStorageKey     String?
   artworkSource    String?
   durationSeconds  Int?
   airingPreference SubmissionAiringPreference   @default(one_off)
   status           SubmissionStatus             @default(pending)
-  vouched          Boolean
+  vouched          Boolean                      @default(false)
   rejectReason     String?
   trackId          String?
   createdAt        DateTime                     @default(now())
@@ -162,8 +162,8 @@ import {
   isValidName,
   sniffMp3,
   sniffImage,
-  audioB2Key,
-  artworkB2Key,
+  audioStorageKey,
+  artworkStorageKey,
 } from "./submissions.ts";
 
 test("isValidEmail accepts well-formed addresses", () => {
@@ -219,10 +219,10 @@ test("sniffImage returns null for unknown bytes", () => {
   assert.equal(sniffImage(Buffer.from([])), null);
 });
 
-test("audioB2Key + artworkB2Key produce stable paths", () => {
-  assert.equal(audioB2Key("abc123"), "submissions/abc123.mp3");
-  assert.equal(artworkB2Key("abc123", "png"), "submissions/abc123.png");
-  assert.equal(artworkB2Key("abc123", "jpeg"), "submissions/abc123.jpg");
+test("audioStorageKey + artworkStorageKey produce stable paths", () => {
+  assert.equal(audioStorageKey("abc123"), "submissions/abc123.mp3");
+  assert.equal(artworkStorageKey("abc123", "png"), "submissions/abc123.png");
+  assert.equal(artworkStorageKey("abc123", "jpeg"), "submissions/abc123.jpg");
 });
 ```
 
@@ -283,11 +283,11 @@ export function sniffImage(buf: Buffer): "png" | "jpeg" | null {
 export const MAX_AUDIO_BYTES = 10 * 1024 * 1024;  // 10 MB
 export const MAX_ARTWORK_BYTES = 2 * 1024 * 1024; //  2 MB
 
-export function audioB2Key(submissionId: string): string {
+export function audioStorageKey(submissionId: string): string {
   return `submissions/${submissionId}.mp3`;
 }
 
-export function artworkB2Key(submissionId: string, kind: "png" | "jpeg"): string {
+export function artworkStorageKey(submissionId: string, kind: "png" | "jpeg"): string {
   const ext = kind === "jpeg" ? "jpg" : "png";
   return `submissions/${submissionId}.${ext}`;
 }
@@ -579,8 +579,8 @@ import {
   normalizeName,
   sniffMp3,
   sniffImage,
-  audioB2Key,
-  artworkB2Key,
+  audioStorageKey,
+  artworkStorageKey,
   MAX_AUDIO_BYTES,
   MAX_ARTWORK_BYTES,
 } from "@/lib/submissions";
@@ -692,8 +692,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       artistName: normalizeName(name),
       email: normEmail,
       ipHash: ipHashOf(req),
-      audioB2Key: "", // filled after upload
-      artworkB2Key: null,
+      audioStorageKey: "", // filled after upload
+      artworkStorageKey: null,
       durationSeconds,
       airingPreference,
       status: "pending",
@@ -702,12 +702,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     select: { id: true },
   });
 
-  const audioKey = audioB2Key(submission.id);
+  const audioKey = audioStorageKey(submission.id);
   await putObject(audioKey, audioBuffer, { contentType: "audio/mpeg" });
 
   let artKey: string | null = null;
   if (artworkBuffer && artworkKind) {
-    artKey = artworkB2Key(submission.id, artworkKind);
+    artKey = artworkStorageKey(submission.id, artworkKind);
     await putObject(artKey, artworkBuffer, {
       contentType: artworkKind === "png" ? "image/png" : "image/jpeg",
     });
@@ -715,7 +715,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   await prisma.musicSubmission.update({
     where: { id: submission.id },
-    data: { audioB2Key: audioKey, artworkB2Key: artKey },
+    data: { audioStorageKey: audioKey, artworkStorageKey: artKey },
   });
 
   return NextResponse.json({ ok: true, id: submission.id }, { status: 200 });
@@ -758,7 +758,7 @@ Then re-run the same curl. Expected this time: `HTTP/1.1 429` with `pending_exis
 Clean up: delete that test row from the DB and the B2 file before committing.
 
 ```bash
-npx tsx -e 'import "./lib/load-env"; import { prisma } from "./lib/db"; import { deleteObject } from "./lib/storage"; (async () => { const r = await prisma.musicSubmission.findFirst({ where: { email: "test+plan@example.com" }, orderBy: { createdAt: "desc" } }); if (r) { await deleteObject(r.audioB2Key).catch(() => {}); await prisma.musicSubmission.delete({ where: { id: r.id } }); console.log("cleaned", r.id); } prisma.$disconnect(); })();'
+npx tsx -e 'import "./lib/load-env"; import { prisma } from "./lib/db"; import { deleteObject } from "./lib/storage"; (async () => { const r = await prisma.musicSubmission.findFirst({ where: { email: "test+plan@example.com" }, orderBy: { createdAt: "desc" } }); if (r) { await deleteObject(r.audioStorageKey).catch(() => {}); await prisma.musicSubmission.delete({ where: { id: r.id } }); console.log("cleaned", r.id); } prisma.$disconnect(); })();'
 ```
 
 Stop the dev server.
@@ -1212,13 +1212,13 @@ export async function GET(
   const { id } = await params;
   const submission = await prisma.musicSubmission.findUnique({
     where: { id },
-    select: { audioB2Key: true, status: true },
+    select: { audioStorageKey: true, status: true },
   });
-  if (!submission || submission.status !== "pending" || !submission.audioB2Key) {
+  if (!submission || submission.status !== "pending" || !submission.audioStorageKey) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const stream = await getObjectStream(submission.audioB2Key);
+  const stream = await getObjectStream(submission.audioStorageKey);
   return new Response(stream as unknown as BodyInit, {
     status: 200,
     headers: {
@@ -1237,7 +1237,7 @@ Expected: a function that streams an object by key.
 If `getObjectStream` doesn't exist but a buffer-returning `getObject` does, change the route to:
 
 ```ts
-const buf = await getObject(submission.audioB2Key);
+const buf = await getObject(submission.audioStorageKey);
 return new Response(buf, {
   status: 200,
   headers: { "Content-Type": "audio/mpeg", "Cache-Control": "private, no-store" },
@@ -1300,7 +1300,7 @@ export async function GET(): Promise<NextResponse> {
       select: {
         id: true, artistName: true, email: true,
         airingPreference: true, durationSeconds: true,
-        artworkB2Key: true, createdAt: true,
+        artworkStorageKey: true, createdAt: true,
       },
     }),
     prisma.musicSubmission.findMany({
@@ -1391,14 +1391,14 @@ export async function POST(
   });
 
   // Load audio
-  const audioBuffer = await getObject(submission.audioB2Key);
+  const audioBuffer = await getObject(submission.audioStorageKey);
 
   // Artwork cascade
   let artwork: { buffer: Buffer; mimeType: string } | undefined;
   let artworkSource: "upload" | "id3" | "generated" | null = null;
-  if (submission.artworkB2Key) {
-    const buf = await getObject(submission.artworkB2Key);
-    const mt = submission.artworkB2Key.endsWith(".png") ? "image/png" : "image/jpeg";
+  if (submission.artworkStorageKey) {
+    const buf = await getObject(submission.artworkStorageKey);
+    const mt = submission.artworkStorageKey.endsWith(".png") ? "image/png" : "image/jpeg";
     artwork = { buffer: buf, mimeType: mt };
     artworkSource = "upload";
   } else {
@@ -1448,9 +1448,9 @@ export async function POST(
   });
 
   // Delete originals — we copied them into the production catalog
-  await deleteObject(submission.audioB2Key).catch(() => undefined);
-  if (submission.artworkB2Key) {
-    await deleteObject(submission.artworkB2Key).catch(() => undefined);
+  await deleteObject(submission.audioStorageKey).catch(() => undefined);
+  if (submission.artworkStorageKey) {
+    await deleteObject(submission.artworkStorageKey).catch(() => undefined);
   }
 
   return NextResponse.json({ ok: true, trackId: result.trackId });
@@ -1543,9 +1543,9 @@ export async function POST(
     },
   });
 
-  await deleteObject(submission.audioB2Key).catch(() => undefined);
-  if (submission.artworkB2Key) {
-    await deleteObject(submission.artworkB2Key).catch(() => undefined);
+  await deleteObject(submission.audioStorageKey).catch(() => undefined);
+  if (submission.artworkStorageKey) {
+    await deleteObject(submission.artworkStorageKey).catch(() => undefined);
   }
 
   return NextResponse.json({ ok: true });
@@ -1600,7 +1600,7 @@ type Pending = {
   email: string;
   airingPreference: "one_off" | "permanent";
   durationSeconds: number | null;
-  artworkB2Key: string | null;
+  artworkStorageKey: string | null;
   createdAt: string;
 };
 
@@ -1730,7 +1730,7 @@ export function SubmissionsPanel() {
                 {p.airingPreference === "permanent" ? "Permanent" : "One-off"}
               </span>
               <span className="text-fg-dim">{fmtDur(p.durationSeconds)}</span>
-              {p.artworkB2Key && <span className="text-fg-dim">+ artwork</span>}
+              {p.artworkStorageKey && <span className="text-fg-dim">+ artwork</span>}
             </div>
             <audio
               src={`https://numaradio.com/api/submissions/${p.id}/audio`}
@@ -1952,7 +1952,7 @@ If any small fix landed during smoke-testing, commit + push. Otherwise this task
 **Type consistency:**
 - `airingPreference` ("one_off" / "permanent") used consistently form ↔ API ↔ DB
 - `airingPolicy` ("priority_request" / "library") mapped only at the approval boundary
-- `audioB2Key` / `artworkB2Key` field names match between spec, schema, and route code
+- `audioStorageKey` / `artworkStorageKey` field names match between spec, schema, and route code
 - `MusicSubmission` model name + relations match across schema, public route, and dashboard routes
 - Operator email header `cf-access-authenticated-user-email` used consistently in approve + reject
 
