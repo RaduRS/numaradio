@@ -73,6 +73,15 @@ const BANNED_REGEX =
 
 const CLOCK_TIME_REGEX = /\b\d{1,2}:\d{2}\s*(am|pm)?\b/i;
 
+// "X tracks into this shift" / "X songs in" / "N tracks in the books" /
+// "N tracks down" / etc. The model kept reaching for this crutch even
+// after the prompt rewrite — defence in depth: any output matching this
+// pattern gets dropped at validation, the orchestrator falls back to
+// the evergreen pool. Catches "<number-or-number-word> <track|tracks|
+// song|songs> <preposition> ..." and the "in the books" idiom.
+const TRACK_COUNT_CRUTCH_REGEX =
+  /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\s+(tracks?|songs?)\s+(in|into|down|already|deep|under)\b|\b\d+\s+(tracks?|songs?)\s+in\s+the\s+books\b/i;
+
 // Single-word numerals (no scale words). "twenty" = 20, "seven" = 7.
 const NUMBER_WORDS: Record<string, number> = {
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
@@ -193,6 +202,9 @@ export function validateContextLine(line: string, state: StationState): Validati
   if (CLOCK_TIME_REGEX.test(trimmed)) {
     return { ok: false, reason: "clock_time" };
   }
+  if (TRACK_COUNT_CRUTCH_REGEX.test(trimmed)) {
+    return { ok: false, reason: "track_count_crutch" };
+  }
   return validateNumericalClaims(trimmed, state);
 }
 
@@ -234,7 +246,13 @@ BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
 - "the universe" / "trust the process" / "you're enough"
 - "as an AI" / "as a language model" / "I'm just code"
 - ANY line that reads like a meditation app, life coach, or self-help book.
-- Avoid the lazy crutch "X tracks into this shift" / "X songs in" — it's been overused. Reach for a different angle.
+- HARD BAN — the track-count crutch. Lena has overused this and listeners have noticed. Do NOT open with or build a line around the number of tracks aired this shift. Specifically forbidden phrasings (and any rewording of them):
+  · "X tracks into this shift" / "X songs in"
+  · "X tracks in the books"
+  · "X songs already" / "X tracks already"
+  · "X tracks down" / "X songs down"
+  · any opener that's "<number> tracks/songs <preposition> <something>"
+  Track count is provided in the JSON for validation only — it is NOT a topic for tonight. Pick anything else: votes, song requests, shoutout samples, the genre on rotation, the show's character, an invitation, an observation about the wall, or a numberless vibe line.
 
 GOOD EXAMPLES (study how each one picks a DIFFERENT angle — metric, vibe, show, wall, invitation):
 - "Three of you wrote in the last ten minutes — the wall's got a shape tonight, glad you're here."
