@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav } from "../_components/Nav";
 import { Footer } from "../_components/Footer";
-import { EmailCta } from "./EmailCta";
+import { SubmitForm } from "../_components/SubmitForm";
 
 const SUBMIT_EMAIL = "hello@numaradio.com";
 
@@ -21,8 +21,8 @@ export const metadata: Metadata = {
 
 const CHECKLIST = [
   {
-    title: "A high-quality audio file",
-    body: "WAV or 320kbps MP3. Attached or on Dropbox / Drive / WeTransfer — not a streaming link.",
+    title: "An MP3 file",
+    body: "Up to 10 MB. Upload directly through the form below — no streaming links.",
   },
   {
     title: "Your name and track title",
@@ -95,7 +95,21 @@ export default function SubmitPage() {
               use the request form
             </Link>
           </p>
-          <EmailCta email={SUBMIT_EMAIL} />
+          <SubmitForm />
+          <p
+            style={{
+              marginTop: 18,
+              fontSize: 13,
+              color: "var(--fg-mute)",
+              maxWidth: 620,
+            }}
+          >
+            Or email{" "}
+            <a href={`mailto:${SUBMIT_EMAIL}`} style={{ color: "var(--accent)" }}>
+              {SUBMIT_EMAIL}
+            </a>{" "}
+            if you&apos;d rather not use the form.
+          </p>
         </div>
       </section>
 
