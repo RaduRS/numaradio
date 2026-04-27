@@ -36,6 +36,11 @@ export type NowPlayingDerived = NowPlaying & {
 
 const POLL_MS = 15_000;
 const TICK_MS = 1_000;
+// Buffer past expectedEndAt before refetching at a track boundary. Liquidsoap
+// fires on_track ~instantly when the next track starts on its end, but the
+// listener's audio is buffered ~5-10s downstream — flipping artwork right at
+// expectedEndAt would update the UI while the listener still hears the outro.
+const TRANSITION_BUFFER_MS = 3_000;
 
 const EMPTY: NowPlaying = { isPlaying: false };
 
@@ -59,6 +64,30 @@ export function seedNowPlayingCache(data: NowPlaying): void {
 }
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let abortCtrl: AbortController | null = null;
+let transitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+function clearTransitionRefetch() {
+  if (transitionTimeoutId !== null) {
+    clearTimeout(transitionTimeoutId);
+    transitionTimeoutId = null;
+  }
+}
+
+// Schedule a one-shot refetch for just after the current track is expected
+// to end. With frame-accurate durations (lib/probe-duration.ts), this lands
+// the new track's metadata within seconds of the listener actually hearing
+// it — instead of waiting up to POLL_MS for the next interval tick.
+function scheduleTransitionRefetch(data: NowPlaying) {
+  clearTransitionRefetch();
+  if (!data.startedAt || !data.durationSeconds) return;
+  const startMs = new Date(data.startedAt).getTime();
+  const delayMs = startMs + data.durationSeconds * 1000 + TRANSITION_BUFFER_MS - Date.now();
+  if (delayMs <= 0) return;
+  transitionTimeoutId = setTimeout(() => {
+    transitionTimeoutId = null;
+    poll();
+  }, delayMs);
+}
 
 async function poll() {
   if (!abortCtrl) return;
@@ -71,6 +100,7 @@ async function poll() {
     const json = (await r.json()) as NowPlaying;
     cachedData = json;
     for (const sub of subscribers) sub(json);
+    scheduleTransitionRefetch(json);
   } catch {
     /* keep previous */
   }
@@ -92,6 +122,7 @@ function stopPolling() {
     abortCtrl.abort();
     abortCtrl = null;
   }
+  clearTransitionRefetch();
 }
 
 export function useNowPlaying(): NowPlayingDerived {
@@ -119,6 +150,10 @@ export function useNowPlaying(): NowPlayingDerived {
     elapsedSeconds = Math.max(0, (now - startMs) / 1000);
     if (data.durationSeconds > 0) {
       progress = Math.min(1, elapsedSeconds / data.durationSeconds);
+      // Cap elapsed at the total so the time label never reads "3:40 / 3:20"
+      // when Liquidsoap holds a track a few seconds past its expected end
+      // (or when the cached duration is short of the actual file length).
+      elapsedSeconds = Math.min(elapsedSeconds, data.durationSeconds);
     }
   }
 
