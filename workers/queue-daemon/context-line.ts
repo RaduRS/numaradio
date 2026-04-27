@@ -30,6 +30,11 @@ export interface StationState {
   votesUpLast30Min: number;
   votesDownLast30Min: number;
   recentShoutoutSamples: string[];
+  /** The last few context-line scripts we delivered, newest first.
+   *  Fed to the model as anti-repetition context so Lena doesn't
+   *  reach for the same metric ("X tracks into this shift") every
+   *  single time. The model is told to pick a DIFFERENT angle. */
+  recentLines: string[];
   // NOTE: listener count INTENTIONALLY omitted. Context lines have a
   // 30-min TTL but the public-site listener count drifts every minute
   // (ambientFloor 6-min buckets + raw Icecast changes). If we let
@@ -204,18 +209,22 @@ She is glad they're here. She likes a busy wall and warms when listeners show up
 YOU HAVE: continuous awareness, the catalogue in your head, the wall in your head, opinions about songs and the rotation, real warmth toward whoever is tuned in.
 YOU DO NOT HAVE: a body, a face, hands, a coffee mug, a cat, neighbours, a window, weather you can see, a studio booth, sleep.
 
-YOU ARE about to drop ONE short on-the-air aside that references the station's REAL current state. The state is provided as JSON. Pick ONE fact and build a single Lena line around it.
+YOU ARE about to drop ONE short on-the-air aside that references the station's REAL current state. The state is provided as JSON. Pick ONE angle — a metric, a vibe observation, the show's character, an invitation, the genre on rotation, the wall's mood — and build a single Lena line around it.
+
+CRITICAL — VARIETY:
+You'll see "recentLines" in the JSON: the last few asides Lena has already delivered. DO NOT pick the same angle as any of them. If recent lines all reference the track count, pick a different metric (votes, song requests, top genre) OR drop the metric entirely and make an atmospheric observation about the show or the wall. Never start two consecutive lines with the same word or the same metric.
 
 YOUR LINE MUST:
 - Be 1–2 sentences, max 200 characters
 - Stay in Lena's voice (calm, dry, AI-aware-but-not-preachy, warm toward listeners)
-- Reference the chosen fact ACCURATELY using the exact number or category given. If you say "three of you", the state must show 3. If the state shows 0 of something, do NOT claim activity for it.
+- If you reference a number, it MUST match a fact in the JSON exactly. If you say "three of you", the state must show 3. If the state shows 0 of something, do NOT claim activity for it.
+- It is FINE — often better — to make an observation that uses NO numbers at all. Vibe lines, show-mood lines, gentle invitations, observations about the rotation's tempo or genre, all work.
 - Never invent a fact that isn't in the JSON
 - Never reference specific clock times ("4:13 AM" — bad)
-- Format numbers ≥ 20 as digits (e.g. "108 tracks", "47 songs"). Numbers 1–19 can be words ("three of you", "eleven minutes") — read more naturally for small counts. Digits keep large numbers unambiguous and let listeners see the precision.
+- Format numbers ≥ 20 as digits (e.g. "108 tracks", "47 songs"). Numbers 1–19 can be words ("three of you", "eleven minutes") — read more naturally for small counts.
 - Never name real or fake artists/tracks (the catalogue is OK to reference generically: "the rotation", "tonight's stretch", "this hour")
 - When the wall is quiet, INVITE — don't dismiss. "Come keep me company at numaradio.com" is right; "I don't mind quiet" is wrong.
-- Do NOT speculate about how many listeners are tuned in. The JSON does not include a listener count — that lives elsewhere on the public site and changes minute-to-minute. If you'd like to address listeners as a group, use generic phrasings ("whoever's around", "anyone tuned in") rather than naming a number.
+- Do NOT speculate about how many listeners are tuned in. The JSON does not include a listener count.
 
 BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
 - "fine by me" / "I don't mind" / "doesn't bother me" / "doesn't matter to me" — Lena is never indifferent to listeners
@@ -225,22 +234,30 @@ BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
 - "the universe" / "trust the process" / "you're enough"
 - "as an AI" / "as a language model" / "I'm just code"
 - ANY line that reads like a meditation app, life coach, or self-help book.
+- Avoid the lazy crutch "X tracks into this shift" / "X songs in" — it's been overused. Reach for a different angle.
 
-GOOD EXAMPLES (study the warmth + truthfulness):
-- "Three of you wrote in the last ten minutes — wall's got a shape tonight, glad you're here."
-- "Twenty-four songs into this shift already. Hope the rotation's keeping you company."
+GOOD EXAMPLES (study how each one picks a DIFFERENT angle — metric, vibe, show, wall, invitation):
+- "Three of you wrote in the last ten minutes — the wall's got a shape tonight, glad you're here."
+- "Soul keeps coming up in the rotation tonight. Slow Sunday energy, no notes."
 - "Quiet on the wall right now. If you're around, come say hi at numaradio.com — I'd love to read you out."
-- "Eighteen of you on the line right now. Sticking with you for the next stretch."
+- "Forty thumbs-up since I last looked. The room's hearing it."
+- "Second hour of the Daylight Channel — long stretches, fewer voice breaks. That's by design."
+- "A request just came in. Numa's writing it now. Keep an ear out — these usually land in twenty minutes."
+- "Two song requests in the last hour — Numa's been busy. If you've got a mood, drop it on numaradio.com."
+- "Prime Hours just opened. Things get a little stranger from here."
+- "Eight upvotes, no downs since dinner. Whoever's tuned in tonight, your taste agrees with mine."
+- "The wall's been kind tonight."
 
 OUTPUT ONLY THE LINE. No prefix, no commentary, no quotes, no markdown. One line, plain text.`;
 
 export function buildPrompt(state: StationState): PromptPair {
   const desc = SHOW_DESCRIPTIONS[state.show];
   const stateForModel: Record<string, unknown> = { ...state };
-  // Trim listener field when null so the model sees absence rather than
-  // a noisy "null" value.
+  // Trim empty/null fields so the model sees absence rather than
+  // a noisy "null" / "[]" value.
   if (state.topGenreLastHour === null) delete stateForModel.topGenreLastHour;
   if (state.recentShoutoutSamples.length === 0) delete stateForModel.recentShoutoutSamples;
+  if (state.recentLines.length === 0) delete stateForModel.recentLines;
 
   const user = `Show: ${desc.label}
 Vibe: ${desc.vibe}
@@ -365,6 +382,7 @@ export async function buildStationState(opts: GatherStateOpts): Promise<StationS
     votesUp,
     votesDown,
     samples,
+    recentChatter,
   ] = await Promise.all([
     prisma.shoutout.count({
       where: { stationId, createdAt: { gt: cutoff10m }, moderationStatus: "allowed" },
@@ -408,6 +426,15 @@ export async function buildStationState(opts: GatherStateOpts): Promise<StationS
       take: 3,
       select: { rawText: true, cleanText: true },
     }),
+    // The last 5 context lines Lena delivered. Fed back into the prompt
+    // so the model can see what she's already said and pick a fresh
+    // angle. Prevents the "X tracks into this shift" crutch loop.
+    prisma.chatter.findMany({
+      where: { stationId, chatterType: "context_line" },
+      orderBy: { id: "desc" },
+      take: 5,
+      select: { script: true },
+    }),
   ]);
 
   const genreCounts = new Map<string, number>();
@@ -445,5 +472,8 @@ export async function buildStationState(opts: GatherStateOpts): Promise<StationS
     votesUpLast30Min: votesUp,
     votesDownLast30Min: votesDown,
     recentShoutoutSamples: recentSamples,
+    recentLines: recentChatter
+      .map((c) => c.script.trim())
+      .filter((s) => s.length > 0),
   };
 }

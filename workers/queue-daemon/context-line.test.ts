@@ -25,6 +25,7 @@ const baseState: StationState = {
   votesUpLast30Min: 8,
   votesDownLast30Min: 1,
   recentShoutoutSamples: ["happy birthday to my mum", "rainy lisbon vibe"],
+  recentLines: [],
 };
 
 // ─── extractNumericalClaims ─────────────────────────────────────────
