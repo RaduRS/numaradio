@@ -1,2 +1,2 @@
 export { storageKeys, publicUrl } from "./keys.ts";
-export { s3, bucket, putObject, deleteObject, objectExists } from "./client.ts";
+export { s3, bucket, putObject, deleteObject, objectExists, getObject } from "./client.ts";

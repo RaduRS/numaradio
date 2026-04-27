@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
+  GetObjectCommand,
 } from "@aws-sdk/client-s3";
 
 function getEnv(name: string): string {
@@ -63,4 +64,24 @@ export async function objectExists(key: string): Promise<boolean> {
       return false;
     throw err;
   }
+}
+
+/**
+ * Read an object from B2 as a Buffer. Used by the dashboard approve
+ * flow (which feeds the buffer to ingestTrack) and by the audio-preview
+ * proxy route. For very large objects this loads the whole body into
+ * memory — fine for our 10MB submission cap, would need streaming for
+ * larger payloads.
+ */
+export async function getObject(key: string): Promise<Buffer> {
+  const res = await s3().send(
+    new GetObjectCommand({ Bucket: bucket(), Key: key }),
+  );
+  if (!res.Body) throw new Error(`empty body for ${key}`);
+  // Body is a Readable stream in Node — collect into a Buffer
+  const chunks: Buffer[] = [];
+  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
