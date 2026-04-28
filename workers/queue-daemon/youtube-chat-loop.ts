@@ -36,14 +36,27 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 /** Min/max length we'll accept. Matches the booth's bounds so the
- *  moderator sees the same shape of input regardless of source. */
+ *  moderator sees the same shape of input regardless of source.
+ *  Length is measured AFTER stripping the trigger mention. */
 const MIN_TEXT = 4;
 const MAX_TEXT = 240;
+
+/** Trigger pattern. Listeners who want their message aired type a
+ *  mention — it filters out chatter, drops noise, and signals intent.
+ *  Configurable via env (`YOUTUBE_CHAT_TRIGGER_PATTERN`) for future
+ *  tweaking. Word boundaries around `@lena` so "@lena's" still works
+ *  but "calendar" doesn't trigger by accident. */
+const DEFAULT_TRIGGER = /@lena\b/i;
 
 // ─── Types ───────────────────────────────────────────────────────────
 
 export type DispatchResult =
-  | { ok: true; status: "queued" | "held" | "blocked"; shoutoutId?: string }
+  | {
+      ok: true;
+      status: "queued" | "held" | "blocked" | "filtered";
+      shoutoutId?: string;
+      reason?: string;
+    }
   | { ok: false; reason: string };
 
 export interface YoutubeChatLoopOpts {
@@ -63,6 +76,10 @@ export interface YoutubeChatLoopOpts {
   client?: YoutubeChatClient;
   /** Logger hook — defaults to console. */
   log?: (level: "info" | "warn" | "error", msg: string) => void;
+  /** Trigger pattern that messages must contain to be considered.
+   *  Defaults to `/@lena\b/i`. Set null to disable (every message
+   *  becomes a candidate). */
+  triggerPattern?: RegExp | null;
 }
 
 export interface YoutubeChatLoop {
@@ -82,6 +99,7 @@ export interface TickResult {
   skippedOwner: number;
   skippedRateLimit: number;
   skippedLength: number;
+  skippedNoTrigger: number;
   failed: number;
 }
 
@@ -101,6 +119,8 @@ export function createYoutubeChatLoop(
   const fetcher = opts.fetcher ?? fetch;
   const now = opts.now ?? Date.now;
   const log = opts.log ?? ((level, msg) => console[level === "info" ? "log" : level](`[yt-chat] ${msg}`));
+  const triggerPattern =
+    opts.triggerPattern === undefined ? DEFAULT_TRIGGER : opts.triggerPattern;
   const client =
     opts.client ??
     createYoutubeChatClient({
@@ -161,8 +181,9 @@ export function createYoutubeChatLoop(
       }
       const j = (await r.json()) as {
         ok?: boolean;
-        status?: "queued" | "held" | "blocked";
+        status?: "queued" | "held" | "blocked" | "filtered";
         shoutoutId?: string;
+        reason?: string;
         error?: string;
       };
       if (!j.ok) return { ok: false, reason: j.error ?? "endpoint refused" };
@@ -170,6 +191,7 @@ export function createYoutubeChatLoop(
         ok: true,
         status: j.status ?? "queued",
         shoutoutId: j.shoutoutId,
+        reason: j.reason,
       };
     } catch (e) {
       return {
@@ -188,6 +210,7 @@ export function createYoutubeChatLoop(
       skippedOwner: 0,
       skippedRateLimit: 0,
       skippedLength: 0,
+      skippedNoTrigger: 0,
       failed: 0,
     };
 
@@ -231,14 +254,27 @@ export function createYoutubeChatLoop(
         result.skippedOwner += 1;
         continue;
       }
-      // Filter 2: length bounds — too short = noise, too long = will
-      // get rejected by booth's max anyway.
-      const trimmed = msg.text.trim();
+      // Filter 2: trigger word. Listeners signal intent by mentioning
+      // Lena (e.g. "@lena shoutout to Marek"). Drops the firehose of
+      // chat-as-chat down to a much smaller stream of "I want this
+      // aired" messages. Strip the mention before forwarding so the
+      // moderator + radio-host rewrite see clean text.
+      let trimmed = msg.text.trim();
+      if (triggerPattern) {
+        if (!triggerPattern.test(trimmed)) {
+          result.skippedNoTrigger += 1;
+          continue;
+        }
+        trimmed = trimmed.replace(triggerPattern, "").replace(/\s+/g, " ").trim();
+      }
+      // Filter 3: length bounds — too short = noise, too long = will
+      // get rejected by booth's max anyway. Run AFTER trigger strip so
+      // a message that's only "@lena" doesn't sneak through.
       if (trimmed.length < MIN_TEXT || trimmed.length > MAX_TEXT) {
         result.skippedLength += 1;
         continue;
       }
-      // Filter 3: per-author rate limit. Done here (not server-side)
+      // Filter 4: per-author rate limit. Done here (not server-side)
       // because YouTube authors don't have an IP, and we don't want
       // every authored message to pay the moderation API cost.
       if (!rateLimitOk(msg.authorChannelId)) {
@@ -246,7 +282,9 @@ export function createYoutubeChatLoop(
         continue;
       }
 
-      const dispatchResult = await dispatch(msg);
+      // Forward the trigger-stripped text instead of the raw message.
+      const cleanedMsg = { ...msg, text: trimmed };
+      const dispatchResult = await dispatch(cleanedMsg);
       if (dispatchResult.ok) {
         result.dispatched += 1;
         totalDispatched += 1;

@@ -15,6 +15,7 @@
 import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { moderateShoutout } from "@/lib/moderate";
+import { classifyShoutoutIntent } from "@/lib/classify-shoutout-intent";
 import { internalAuthOk } from "@/lib/internal-auth";
 
 export const dynamic = "force-dynamic";
@@ -115,6 +116,19 @@ export async function POST(req: Request): Promise<NextResponse> {
       { ok: false, error: "station not configured" },
       { status: 500 },
     );
+  }
+
+  // YouTube-specific intent filter — separates "real shoutout" from
+  // "lol"/"first"/"hi". Booth submissions skip this (the form itself
+  // self-selects for intent). Fail-open: if the classifier can't
+  // decide, fall through to moderation as if it said worthy.
+  const intent = await classifyShoutoutIntent(rawText);
+  if (!intent.worthy) {
+    return NextResponse.json({
+      ok: true,
+      status: "filtered",
+      reason: intent.reason,
+    });
   }
 
   const moderation = await moderateShoutout(rawText);
