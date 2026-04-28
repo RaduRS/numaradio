@@ -652,57 +652,10 @@ html[data-broadcast] body {
   pointer-events: none;
 }
 
-/* Time-of-day tint — a top-of-frame coloured wash that bleeds down
-   into transparency. The previous mix-blend-mode: soft-light values
-   were nearly invisible against the near-black backdrop; this is
-   straight alpha compositing at a high enough opacity to actually
-   read as colour while staying behind all content (z-index: 2,
-   below the booth at z-index: 8). */
-.bcast-stage::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  /* default fallback when no time-of-day attribute matches */
-  background: transparent;
-}
-.bcast-stage[data-tod="late night"]::before,
-.bcast-stage[data-tod="night"]::before {
-  background: linear-gradient(
-    180deg,
-    rgba(60, 100, 180, 0.32) 0%,
-    rgba(40, 70, 140, 0.20) 35%,
-    rgba(20, 30, 60, 0.08) 70%,
-    transparent 100%
-  );
-}
-.bcast-stage[data-tod="morning"]::before {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 170, 90, 0.40) 0%,
-    rgba(255, 130, 70, 0.22) 35%,
-    rgba(200, 90, 50, 0.10) 70%,
-    transparent 100%
-  );
-}
-.bcast-stage[data-tod="afternoon"]::before {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 200, 130, 0.22) 0%,
-    rgba(220, 180, 110, 0.12) 50%,
-    transparent 100%
-  );
-}
-.bcast-stage[data-tod="evening"]::before {
-  background: linear-gradient(
-    180deg,
-    rgba(220, 90, 140, 0.36) 0%,
-    rgba(180, 60, 120, 0.22) 35%,
-    rgba(110, 40, 90, 0.10) 70%,
-    transparent 100%
-  );
-}
+/* Time-of-day expression lives on the show-name text gradient
+   (see .bcast-show-name below) — keeping the background neutral
+   preserves the dark-teal brand and lets the booth content read
+   without any colour-cast competing for attention. */
 
 /* Drifting glow behind the stage — slow, ambient, never distracting. */
 .bcast-glow {
@@ -823,14 +776,96 @@ html[data-broadcast] body {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(79, 209, 197, 0.45), transparent);
 }
+/* Show name carries the time-of-day mood via an animated gradient
+   sweep — the only place colour-cast lives now. background-size 200%
+   plus a slow background-position shift produces the "shine moving
+   across the letters" effect. Each time-of-day picks a palette that
+   harmonises with the brand teal: dawn warm, day gold-teal, dusk
+   pink-purple, night purple-blue, late-night brand cyan. */
 .bcast-show-name {
   font-family: var(--font-display);
-  font-weight: 700;
-  font-stretch: 110%;
-  font-size: 1.5cqw;
-  letter-spacing: 0.06em;
+  font-weight: 800;
+  font-stretch: 115%;
+  font-size: 1.7cqw;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--fg);
+  /* Default — neutral fallback if data-tod missing. */
+  background-image: linear-gradient(
+    90deg,
+    var(--fg) 0%,
+    var(--fg) 50%,
+    var(--fg) 100%
+  );
+  background-size: 200% 100%;
+  background-position: 0% 50%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: bcast-name-shimmer 8s linear infinite;
+  /* The clip+transparent pair sometimes leaves a hairline anti-alias
+     edge in the wrong colour; explicit hyphens off to dodge that. */
+  -webkit-text-stroke: 0;
+}
+@keyframes bcast-name-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bcast-show-name { animation: none; background-position: 50% 50%; }
+}
+
+/* Time-of-day palettes for the show name. Each gradient repeats the
+   start colour at the end so the shimmer loops seamlessly. */
+.bcast-stage[data-tod="morning"] .bcast-show-name {
+  background-image: linear-gradient(
+    90deg,
+    #FFB575 0%,
+    #FFD89E 25%,
+    #FFE9C2 50%,
+    #FFD89E 75%,
+    #FFB575 100%
+  );
+}
+.bcast-stage[data-tod="afternoon"] .bcast-show-name {
+  background-image: linear-gradient(
+    90deg,
+    #FFD580 0%,
+    #FFE9B0 25%,
+    var(--accent) 50%,
+    #FFE9B0 75%,
+    #FFD580 100%
+  );
+}
+.bcast-stage[data-tod="evening"] .bcast-show-name {
+  background-image: linear-gradient(
+    90deg,
+    #FF8FB1 0%,
+    #C792F0 25%,
+    #8FA8FF 50%,
+    #C792F0 75%,
+    #FF8FB1 100%
+  );
+}
+.bcast-stage[data-tod="night"] .bcast-show-name {
+  background-image: linear-gradient(
+    90deg,
+    #8FA8FF 0%,
+    #B79DFF 25%,
+    #C792F0 50%,
+    #B79DFF 75%,
+    #8FA8FF 100%
+  );
+}
+.bcast-stage[data-tod="late night"] .bcast-show-name {
+  background-image: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    #7CC5FF 25%,
+    #B79DFF 50%,
+    #7CC5FF 75%,
+    var(--accent) 100%
+  );
 }
 .bcast-show-time {
   font-family: var(--font-mono);
