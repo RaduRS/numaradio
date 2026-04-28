@@ -669,7 +669,7 @@ html[data-broadcast] body {
   background:
     radial-gradient(circle at 30% 70%, rgba(79, 209, 197, 0.10), transparent 35%),
     radial-gradient(circle at 70% 25%, rgba(79, 209, 197, 0.07), transparent 40%);
-  filter: blur(20px);
+  filter: blur(35px);
   animation: bcast-glow-drift 60s ease-in-out infinite alternate;
 }
 @keyframes bcast-glow-drift {
@@ -708,7 +708,7 @@ html[data-broadcast] body {
   inset: 0;
   z-index: 7;
   pointer-events: none;
-  opacity: 0.03;
+  opacity: 0.05;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   background-size: 160px 160px;
   animation: bcast-grain-shift 0.8s steps(2) infinite;
