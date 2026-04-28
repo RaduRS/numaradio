@@ -128,6 +128,89 @@ their commercial API terms. Both safe to broadcast.
 
 ---
 
+## 2026-04-28 — Dashboard YouTube health card (PR 3) — CODE READY, NEEDS OAUTH
+
+A new `YoutubeCard` on the operator dashboard reads YouTube Data API
+v3 every 30s and shows: stream state pill (LIVE / DEGRADED / NO INGEST
+/ READY / OFF AIR / API ERROR), concurrent viewer count, broadcast
+title, watch + Studio links. The card sits between BandwidthPill and
+HeldShoutoutsCard on `/`.
+
+**Files added:**
+- `dashboard/lib/youtube.ts` — OAuth refresh-token flow, `fetchYoutubeSnapshot()`
+  with 30s in-process cache. Quota cost: 3 units per snapshot
+  (broadcasts.list + streams.list + videos.list). At 30s polling that's
+  ~8.6k units/day — under the 10k default quota with headroom for any
+  other YouTube calls we add later.
+- `dashboard/app/api/youtube/health/route.ts` — GET endpoint, `force-dynamic`,
+  returns the snapshot JSON.
+- `dashboard/components/youtube-card.tsx` — pill + viewers + title + links.
+- `dashboard/app/page.tsx` — wired in.
+
+**One-time OAuth setup** (do this once; the refresh token never
+expires unless you revoke it in your Google Account):
+
+1. **Create a Google Cloud project + enable the YouTube Data API v3**:
+   - <https://console.cloud.google.com> → New Project (or reuse one).
+   - APIs & Services → Library → search "YouTube Data API v3" → Enable.
+
+2. **Configure the OAuth consent screen**:
+   - APIs & Services → OAuth consent screen → External → fill the
+     minimum fields (app name "Numa Radio Dashboard", support email,
+     dev email).
+   - Scopes: add `https://www.googleapis.com/auth/youtube.readonly`.
+   - Test users: add the Google account that owns the @numaradio
+     YouTube channel.
+
+3. **Create OAuth 2.0 Client ID credentials** (Web application type):
+   - APIs & Services → Credentials → Create Credentials → OAuth client ID.
+   - Application type: **Web application**.
+   - Authorised redirect URIs: add
+     `https://developers.google.com/oauthplayground` (only used for the
+     one-time refresh-token grab below).
+   - Save. Note the **Client ID** and **Client Secret**.
+
+4. **Get a refresh token via the OAuth Playground**:
+   - <https://developers.google.com/oauthplayground/>
+   - Top right ⚙ → "Use your own OAuth credentials" → paste the
+     Client ID + Client Secret from step 3. Tick "Force prompt".
+   - Step 1 (Select & authorize APIs): in the input box at the
+     bottom of the long list, type
+     `https://www.googleapis.com/auth/youtube.readonly` and click
+     "Authorize APIs". Sign in with the @numaradio channel's Google
+     account.
+   - Step 2 (Exchange authorization code for tokens) → click the
+     button. Copy the **Refresh token** that appears on the right.
+
+5. **Add the three secrets to Vercel** (Project → Settings → Environment
+   Variables, scope: Production + Preview):
+   ```
+   YOUTUBE_OAUTH_CLIENT_ID       <client id from step 3>
+   YOUTUBE_OAUTH_CLIENT_SECRET   <client secret from step 3>
+   YOUTUBE_OAUTH_REFRESH_TOKEN   <refresh token from step 4>
+   ```
+   Redeploy or push a commit so the new env reaches the dashboard.
+
+**Without these env vars**, the card renders "API ERROR" with a tooltip
+saying "missing YOUTUBE_OAUTH_*". Until then everything else on the
+dashboard keeps working — the route is isolated.
+
+**Verify after env is set:**
+- Open `dashboard.numaradio.com/` → the YouTube card shows a pill.
+- With the encoder offline: state should be `OFF AIR` (or `READY` if
+  you have a scheduled stream).
+- Once the encoder is pushing: pill flips to `LIVE · GOOD` within
+  30-60 s, viewer count populates within 1-2 minutes (YouTube
+  suppresses very low values).
+
+**Quota:** the API console at
+<https://console.cloud.google.com/apis/dashboard> shows live usage.
+If you ever blow through 10k/day, request a quota bump (free, 2-3
+weeks turnaround) or back the polling off to 60s in
+`dashboard/app/page.tsx` (drops daily cost to ~4.3k).
+
+---
+
 ## 2026-04-26 (evening) — Lena Tier 2.5 + content-pipeline polish — LIVE
 
 A long session. Multiple connected ships:
