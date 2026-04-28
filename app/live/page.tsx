@@ -1,0 +1,21 @@
+import type { Metadata } from "next";
+import { BroadcastStage } from "../_components/BroadcastStage";
+
+export const metadata: Metadata = {
+  title: "Numa Radio · 24/7 Live",
+  description:
+    "Live YouTube broadcast stage — same booth, full bleed, always on.",
+  alternates: { canonical: "/live" },
+  // No need to be indexed; the YouTube watch page is the public surface.
+  robots: { index: false, follow: false },
+};
+
+export default async function LivePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ broadcast?: string }>;
+}) {
+  const params = await searchParams;
+  const isBroadcast = params.broadcast === "1";
+  return <BroadcastStage broadcast={isBroadcast} />;
+}

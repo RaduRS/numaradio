@@ -27,7 +27,9 @@ export function MiniPlayer() {
   // it, otherwise the two players overlap. On every other route the
   // mini-player is the only controls on screen, so show it straight away.
   const isHome = pathname === "/";
-  const show = isHome ? scrolled : true;
+  const isBroadcast = pathname === "/live";
+  const show = isBroadcast ? false : isHome ? scrolled : true;
+  if (isBroadcast) return null;
 
   return (
     <div

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { getSessionId } from "./session-id";
 
 const HEARTBEAT_MS = 30_000;
@@ -11,7 +12,14 @@ const HEARTBEAT_MS = 30_000;
 // visible, so the dashboard can count live visitors without tracking
 // anyone.
 export function PresenceHeartbeat() {
+  const pathname = usePathname();
+  // The /live broadcast page is hit by the headless YouTube encoder. We
+  // don't want that single Chromium tab inflating the visitor count
+  // forever.
+  const isBroadcast = pathname === "/live";
+
   useEffect(() => {
+    if (isBroadcast) return;
     let cancelled = false;
     let timeoutId: number | null = null;
 
@@ -56,7 +64,7 @@ export function PresenceHeartbeat() {
       if (timeoutId !== null) clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+  }, [isBroadcast]);
 
   return null;
 }

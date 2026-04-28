@@ -561,3 +561,238 @@
   color: var(--fg-mute);
   letter-spacing: 0.1em;
 }
+
+/* ============================================================
+   YouTube broadcast stage — /live (and /live?broadcast=1)
+   Reuses ExpandedPlayerDesktop's booth and overlays it with
+   broadcast-only chrome (ON AIR, listeners, REQUEST CTA).
+   ============================================================ */
+
+/* Encoder runs Chromium at exactly 1920x1080. Body fills it edge-to-edge,
+   no scroll, no cursor. Preview mode (?broadcast absent) keeps a normal
+   body so a developer can scroll/inspect. */
+html[data-broadcast="encoder"],
+html[data-broadcast="encoder"] body.broadcast-body {
+  margin: 0;
+  padding: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  cursor: none;
+}
+
+/* The stage frame. Fixed 1920x1080 — Chromium is sized to match, so
+   nothing overflows. In preview mode the user might scroll if their
+   viewport is smaller, that's fine; the fullscreen button is right there. */
+.broadcast-stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  background: linear-gradient(180deg, #0A0D0E 0%, #14181D 100%);
+  overflow: hidden;
+  font-size: 1.25em; /* TV / phone-distance legibility bump */
+}
+
+/* In preview mode, center the stage in the viewport and scale to fit
+   so a normal laptop screen shows the whole thing without scrolling. */
+html[data-broadcast="preview"] body.broadcast-body {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  background: #050708;
+  overflow: hidden;
+}
+html[data-broadcast="preview"] .broadcast-stage {
+  /* CSS-only fit: scale the 1920x1080 box down to the viewport with
+     aspect-ratio preserved, anchored at the center. */
+  transform-origin: center center;
+  transform: scale(min(calc(100vw / 1920), calc(100vh / 1080)));
+}
+
+/* Booth wrapper — full bleed inside the stage, behind chrome overlays. */
+.bs-booth-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+/* The reused ExpandedPlayerDesktop renders inside a fake ep-root.open +
+   ep-shell. We need the shell to be flush against the stage (no inset,
+   no border), and we don't want the morph/transitions kicking in here. */
+.broadcast-stage .ep-shell {
+  transition: none !important;
+  transform: none !important;
+}
+.broadcast-stage .ep-shell > * {
+  opacity: 1 !important;
+  transition: none !important;
+}
+/* Booth grid: leave breathing room top + bottom for the chrome bars. */
+.broadcast-stage .ep-booth {
+  padding: 96px 56px 120px;
+  gap: 40px;
+}
+/* Make the artwork bigger on the broadcast — lots of viewport real estate. */
+.broadcast-stage .ep-booth-art,
+.broadcast-stage .ep-booth-left .wave-wrap {
+  width: 80%;
+  max-width: 560px;
+}
+.broadcast-stage .ep-booth-title {
+  font-size: 40px;
+}
+.broadcast-stage .ep-booth-artist {
+  font-size: 14px;
+}
+.broadcast-stage .ep-booth-lena {
+  width: 80%;
+  max-width: 640px;
+}
+.broadcast-stage .ep-booth-lena .quote {
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+/* Strip-outs: interactive controls that make no sense on a one-way
+   broadcast (viewers can't click). Encoder mode is firm; preview mode
+   keeps the same look so what you see is what gets broadcast. */
+.broadcast-stage .ep-controls .btn-play,
+.broadcast-stage .ep-controls .vol,
+.broadcast-stage .ep-art-share,
+.broadcast-stage .ep-art-vote {
+  display: none !important;
+}
+.broadcast-stage .ep-controls {
+  justify-content: center;
+}
+
+/* ON AIR pill, top-left */
+.bs-onair {
+  position: absolute;
+  top: 28px;
+  left: 32px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: rgba(229, 62, 62, 0.12);
+  border: 1px solid rgba(229, 62, 62, 0.4);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #FF6B6B;
+}
+.bs-onair-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #FF4F4F;
+  box-shadow: 0 0 12px rgba(255, 79, 79, 0.7);
+  animation: bs-pulse 1.4s ease-in-out infinite;
+}
+@keyframes bs-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bs-onair-dot { animation: none; }
+}
+
+/* Top-right cluster: wordmark + listener pill */
+.bs-topright {
+  position: absolute;
+  top: 28px;
+  right: 32px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+}
+.bs-wordmark {
+  /* Matches Nav's wordmark sizing on the public site. */
+  font-size: 18px;
+  opacity: 0.85;
+}
+.bs-listeners {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(79, 209, 197, 0.08);
+  border: 1px solid rgba(79, 209, 197, 0.3);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.bs-listeners-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(79, 209, 197, 0.6);
+}
+
+/* Bottom CTA strip — the whole point of the broadcast. */
+.bs-cta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 20px 40px 28px;
+  background: linear-gradient(180deg, rgba(10, 13, 14, 0) 0%, rgba(10, 13, 14, 0.85) 60%, rgba(10, 13, 14, 0.95) 100%);
+  text-align: center;
+}
+.bs-cta-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.bs-cta-line {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+.bs-cta-line strong {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+/* Fullscreen toggle (preview only). */
+.bs-fullscreen {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 20;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--fg);
+  font-size: 22px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+  transition: background 160ms ease, transform 160ms ease;
+}
+.bs-fullscreen:hover {
+  background: rgba(0, 0, 0, 0.75);
+  transform: scale(1.05);
+}
+html[data-broadcast="encoder"] .bs-fullscreen {
+  display: none;
+}
