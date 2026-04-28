@@ -652,50 +652,56 @@ html[data-broadcast] body {
   pointer-events: none;
 }
 
-/* Time-of-day tint — visible-but-not-loud hue shift over the dark
-   base. The previous values (8-15deg hue, 0.95-1.05 brightness) were
-   so subtle they were essentially invisible to most viewers. New
-   values: bigger hue swings + a saturated colour overlay so morning
-   actually FEELS warm, late night actually FEELS cool. */
-.bcast-stage[data-tod="late night"] .bcast-bg,
-.bcast-stage[data-tod="night"] .bcast-bg {
-  filter: hue-rotate(-30deg) saturate(1.4) brightness(0.88);
+/* Time-of-day tint — a top-of-frame coloured wash that bleeds down
+   into transparency. The previous mix-blend-mode: soft-light values
+   were nearly invisible against the near-black backdrop; this is
+   straight alpha compositing at a high enough opacity to actually
+   read as colour while staying behind all content (z-index: 2,
+   below the booth at z-index: 8). */
+.bcast-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  /* default fallback when no time-of-day attribute matches */
+  background: transparent;
 }
 .bcast-stage[data-tod="late night"]::before,
 .bcast-stage[data-tod="night"]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(180deg, rgba(40, 60, 110, 0.18) 0%, rgba(20, 30, 60, 0.14) 100%);
-  pointer-events: none;
-}
-.bcast-stage[data-tod="morning"] .bcast-bg {
-  filter: hue-rotate(40deg) saturate(1.5) brightness(1.12);
+  background: linear-gradient(
+    180deg,
+    rgba(60, 100, 180, 0.32) 0%,
+    rgba(40, 70, 140, 0.20) 35%,
+    rgba(20, 30, 60, 0.08) 70%,
+    transparent 100%
+  );
 }
 .bcast-stage[data-tod="morning"]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(180deg, rgba(255, 180, 90, 0.10) 0%, rgba(255, 130, 60, 0.06) 100%);
-  pointer-events: none;
-  mix-blend-mode: soft-light;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 170, 90, 0.40) 0%,
+    rgba(255, 130, 70, 0.22) 35%,
+    rgba(200, 90, 50, 0.10) 70%,
+    transparent 100%
+  );
 }
-.bcast-stage[data-tod="afternoon"] .bcast-bg {
-  filter: hue-rotate(20deg) saturate(1.2) brightness(1.06);
-}
-.bcast-stage[data-tod="evening"] .bcast-bg {
-  filter: hue-rotate(-40deg) saturate(1.5) brightness(0.96);
+.bcast-stage[data-tod="afternoon"]::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 200, 130, 0.22) 0%,
+    rgba(220, 180, 110, 0.12) 50%,
+    transparent 100%
+  );
 }
 .bcast-stage[data-tod="evening"]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(180deg, rgba(180, 70, 130, 0.10) 0%, rgba(100, 40, 90, 0.16) 100%);
-  pointer-events: none;
-  mix-blend-mode: soft-light;
+  background: linear-gradient(
+    180deg,
+    rgba(220, 90, 140, 0.36) 0%,
+    rgba(180, 60, 120, 0.22) 35%,
+    rgba(110, 40, 90, 0.10) 70%,
+    transparent 100%
+  );
 }
 
 /* Drifting glow behind the stage — slow, ambient, never distracting. */
@@ -968,30 +974,13 @@ html[data-broadcast] body {
   .bcast-lena-halo { animation: none; }
 }
 
-/* Live dot on the avatar — same 4:30 anchor as the in-app component. */
-.bcast-lena-livedot {
-  position: absolute;
-  width: 1.4cqw;
-  height: 1.4cqw;
-  min-width: 10px;
-  min-height: 10px;
-  border-radius: 50%;
-  background: #FF4F4F;
-  top: 85.36%;
-  left: 85.36%;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 0 0 0.3cqw #050709, 0 0 0.8cqw rgba(255, 79, 79, 0.6);
-  z-index: 3;
-}
-.bcast-lena-portrait-wrap.is-fresh .bcast-lena-livedot {
-  animation: bcast-livedot-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-@keyframes bcast-livedot-pulse {
-  0%, 100% { box-shadow: 0 0 0 0.3cqw #050709, 0 0 0 0 rgba(255, 79, 87, 0.55); }
-  50%      { box-shadow: 0 0 0 0.3cqw #050709, 0 0 0 1cqw rgba(255, 79, 87, 0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bcast-lena-portrait-wrap.is-fresh .bcast-lena-livedot { animation: none; }
+/* When Lena's quote is fresh (live or context source, ≤30 min), the
+   halo breathes a touch stronger — a soft, brand-aligned cue without
+   competing with the ON AIR pulse pill in the header. The base
+   bcast-halo-breathe animation already runs on every halo; this just
+   amps the amplitude on freshness. */
+.bcast-lena-portrait-wrap.is-fresh .bcast-lena-halo {
+  background: radial-gradient(circle, rgba(79, 209, 197, 0.34) 0%, transparent 60%);
 }
 
 .bcast-lena-meta {

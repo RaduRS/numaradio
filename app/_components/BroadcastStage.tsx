@@ -136,18 +136,30 @@ export function BroadcastStage({ broadcast }: Props) {
         <BroadcastFeed />
       </main>
 
-      {/* ──── Footer / CTA ──── */}
+      {/* ──── Footer / CTA ────
+          Two CTAs — the encoder ships ?broadcast=1, so YouTube
+          viewers see the chat-trigger version; humans browsing
+          numaradio.com/live see the website version. Different
+          ask, same conversion goal: get them to type something. */}
       <footer className="bcast-footer">
         <div className="bcast-cta-eyebrow">
           <span className="bcast-cta-rule" aria-hidden />
           <span>REQUEST · ON AIR · ALWAYS</span>
           <span className="bcast-cta-rule" aria-hidden />
         </div>
-        <div className="bcast-cta-line">
-          Type a message at <strong>numaradio.com</strong>
-          <span className="bcast-caret" aria-hidden />
-          <span className="bcast-cta-tail">— hear Lena read it on air.</span>
-        </div>
+        {broadcast ? (
+          <div className="bcast-cta-line">
+            Type <strong>@lena</strong> in chat
+            <span className="bcast-caret" aria-hidden />
+            <span className="bcast-cta-tail">— hear her read it on air.</span>
+          </div>
+        ) : (
+          <div className="bcast-cta-line">
+            Type a message at <strong>numaradio.com</strong>
+            <span className="bcast-caret" aria-hidden />
+            <span className="bcast-cta-tail">— hear Lena read it on air.</span>
+          </div>
+        )}
       </footer>
 
       {/* ──── Fullscreen toggle (preview only) ──── */}
@@ -190,7 +202,6 @@ function BroadcastLena() {
             style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 38%" }}
           />
         </div>
-        <span className="bcast-lena-livedot" aria-hidden />
       </div>
 
       <div className="bcast-lena-meta">
