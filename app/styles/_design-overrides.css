@@ -327,3 +327,82 @@
     display: none;
   }
 }
+
+/* ─── Live-on-YouTube banner ─────────────────────────────────────
+   Top strip that appears only while a YouTube broadcast is active.
+   Compact, monospaced, soft-glowing red dot — matches the "On Air"
+   chip in the nav so it reads as part of the same brand language.
+   Hidden on /live (where the user is already watching). */
+.yt-live-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 18px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 79, 87, 0.12) 0%,
+    rgba(255, 79, 87, 0.06) 50%,
+    rgba(255, 79, 87, 0.12) 100%
+  );
+  border-bottom: 1px solid rgba(255, 79, 87, 0.22);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--fg);
+  text-decoration: none;
+  transition: background 200ms ease;
+}
+.yt-live-banner:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 79, 87, 0.18) 0%,
+    rgba(255, 79, 87, 0.10) 50%,
+    rgba(255, 79, 87, 0.18) 100%
+  );
+}
+.yt-live-banner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--red-live);
+  box-shadow: 0 0 10px rgba(255, 79, 87, 0.7);
+  animation: yt-banner-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  flex-shrink: 0;
+}
+@keyframes yt-banner-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.85); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yt-live-banner__dot { animation: none; }
+}
+.yt-live-banner__label {
+  flex: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yt-live-banner__label strong {
+  color: #FF6B6B;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.yt-live-banner__cta {
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .yt-live-banner {
+    padding: 7px 12px;
+    font-size: 11px;
+    gap: 10px;
+  }
+}
+/* Hide on /live — viewer is already watching. */
+html[data-broadcast] .yt-live-banner {
+  display: none;
+}

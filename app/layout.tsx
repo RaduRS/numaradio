@@ -6,6 +6,7 @@ import { PlayerProvider } from "./_components/PlayerProvider";
 import { MiniPlayer } from "./_components/MiniPlayer";
 import { ExpandedPlayer } from "./_components/ExpandedPlayer";
 import { PresenceHeartbeat } from "./_components/PresenceHeartbeat";
+import { LiveOnYouTubeBanner } from "./_components/LiveOnYouTubeBanner";
 import { NowPlayingSeeder } from "./_components/NowPlayingSeeder";
 import { FallbackArtworkProvider } from "./_components/FallbackArtworkProvider";
 import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
@@ -191,6 +192,10 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <NowPlayingSeeder initial={initialNowPlaying} />
+        {/* "We're live on YouTube" banner — only renders when a YT
+            broadcast is active. Hidden on /live itself (you're
+            already watching). */}
+        <LiveOnYouTubeBanner />
         {/* One PlayerProvider for the whole app — keeps the <audio> element
             alive across client-side navigations so playback doesn't cut
             out when the user moves between /, /about, /submit, etc.

@@ -652,20 +652,50 @@ html[data-broadcast] body {
   pointer-events: none;
 }
 
-/* Time-of-day tint — very subtle hue shift. Only adds chroma; the dark
-   base shows through. */
+/* Time-of-day tint — visible-but-not-loud hue shift over the dark
+   base. The previous values (8-15deg hue, 0.95-1.05 brightness) were
+   so subtle they were essentially invisible to most viewers. New
+   values: bigger hue swings + a saturated colour overlay so morning
+   actually FEELS warm, late night actually FEELS cool. */
 .bcast-stage[data-tod="late night"] .bcast-bg,
 .bcast-stage[data-tod="night"] .bcast-bg {
-  filter: hue-rotate(-8deg) brightness(0.95);
+  filter: hue-rotate(-30deg) saturate(1.4) brightness(0.88);
+}
+.bcast-stage[data-tod="late night"]::before,
+.bcast-stage[data-tod="night"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(40, 60, 110, 0.18) 0%, rgba(20, 30, 60, 0.14) 100%);
+  pointer-events: none;
 }
 .bcast-stage[data-tod="morning"] .bcast-bg {
-  filter: hue-rotate(15deg) brightness(1.05);
+  filter: hue-rotate(40deg) saturate(1.5) brightness(1.12);
+}
+.bcast-stage[data-tod="morning"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(255, 180, 90, 0.10) 0%, rgba(255, 130, 60, 0.06) 100%);
+  pointer-events: none;
+  mix-blend-mode: soft-light;
 }
 .bcast-stage[data-tod="afternoon"] .bcast-bg {
-  filter: hue-rotate(8deg) brightness(1.02);
+  filter: hue-rotate(20deg) saturate(1.2) brightness(1.06);
 }
 .bcast-stage[data-tod="evening"] .bcast-bg {
-  filter: hue-rotate(-15deg) brightness(0.98);
+  filter: hue-rotate(-40deg) saturate(1.5) brightness(0.96);
+}
+.bcast-stage[data-tod="evening"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(180, 70, 130, 0.10) 0%, rgba(100, 40, 90, 0.16) 100%);
+  pointer-events: none;
+  mix-blend-mode: soft-light;
 }
 
 /* Drifting glow behind the stage — slow, ambient, never distracting. */
@@ -1317,4 +1347,206 @@ html[data-broadcast] body {
 }
 html[data-broadcast="encoder"] .bcast-fullscreen {
   display: none;
+}
+
+/* ─── Mobile preview (≤700px viewport) ──────────────────────────
+   Phones can't watch the 16:9 letterboxed broadcast comfortably —
+   it shrinks to a narrow strip with massive black bars. Instead,
+   on small viewports we switch the stage to a single-column stack
+   that fills the screen.
+
+   The encoder mode is UNAFFECTED — Chromium runs at exactly
+   1920×1080 on Orion, so these rules only kick in for human
+   visitors browsing /live on a phone. */
+@media (max-width: 700px) {
+  html[data-broadcast="preview"] .bcast-stage {
+    width: 100vw;
+    height: 100vh;
+    aspect-ratio: auto;
+    container-type: inline-size;
+    overflow-y: auto;
+    /* Absolute-positioned regions need to switch to natural flow on
+       mobile so they stack instead of overlap. */
+  }
+  html[data-broadcast="preview"] .bcast-header,
+  html[data-broadcast="preview"] .bcast-main,
+  html[data-broadcast="preview"] .bcast-footer {
+    /* Keep `position: relative` (NOT static) so the existing z-index
+       on each region stays effective and the atmospheric layers
+       (scanlines/grain/vignette) don't paint over our content. */
+    position: relative;
+    height: auto;
+    inset: auto;
+    left: 0;
+    right: 0;
+  }
+  html[data-broadcast="preview"] .bcast-header {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 14px 16px 10px;
+    text-align: center;
+  }
+  html[data-broadcast="preview"] .bcast-brand {
+    justify-content: center;
+  }
+  html[data-broadcast="preview"] .bcast-brand .logo {
+    font-size: 18px !important;
+    gap: 8px;
+  }
+  html[data-broadcast="preview"] .bcast-brand .logo-mark {
+    width: 16px;
+    height: 16px;
+  }
+  html[data-broadcast="preview"] .bcast-show {
+    grid-template-columns: 1fr auto auto 1fr;
+    gap: 8px;
+    font-size: 11px;
+  }
+  html[data-broadcast="preview"] .bcast-show-name {
+    font-size: 12px;
+  }
+  html[data-broadcast="preview"] .bcast-show-time {
+    font-size: 10px;
+  }
+  html[data-broadcast="preview"] .bcast-status {
+    justify-content: center;
+    gap: 8px;
+  }
+  html[data-broadcast="preview"] .bcast-onair,
+  html[data-broadcast="preview"] .bcast-listeners {
+    font-size: 10px;
+    padding: 6px 10px;
+  }
+  html[data-broadcast="preview"] .bcast-onair-dot {
+    width: 7px;
+    height: 7px;
+  }
+
+  /* Main: vertical stack instead of 3-column grid. Columns
+     become full-width, padded, with their own natural heights. */
+  html[data-broadcast="preview"] .bcast-main {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 12px 16px 20px;
+    overflow: visible;
+  }
+  html[data-broadcast="preview"] .bcast-col {
+    width: 100%;
+  }
+
+  /* Lena: portrait shrinks to ~50vw, quote sits below at full width. */
+  html[data-broadcast="preview"] .bcast-lena-portrait-wrap {
+    width: 50vw;
+    max-width: 240px;
+  }
+  html[data-broadcast="preview"] .bcast-lena-name {
+    font-size: 26px;
+  }
+  html[data-broadcast="preview"] .bcast-lena-label {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+  html[data-broadcast="preview"] .bcast-lena-quote {
+    width: 100%;
+    max-width: 100%;
+    font-size: 14px;
+    padding: 14px 16px;
+    border-radius: 10px;
+  }
+  html[data-broadcast="preview"] .bcast-lena-quote::before {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* Now playing: artwork takes the column. */
+  html[data-broadcast="preview"] .bcast-now-art-wrap {
+    width: 70vw;
+    max-width: 320px;
+  }
+  html[data-broadcast="preview"] .bcast-now-eyebrow,
+  html[data-broadcast="preview"] .bcast-feed-eyebrow {
+    font-size: 10px;
+  }
+  html[data-broadcast="preview"] .bcast-now-title {
+    font-size: 24px;
+  }
+  html[data-broadcast="preview"] .bcast-now-artist {
+    font-size: 11px;
+  }
+  html[data-broadcast="preview"] .bcast-now-wave {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  /* Feed: list reads at body-text size, no fade mask (phones
+     scroll the whole page; mask interferes). */
+  html[data-broadcast="preview"] .bcast-feed-eyebrow {
+    align-self: center;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll {
+    mask-image: none;
+    overflow: visible;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair {
+    overflow: visible;
+    height: auto;
+    gap: 8px;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair-item {
+    grid-template-columns: 40px 1fr auto;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair-art,
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair-avatar {
+    font-size: 16px;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair-main .primary {
+    font-size: 13px;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair-main .secondary {
+    font-size: 9px;
+  }
+  html[data-broadcast="preview"] .bcast-feed-scroll .ep-onair-time {
+    font-size: 9px;
+  }
+
+  /* Footer: smaller, still prominent. Sticks to bottom of stack. */
+  html[data-broadcast="preview"] .bcast-footer {
+    padding: 18px 16px 24px;
+    gap: 8px;
+  }
+  html[data-broadcast="preview"] .bcast-cta-eyebrow {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 10px;
+    font-size: 9px;
+  }
+  html[data-broadcast="preview"] .bcast-cta-line {
+    font-size: 18px;
+    line-height: 1.25;
+  }
+  html[data-broadcast="preview"] .bcast-cta-tail {
+    display: block;
+    margin-left: 0;
+    margin-top: 4px;
+    font-size: 0.75em;
+  }
+
+  /* Fullscreen button at the bottom-right of the header strip
+     instead of bottom of stage. */
+  html[data-broadcast="preview"] .bcast-fullscreen {
+    width: 36px;
+    height: 36px;
+    bottom: auto;
+    right: 12px;
+    top: 12px;
+    font-size: 18px;
+  }
 }
