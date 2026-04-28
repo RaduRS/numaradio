@@ -1,32 +1,37 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { ExpandedPlayerDesktop } from "./ExpandedPlayerDesktop";
+import { useNowPlaying } from "./useNowPlaying";
+import { useLenaLine, relativeTimeLabel } from "./useLenaLine";
+import { useFallbackArtworkUrl } from "./FallbackArtworkProvider";
+import { OnAirFeed } from "./OnAirFeed";
+import { Waveform } from "./Waveform";
 import { ListenerCount } from "./ListenerCount";
 import { Logo } from "./Logo";
+import { showForHour, timeOfDayFor, type TimeOfDay } from "@/lib/schedule";
 
 type Props = {
   broadcast: boolean;
 };
 
-// Numa Radio's YouTube broadcast stage. Reuses the existing
-// ExpandedPlayerDesktop "booth" layout (artwork + Lena + waveform on the
-// left, OnAirFeed on the right), wraps it in a fixed 1920x1080 frame, and
-// adds broadcast-only chrome:
-//   - ON AIR pill (top-left)
-//   - listener count + clock (top-right)
-//   - REQUEST AT NUMARADIO.COM strip (bottom)
-// In broadcast mode (?broadcast=1) the headless Chromium encoder hits this
-// page; we hide the fullscreen button and silence any audio the page
-// might emit (the encoder pulls audio directly from Icecast).
+// Numa Radio's YouTube broadcast stage. A purpose-built 16:9 layout that
+// shares the in-app expanded player's visual DNA (dark base, teal accent,
+// CRT/booth feel) but is tuned for video: bigger Lena portrait, prominent
+// wordmark + clock, persistent CTA, atmospheric layers.
+//
+// Sizing strategy: the stage is always 16:9 and uses container query units
+// (cqw/cqh) for everything inside. At 1920×1080 (the encoder's Chromium
+// window) and at any preview viewport, proportions are identical.
 export function BroadcastStage({ broadcast }: Props) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>("night");
+  const [showName, setShowName] = useState<string>("Night Shift");
+  const [clockText, setClockText] = useState<string>("");
 
-  // Hard-mute every <audio> tag in the document so the page never doubles up
-  // with the Icecast feed the encoder muxes in directly. Defensive — the
-  // booth UI doesn't auto-play, but a future change shouldn't be able to
-  // smuggle audio onto the broadcast.
+  // Hard-mute every <audio> tag in the document — the encoder muxes Icecast
+  // directly. Defensive against future code that might auto-play.
   useEffect(() => {
     if (!broadcast) return;
     const mute = () => {
@@ -41,8 +46,8 @@ export function BroadcastStage({ broadcast }: Props) {
     return () => window.clearInterval(id);
   }, [broadcast]);
 
-  // Tag the document so the data-broadcast CSS scope kicks in (hides
-  // play/volume/share/vote, bumps fonts, etc).
+  // Tag the document so the data-broadcast CSS scope kicks in (full-bleed
+  // body, no scrollbars, no cursor in encoder mode).
   useEffect(() => {
     document.documentElement.setAttribute(
       "data-broadcast",
@@ -61,6 +66,21 @@ export function BroadcastStage({ broadcast }: Props) {
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  // Tick the clock + show + time-of-day tint every 30s.
+  useEffect(() => {
+    function tick() {
+      const d = new Date();
+      const h = d.getHours();
+      const m = String(d.getMinutes()).padStart(2, "0");
+      setClockText(`${String(h).padStart(2, "0")}:${m}`);
+      setShowName(showForHour(h).name);
+      setTimeOfDay(timeOfDayFor(h));
+    }
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   function toggleFullscreen() {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
@@ -72,50 +92,67 @@ export function BroadcastStage({ broadcast }: Props) {
   return (
     <div
       ref={stageRef}
-      className="broadcast-stage"
+      className="bcast-stage"
       data-mode={broadcast ? "encoder" : "preview"}
+      data-tod={timeOfDay}
     >
-      {/* Top-left: ON AIR pill */}
-      <div className="bs-onair">
-        <span className="bs-onair-dot" aria-hidden />
-        <span className="bs-onair-label">ON AIR · LIVE</span>
-      </div>
+      {/* ──── Atmospheric layers (decorative, pointer-events: none) ──── */}
+      <div className="bcast-bg" aria-hidden />
+      <div className="bcast-glow" aria-hidden />
+      <div className="bcast-scanlines" aria-hidden />
+      <div className="bcast-grain" aria-hidden />
+      <div className="bcast-vignette" aria-hidden />
 
-      {/* Top-right: listener pill + wordmark */}
-      <div className="bs-topright">
-        <div className="bs-listeners">
-          <span className="bs-listeners-dot" aria-hidden />
-          <ListenerCount suffix=" tuned in" />
-        </div>
-        <div className="bs-wordmark">
+      {/* ──── Header ──── */}
+      <header className="bcast-header">
+        <div className="bcast-brand">
           <Logo />
         </div>
-      </div>
 
-      {/* The booth itself — same component the in-app expanded player uses.
-          Wrapped in .ep-root.open + .ep-shell so the existing CSS lights up
-          (backdrop, content opacity, layout grid). */}
-      <div className="bs-booth-wrap">
-        <div className="ep-root open" style={{ position: "absolute", inset: 0 }}>
-          <div className="ep-shell" style={{ inset: 0, borderRadius: 0, border: "none" }}>
-            <ExpandedPlayerDesktop />
+        <div className="bcast-show">
+          <div className="bcast-show-rule" aria-hidden />
+          <div className="bcast-show-name">{showName}</div>
+          <div className="bcast-show-time">{clockText} GMT</div>
+          <div className="bcast-show-rule" aria-hidden />
+        </div>
+
+        <div className="bcast-status">
+          <div className="bcast-onair">
+            <span className="bcast-onair-dot" aria-hidden />
+            <span>ON AIR · LIVE</span>
+          </div>
+          <div className="bcast-listeners">
+            <span className="bcast-listener-dot" aria-hidden />
+            <ListenerCount suffix=" tuned in" />
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Bottom: persistent request CTA strip — the conversion lever. */}
-      <div className="bs-cta">
-        <div className="bs-cta-eyebrow">REQUEST · ON AIR · ALWAYS</div>
-        <div className="bs-cta-line">
-          Type a message at <strong>numaradio.com</strong> — hear Lena read it on air.
+      {/* ──── Main 3-column stage ──── */}
+      <main className="bcast-main">
+        <BroadcastLena />
+        <BroadcastNowPlaying />
+        <BroadcastFeed />
+      </main>
+
+      {/* ──── Footer / CTA ──── */}
+      <footer className="bcast-footer">
+        <div className="bcast-cta-eyebrow">
+          <span className="bcast-cta-rule" aria-hidden />
+          <span>REQUEST · ON AIR · ALWAYS</span>
+          <span className="bcast-cta-rule" aria-hidden />
         </div>
-      </div>
+        <div className="bcast-cta-line">
+          Type a message at <strong>numaradio.com</strong>
+          <span className="bcast-caret" aria-hidden />
+          <span className="bcast-cta-tail">— hear Lena read it on air.</span>
+        </div>
+      </footer>
 
-      {/* Fullscreen toggle: only in preview mode (humans browsing /live).
-          The encoder runs Chromium in --kiosk so it's already full bleed. */}
+      {/* ──── Fullscreen toggle (preview only) ──── */}
       {!broadcast && (
         <button
-          className="bs-fullscreen"
+          className="bcast-fullscreen"
           onClick={toggleFullscreen}
           aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
           title={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
@@ -124,5 +161,109 @@ export function BroadcastStage({ broadcast }: Props) {
         </button>
       )}
     </div>
+  );
+}
+
+// ─── Lena column ─────────────────────────────────────────────────────────
+// Big portrait + tag + live quote. Reuses the same hook as the in-app
+// LenaLine component so on-air freshness syncs perfectly.
+function BroadcastLena() {
+  const line = useLenaLine();
+  const isFresh = line?.source === "live" || line?.source === "context";
+  const freshLabel =
+    isFresh && line && "atIso" in line ? relativeTimeLabel(line.atIso) : null;
+
+  return (
+    <section className="bcast-col bcast-col-lena">
+      <div className={`bcast-lena-portrait-wrap ${isFresh ? "is-fresh" : ""}`}>
+        <div className="bcast-lena-halo" aria-hidden />
+        <div className="bcast-lena-portrait">
+          <Image
+            src="/lena/portrait.png"
+            alt="Lena, Numa Radio's AI host"
+            width={600}
+            height={600}
+            priority
+            sizes="(max-width: 1920px) 18vw, 360px"
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 38%" }}
+          />
+        </div>
+        <span className="bcast-lena-livedot" aria-hidden />
+      </div>
+
+      <div className="bcast-lena-meta">
+        <div className="bcast-lena-name">Lena</div>
+        <div className="bcast-lena-label">
+          Host · Live{freshLabel ? ` · ${freshLabel}` : ""}
+        </div>
+      </div>
+
+      <div className="bcast-lena-quote" key={line?.script ?? "loading"}>
+        {line ? (
+          <span className="lena-text-anim">&ldquo;{line.script}&rdquo;</span>
+        ) : (
+          <span className="bcast-lena-quote-loading">tuning in…</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── Now-playing column ──────────────────────────────────────────────────
+// Big artwork, title in display type, artist in mono caps, waveform.
+function BroadcastNowPlaying() {
+  const np = useNowPlaying();
+  const fallback = useFallbackArtworkUrl();
+  const cover = np.artworkUrl ?? fallback;
+  const title = np.title ?? "—";
+  const artist = np.artistDisplay ?? "—";
+
+  return (
+    <section className="bcast-col bcast-col-now">
+      <div className="bcast-now-eyebrow">
+        <span className="bcast-eye-dot" aria-hidden />
+        <span>NOW PLAYING</span>
+      </div>
+
+      <div className="bcast-now-art-wrap">
+        <div
+          className="bcast-now-art"
+          style={{ backgroundImage: cover ? `url(${cover})` : undefined }}
+          aria-label={`Cover art for ${title}`}
+        />
+        <div className="bcast-now-art-glow" aria-hidden />
+      </div>
+
+      <div className="bcast-now-meta">
+        <div className="bcast-now-title">{title}</div>
+        <div className="bcast-now-artist">{artist}</div>
+      </div>
+
+      <div className="bcast-now-wave">
+        <Waveform
+          hasTrack={Boolean(np.isPlaying)}
+          progress={np.progress}
+          elapsedSeconds={np.elapsedSeconds}
+          durationSeconds={np.durationSeconds ?? null}
+          showTime
+        />
+      </div>
+    </section>
+  );
+}
+
+// ─── Feed column ─────────────────────────────────────────────────────────
+// Reuses OnAirFeed (recently played + recent shoutouts merged chronologically).
+function BroadcastFeed() {
+  return (
+    <section className="bcast-col bcast-col-feed">
+      <div className="bcast-feed-eyebrow">
+        <span className="bcast-eye-dot" aria-hidden />
+        <span>THE BOOTH · LIVE</span>
+      </div>
+      <div className="bcast-feed-scroll">
+        <OnAirFeed />
+      </div>
+    </section>
   );
 }
