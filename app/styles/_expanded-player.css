@@ -575,25 +575,37 @@
    identical at the encoder's 1920×1080 and any preview viewport.
    ==================================================================== */
 
-/* Page-level: hide everything that isn't the stage. */
-html[data-broadcast] body.broadcast-body {
-  margin: 0;
-  padding: 0;
+/* Broadcast root — pins to the full viewport regardless of any
+   layout the body provides (Tailwind flex-col, etc). Solves the
+   first-paint flash where the stage was laid out before the JS
+   useEffect could tag the html with data-broadcast. */
+.bcast-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
   display: grid;
   place-items: center;
-  min-height: 100vh;
-  height: 100vh;
   background: #030506;
   overflow: hidden;
-  /* Hide nav/footer/etc. if they're rendered by ancestor layouts. */
 }
-html[data-broadcast="encoder"] body.broadcast-body {
+.bcast-root[data-mode="encoder"] {
   cursor: none;
 }
-html[data-broadcast] body.broadcast-body > nav,
-html[data-broadcast] body.broadcast-body > footer,
-html[data-broadcast] body.broadcast-body .mini-player {
+/* Belt-and-braces — also hides nav/footer/MiniPlayer in case the JS
+   side ever fails to set the data-broadcast attribute. The fixed root
+   above already covers them visually, but removing them from the flow
+   means no listener-count inflation if the user resizes weirdly. */
+html[data-broadcast] body > nav,
+html[data-broadcast] body > footer,
+html[data-broadcast] body .mini-player {
   display: none !important;
+}
+/* Lock body scrolling on /live so the page can't scroll behind the
+   fixed root on touch devices. Same goal as before, but doesn't
+   depend on the .broadcast-body class being applied (which races
+   with first paint). */
+html[data-broadcast] body {
+  overflow: hidden;
 }
 
 /* The 16:9 stage. Picks the larger of (width-fit, height-fit) so it

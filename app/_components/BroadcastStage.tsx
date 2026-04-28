@@ -90,6 +90,7 @@ export function BroadcastStage({ broadcast }: Props) {
   }
 
   return (
+    <div className="bcast-root" data-mode={broadcast ? "encoder" : "preview"}>
     <div
       ref={stageRef}
       className="bcast-stage"
@@ -160,6 +161,7 @@ export function BroadcastStage({ broadcast }: Props) {
           {fullscreen ? "⤓" : "⛶"}
         </button>
       )}
+    </div>
     </div>
   );
 }
