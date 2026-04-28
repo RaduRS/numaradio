@@ -16,6 +16,11 @@ import { uploadChatterAudio } from "./chatter-upload.ts";
 import { ContextLineOrchestrator, buildStationState } from "./context-line.ts";
 import { fetchWorldAside } from "./world-aside-client.ts";
 import { runRefresh as refreshRotation } from "../../scripts/refresh-rotation.ts";
+import {
+  createYoutubeChatLoop,
+  DEFAULT_POLL_INTERVAL_MS as YT_CHAT_INTERVAL_MS,
+  type YoutubeChatLoop,
+} from "./youtube-chat-loop.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -566,6 +571,46 @@ async function main() {
   const contextTick = () => contextLine.runOnce().catch(() => undefined);
   setTimeout(contextTick, CONTEXT_LINE_FIRST_DELAY_MS);
   setInterval(contextTick, CONTEXT_LINE_TICK_MS);
+
+  // YouTube live chat → shoutout pipeline (PR 4). Inert when any of
+  // the OAuth env vars are missing — letting an operator opt in by
+  // adding the keys later without touching code.
+  let ytChatLoop: YoutubeChatLoop | null = null;
+  const ytClientId = process.env.YOUTUBE_OAUTH_CLIENT_ID;
+  const ytClientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET;
+  const ytRefreshToken = process.env.YOUTUBE_OAUTH_REFRESH_TOKEN;
+  const ytShoutoutEndpoint =
+    process.env.YOUTUBE_CHAT_SHOUTOUT_URL ??
+    "https://api.numaradio.com/api/internal/youtube-chat-shoutout";
+  const ytInternalSecret = process.env.INTERNAL_API_SECRET;
+  if (ytClientId && ytClientSecret && ytRefreshToken && ytInternalSecret) {
+    ytChatLoop = createYoutubeChatLoop({
+      clientId: ytClientId,
+      clientSecret: ytClientSecret,
+      refreshToken: ytRefreshToken,
+      shoutoutEndpoint: ytShoutoutEndpoint,
+      internalSecret: ytInternalSecret,
+    });
+    const ytTick = () =>
+      ytChatLoop!
+        .tick()
+        .then((r) => {
+          if (r.dispatched > 0 || r.failed > 0) {
+            console.log(
+              `[yt-chat] tick: dispatched=${r.dispatched} held/skipped=${r.skippedRateLimit + r.skippedOwner + r.skippedLength} failed=${r.failed} liveChatId=${r.liveChatId ?? "none"}`,
+            );
+          }
+        })
+        .catch((e) => console.error("[yt-chat] tick error", e));
+    // First tick 30s after boot so OAuth and other systems are warm.
+    setTimeout(ytTick, 30_000);
+    setInterval(ytTick, YT_CHAT_INTERVAL_MS);
+    console.log("[queue-daemon] YouTube chat poller enabled (90s cadence)");
+  } else {
+    console.log(
+      "[queue-daemon] YouTube chat poller DISABLED — set YOUTUBE_OAUTH_* env to enable",
+    );
+  }
 
   const shutdown = () => {
     console.log("[queue-daemon] shutting down");

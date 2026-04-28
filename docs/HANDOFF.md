@@ -211,6 +211,99 @@ weeks turnaround) or back the polling off to 60s in
 
 ---
 
+## 2026-04-28 — YouTube live chat → shoutouts (PR 4) — CODE READY, NEEDS DAEMON RESTART + ENV
+
+queue-daemon now polls the active YouTube broadcast's live chat every
+90s and pipes new messages through the existing shoutout pipeline
+(MiniMax moderator → if held → NanoClaw on Telegram + dashboard chat
+→ if allowed → Lena radio-host rewrite + Deepgram TTS + B2 + queue
+push). Inert (skipped + logged at boot) until the operator drops
+the OAuth env vars in `/etc/numa/env`.
+
+**Files added:**
+- `workers/queue-daemon/youtube-chat-client.ts` — OAuth + low-level
+  YouTube Data API v3 calls. Caches `liveChatId`, paginates message
+  fetches with `nextPageToken`, drops the initial backlog so we don't
+  air everything posted before the daemon came online. 12 tests.
+- `workers/queue-daemon/youtube-chat-loop.ts` — orchestrator.
+  Per-author rate limit (3/hr, 8/day per `authorChannelId` — sliding
+  window). Skips channel-owner + moderator messages. Length bounds
+  match the booth (4-240 chars). Dispatches to the new internal
+  endpoint.
+- `app/api/internal/youtube-chat-shoutout/route.ts` — Vercel internal
+  endpoint, `x-internal-secret` guarded. Mirrors `/api/booth/submit`
+  moderation + held flow but without IP rate-limit. Idempotent on
+  YouTube message ID via `Shoutout.fingerprintHash` (`yt:<msgId>`)
+  so a daemon restart can't double-fire.
+
+**Quota math (combined with PR 3 dashboard health):**
+- liveBroadcasts.list (cold-start): 1u
+- liveChatMessages.list: 5u per call, 90s cadence → ~3,300/day
+- PR 3 dashboard health (60s would be safer if you enable PR 4):
+  ~4,300/day
+- Combined: ~7,600/day. Comfortable under the 10k default.
+- **Recommended:** when both PRs are live, drop dashboard polling to
+  60s by changing `30_000` → `60_000` in `dashboard/app/page.tsx`'s
+  `usePolling<YoutubeBroadcastSnapshot>` line.
+
+**Setup steps** (after the OAuth env from PR 3 is in Vercel):
+
+1. **Add the same OAuth credentials to Orion's `/etc/numa/env`** so the
+   daemon can poll. INTERNAL_API_SECRET should already be there.
+   ```
+   sudo nano /etc/numa/env
+   # add the same three values you put in Vercel for PR 3:
+   # YOUTUBE_OAUTH_CLIENT_ID=...
+   # YOUTUBE_OAUTH_CLIENT_SECRET=...
+   # YOUTUBE_OAUTH_REFRESH_TOKEN=...
+   sudo chmod 0600 /etc/numa/env
+   ```
+
+2. **Pull + restart the daemon**:
+   ```
+   cd /home/marku/saas/numaradio && git pull
+   sudo systemctl restart numa-queue-daemon
+   ```
+   The Vercel internal endpoint deploys automatically with the push.
+
+3. **Verify**:
+   ```
+   journalctl --user -u numa-queue-daemon -f | grep yt-chat
+   ```
+   On boot you should see:
+   `[queue-daemon] YouTube chat poller enabled (90s cadence)`
+   When a broadcast is live and someone sends a chat message:
+   `[yt-chat] dispatched queued from <name> (<channel-id-suffix>): "..."`
+   When off-air: silence (the loop early-returns after the 1u
+   `liveBroadcasts.list` call).
+
+4. **Test end-to-end**:
+   - Make sure the encoder (PR 2) is running so a YouTube broadcast
+     is actually live.
+   - From a different YouTube account (not the channel owner — those
+     get filtered), send a chat message on your live stream.
+   - Within ~2 minutes you should hear it air on numaradio.com.
+   - Send a profanity-laced one and verify it lands in the dashboard
+     **/shoutouts** held queue (or shows up in the Telegram bot if
+     NanoClaw is up).
+
+**Rate limit behaviour:**
+- 3 dispatches/hour per author channel ID
+- 8 dispatches/day per author channel ID
+- Excess messages are silently dropped (logged but not aired). The
+  YouTube user sees their message in chat normally; they just don't
+  get put on air.
+- The window is in-memory (per daemon process) — a daemon restart
+  resets the counter. That's intentional: a 90s poll cycle plus
+  systemd's 15s restart delay means abuse-via-restart isn't viable.
+
+**Disabling without code change:**
+Comment out any of `YOUTUBE_OAUTH_CLIENT_ID` / `_SECRET` /
+`_REFRESH_TOKEN` in `/etc/numa/env` and restart the daemon. Boot log
+will say `YouTube chat poller DISABLED` and nothing else changes.
+
+---
+
 ## 2026-04-26 (evening) — Lena Tier 2.5 + content-pipeline polish — LIVE
 
 A long session. Multiple connected ships:
