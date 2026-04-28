@@ -1,6 +1,6 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-28 (afternoon)
+Last updated: 2026-04-28 (evening)
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
@@ -9,7 +9,44 @@ this, then fall back to the archive if a reference here points there.
 
 ---
 
-## 2026-04-28 — YouTube 24/7 broadcast — `/live` LIVE on Vercel, encoder NEEDS INSTALL ON ORION
+## 2026-04-28 (evening) — Broadcast UX refinements — LIVE
+
+After the four-PR launch (below) the design got iterated through
+the evening:
+
+- **YouTube-live banner** on the public site — pulses + links to
+  the watch URL when a broadcast is active. Reads from
+  `/api/youtube/state` (60s cached). `LiveOnYouTubeBanner.tsx`.
+  Hidden on `/live` itself. Today silent (no broadcast yet);
+  goes live tomorrow with the encoder install.
+- **Time-of-day expression moved to the show-name gradient.**
+  An earlier attempt to tint the background with magenta/purple
+  read as off-brand. Reverted: dark-teal base stays clean. Time
+  is now in an animated gradient sweep across the show name
+  (e.g. "PRIME HOURS") — warm dawn (peach), daylight gold-teal,
+  dusk pink/purple/blue, night blue/violet, late-night brand
+  cyan. Slow shimmer (`background-position` animation, 8s).
+- **Lena live-dot removed.** The red pulsing dot on her portrait
+  competed with the ON AIR · LIVE pill in the top-right header.
+  Breathing teal halo around the portrait does the host-cue work
+  on its own (and brightens when her quote is fresh).
+- **Dual-mode CTA in the footer.** Encoder mode (`?broadcast=1`,
+  the YouTube viewer copy) → "Type **@lena** in chat — hear her
+  read it on air." Preview mode (`numaradio.com/live`) →
+  unchanged "Type a message at numaradio.com — hear Lena read it
+  on air." Audience-aware ask, same conversion.
+- **Mobile `/live` single-column stack** for viewports ≤ 700px in
+  preview mode. Encoder still runs at exactly 1920×1080 on Orion.
+- **Bg atmosphere dialled to taste**: `.bcast-glow` blur 30px,
+  `.bcast-grain` opacity 4%. Operator picked these after walking
+  through three sharpness levels.
+
+Commits between `0c7a88d` and `880a56b` on `main`. ~10 commits in
+the evening session, all on the broadcast surface.
+
+---
+
+## 2026-04-28 — YouTube 24/7 broadcast — PR 1, 3, 4 LIVE; PR 2 NEEDS INSTALL TOMORROW
 
 Two-PR ship in flight, only PR 2 left.
 
@@ -32,7 +69,7 @@ encoder muxes Icecast directly).
 
 Spec: `docs/superpowers/specs/2026-04-28-youtube-live-broadcast-design.md`.
 
-### PR 2 — Orion encoder service (CODE READY, NOT INSTALLED) — `?` on `main`
+### PR 2 — Orion encoder service (CODE READY, INSTALL TOMORROW) — `44fc281` on `main`
 `deploy/numa-youtube-encoder.sh` + `deploy/systemd/numa-youtube-encoder.service`
 + sudoers entry. Pipeline: `Xvfb :99 → headless Chromium kiosk on
 /live?broadcast=1 → ffmpeg x11grab + Icecast audio → RTMP to YouTube`.
