@@ -1,11 +1,130 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-26 (evening)
+Last updated: 2026-04-28 (afternoon)
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-
 deployed, and the evergreen conventions. When picking up work: read
 this, then fall back to the archive if a reference here points there.
+
+---
+
+## 2026-04-28 — YouTube 24/7 broadcast — `/live` LIVE on Vercel, encoder NEEDS INSTALL ON ORION
+
+Two-PR ship in flight, only PR 2 left.
+
+### PR 1 — `/live` page (LIVE on Vercel) — `b7e2452` on `main`
+A purpose-built 16:9 broadcast stage at <https://numaradio.com/live>
+that shares the in-app expanded-player's visual DNA: big Lena portrait
+with teal halo + live-dot, NUMA·RADIO wordmark + show clock, ON AIR
+pulse + listener-count pill, 3-column main (Lena / now-playing /
+booth feed), persistent REQUEST CTA, scanlines + film grain + radial
+vignette + time-of-day hue shift. Container-query-units (cqw/cqh)
+throughout — same proportions at 1920×1080 (encoder) and any preview
+viewport. The broadcast surface is wrapped in
+`position: fixed; inset: 0` so it's pinned regardless of any body
+styles (fixed a first-paint flash where the bottom CTA was the only
+thing visible).
+
+`/live?broadcast=1` is what the encoder will hit — hides the
+fullscreen button, sets `cursor: none`, hard-mutes any audio (the
+encoder muxes Icecast directly).
+
+Spec: `docs/superpowers/specs/2026-04-28-youtube-live-broadcast-design.md`.
+
+### PR 2 — Orion encoder service (CODE READY, NOT INSTALLED) — `?` on `main`
+`deploy/numa-youtube-encoder.sh` + `deploy/systemd/numa-youtube-encoder.service`
++ sudoers entry. Pipeline: `Xvfb :99 → headless Chromium kiosk on
+/live?broadcast=1 → ffmpeg x11grab + Icecast audio → RTMP to YouTube`.
+One systemd unit owns all three subprocesses with a cleanup trap so
+restart leaves no orphans. `RuntimeMaxSec=86400` forces a daily clean
+restart so a long-running Chromium can't leak forever.
+
+**Operator install steps** (one-time, after PR 2 lands on `main`):
+
+1. **Get a YouTube stream key** — <https://studio.youtube.com> →
+   Create → Go Live → Stream → "Default" stream → copy stream key.
+   You can also create a permanent stream so the same key is reused
+   across restarts.
+
+2. **Add the key to `/etc/numa/env` on Orion**:
+   ```
+   sudo nano /etc/numa/env
+   # add: YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+   sudo chmod 0600 /etc/numa/env
+   ```
+
+3. **Install dependencies** (Ubuntu/WSL2):
+   ```
+   sudo apt-get update
+   sudo apt-get install -y xvfb x11-utils ffmpeg
+   # Browser — google-chrome-stable is most reliable on WSL2:
+   wget -qO- https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+   echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+   sudo apt-get update
+   sudo apt-get install -y google-chrome-stable
+   # (Or `chromium` from the Snap or your distro repo — the script
+   #  detects either binary.)
+   ```
+
+4. **Smoke-test the encoder before pushing real traffic to YouTube**:
+   ```
+   cd /home/marku/saas/numaradio
+   git pull
+   export YOUTUBE_STREAM_KEY=smoke
+   bash deploy/numa-youtube-encoder.sh --smoke
+   # Stop with Ctrl-C after ~30 seconds.
+   ffprobe /tmp/numa-encoder-smoke.flv
+   # Expect: 1920x1080 30fps H.264 + 44100Hz stereo AAC.
+   ```
+
+5. **Install the service**:
+   ```
+   sudo install -m 0755 deploy/numa-youtube-encoder.sh /usr/local/bin/
+   sudo install -m 0644 deploy/systemd/numa-youtube-encoder.service /etc/systemd/system/
+   sudo install -d -o marku -g marku /var/lib/numa/chromium-broadcast
+   # Refresh the sudoers drop-in so the new restart line takes effect:
+   sudo install -m 0440 deploy/systemd/numa-nopasswd.sudoers /etc/sudoers.d/numa-nopasswd
+   sudo visudo -c   # parsed OK
+   sudo systemctl daemon-reload
+   sudo systemctl enable numa-youtube-encoder
+   sudo systemctl start numa-youtube-encoder
+   ```
+
+6. **Verify**:
+   - `systemctl status numa-youtube-encoder` — active (running)
+   - `journalctl -u numa-youtube-encoder -f` — should see one
+     `[encoder] streaming → rtmp://a.rtmp.youtube.com/live2/<redacted>`
+     and then ffmpeg reporting `frame=  N fps= N q= ...` lines.
+   - <https://studio.youtube.com> live dashboard → **Stream health:
+     Excellent** within ~30 s of `Start streaming`.
+   - On Orion, capture the rendered Chromium frame:
+     `DISPLAY=:99 import -window root /tmp/broadcast.png`
+     then `scp` it back to your desktop and confirm it looks like
+     `/live?broadcast=1`.
+
+7. **Restart on `/live` redeploy**: when you push a frontend change to
+   `/live`, the running Chromium tab won't auto-reload — give it a
+   nudge:
+   ```
+   sudo systemctl restart numa-youtube-encoder
+   ```
+   ~10 s gap on the broadcast. The daily auto-restart
+   (`RuntimeMaxSec=86400`) catches anything you forget.
+
+**Knobs** (override in `/etc/numa/env`):
+- `BROADCAST_URL` — defaults to `https://numaradio.com/live?broadcast=1`
+- `ICECAST_URL` — defaults to `https://api.numaradio.com/stream`
+- `ENCODER_VIDEO_BITRATE` — kbps for H.264, default 4500 (YouTube's
+  recommended for 1080p30)
+- `ENCODER_AUDIO_BITRATE` — kbps for AAC, default 192
+- `ENCODER_FRAMERATE` — default 30. Bump to 60 only if Orion's CPU
+  has headroom (encoding 1080p60 with libx264 veryfast is ~2× the
+  cost of 1080p30).
+
+**Music rights:** Suno Pro tier (commercial use rights for new songs,
+verified 2026-04-28). MiniMax music-2.6 output is owned by us under
+their commercial API terms. Both safe to broadcast.
 
 ---
 

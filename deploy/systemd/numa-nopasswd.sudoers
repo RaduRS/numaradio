@@ -35,6 +35,14 @@ Cmnd_Alias NUMA_UNITS = \
     /usr/bin/systemctl stop numa-song-worker, \
     /usr/bin/systemctl stop numa-song-worker.service, \
     /usr/bin/systemctl status numa-song-worker, \
-    /usr/bin/systemctl status numa-song-worker.service
+    /usr/bin/systemctl status numa-song-worker.service, \
+    /usr/bin/systemctl restart numa-youtube-encoder, \
+    /usr/bin/systemctl restart numa-youtube-encoder.service, \
+    /usr/bin/systemctl start numa-youtube-encoder, \
+    /usr/bin/systemctl start numa-youtube-encoder.service, \
+    /usr/bin/systemctl stop numa-youtube-encoder, \
+    /usr/bin/systemctl stop numa-youtube-encoder.service, \
+    /usr/bin/systemctl status numa-youtube-encoder, \
+    /usr/bin/systemctl status numa-youtube-encoder.service
 
 marku ALL=(root) NOPASSWD: NUMA_UNITS
