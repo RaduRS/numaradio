@@ -59,7 +59,9 @@ test("findActiveLiveChatId returns the chat ID for the active broadcast", async 
   assert.equal(calls.length, 2);
   assert.match(calls[1].url, /liveBroadcasts/);
   assert.match(calls[1].url, /broadcastStatus=active/);
-  assert.match(calls[1].url, /mine=true/);
+  // YouTube API rejects mine + broadcastStatus together; OAuth token
+  // already scopes to the user's channel.
+  assert.doesNotMatch(calls[1].url, /mine=true/);
 });
 
 test("findActiveLiveChatId returns null when nothing is live", async () => {

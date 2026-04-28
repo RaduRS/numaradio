@@ -166,15 +166,15 @@ export async function fetchYoutubeSnapshot(
     const token = await getAccessToken();
 
     // 1. Find the active broadcast on this channel. broadcastStatus=active
-    //    only returns currently-live broadcasts. mine=true scopes to the
-    //    authorized account's channel.
+    //    only returns currently-live broadcasts. The OAuth token already
+    //    scopes to the authorized account's channel — and the API
+    //    explicitly rejects `mine=true` combined with broadcastStatus.
     const broadcasts = await api<{ items?: BroadcastsListItem[] }>(
       "/liveBroadcasts",
       {
         part: "id,snippet,status,contentDetails",
         broadcastStatus: "active",
         maxResults: "1",
-        mine: "true",
       },
       token,
     );
@@ -190,7 +190,6 @@ export async function fetchYoutubeSnapshot(
           part: "id,snippet,status",
           broadcastStatus: "upcoming",
           maxResults: "1",
-          mine: "true",
         },
         token,
       );

@@ -166,11 +166,14 @@ export function createYoutubeChatClient(
 
   async function findActiveLiveChatId(): Promise<string | null> {
     if (cachedLiveChatId) return cachedLiveChatId;
+    // YouTube API rejects `mine=true` combined with `broadcastStatus`
+    // — they're mutually exclusive filter params. broadcastStatus
+    // alone returns broadcasts in that state for the OAuth user, which
+    // is what we want.
     const j = await api<{ items?: BroadcastsListItem[] }>("/liveBroadcasts", {
       part: "id,snippet",
       broadcastStatus: "active",
       maxResults: "1",
-      mine: "true",
     });
     const id = j.items?.[0]?.snippet?.liveChatId ?? null;
     cachedLiveChatId = id;
