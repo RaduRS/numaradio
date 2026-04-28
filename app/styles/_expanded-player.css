@@ -657,7 +657,10 @@ html[data-broadcast] body {
    preserves the dark-teal brand and lets the booth content read
    without any colour-cast competing for attention. */
 
-/* Drifting glow behind the stage — slow, ambient, never distracting. */
+/* Drifting glow behind the stage — slow, ambient, never distracting.
+   Blur dialled in (40 → 20px) so the colour pools have shape rather
+   than dissolving into uniform fog; sharpens the perceived crispness
+   of the whole background without losing the depth cue. */
 .bcast-glow {
   position: absolute;
   inset: -10%;
@@ -666,7 +669,7 @@ html[data-broadcast] body {
   background:
     radial-gradient(circle at 30% 70%, rgba(79, 209, 197, 0.10), transparent 35%),
     radial-gradient(circle at 70% 25%, rgba(79, 209, 197, 0.07), transparent 40%);
-  filter: blur(40px);
+  filter: blur(20px);
   animation: bcast-glow-drift 60s ease-in-out infinite alternate;
 }
 @keyframes bcast-glow-drift {
@@ -696,13 +699,16 @@ html[data-broadcast] body {
   opacity: 0.35;
 }
 
-/* Film grain — animated 2-frame noise, kept faint. */
+/* Film grain — animated 2-frame noise, kept faint. Halved opacity
+   (6% → 3%) so the texture is felt rather than seen — preserves
+   the broadcast-stock cue without making large flat areas read
+   as "fuzzy". */
 .bcast-grain {
   position: absolute;
   inset: 0;
   z-index: 7;
   pointer-events: none;
-  opacity: 0.06;
+  opacity: 0.03;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   background-size: 160px 160px;
   animation: bcast-grain-shift 0.8s steps(2) infinite;
