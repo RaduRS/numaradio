@@ -86,7 +86,9 @@ function isVoiceFailure(f: DaemonFailure): boolean {
   if (!f.reason) return false;
   return (
     f.reason.startsWith("auto_chatter_") ||
-    f.reason.startsWith("listener_song_announce_")
+    f.reason.startsWith("listener_song_announce_") ||
+    f.reason.startsWith("world_aside_") ||
+    f.reason.startsWith("context_line_")
   );
 }
 

@@ -391,7 +391,9 @@ export default function ShoutoutsPage() {
       if (!f.reason || !f.at) continue;
       if (
         f.reason.startsWith("auto_chatter_") ||
-        f.reason.startsWith("listener_song_announce_")
+        f.reason.startsWith("listener_song_announce_") ||
+        f.reason.startsWith("world_aside_") ||
+        f.reason.startsWith("context_line_")
       ) {
         list.push({
           kind: "failure",

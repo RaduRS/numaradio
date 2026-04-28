@@ -299,7 +299,8 @@ const contextLine = new ContextLineOrchestrator({
     console.log(`[context-line] ${script.slice(0, 80)}`);
   },
   logFailure: (reason, detail) => {
-    lastFailures.push({ at: new Date().toISOString(), reason, detail });
+    const prefixed = `context_line_${reason}`;
+    lastFailures.push({ at: new Date().toISOString(), reason: prefixed, detail });
     console.warn(`[context-line] fail ${reason}: ${detail ?? ""}`);
   },
 });
