@@ -33,9 +33,13 @@ export default function OperatorDashboard() {
     bandwidthPoll.data && bandwidthPoll.data.ok
       ? (bandwidthPoll.data as BandwidthToday)
       : null;
+  // 60s cadence (not 30s) so the combined PR 3 + PR 4 quota fits the
+  // 10k/day default. PR 4's chat poll burns 5u every 90s when live
+  // (~4.8k/day on its own); at 30s here the dashboard alone would
+  // spend ~8.6k/day and we'd blow the budget.
   const youtubePoll = usePolling<YoutubeBroadcastSnapshot>(
     "/api/youtube/health",
-    30_000,
+    60_000,
   );
 
   return (
