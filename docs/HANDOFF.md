@@ -4,6 +4,64 @@ Last updated: 2026-04-29 (evening)
 
 ---
 
+## 2026-04-30 — TODO: dashboard owns the YouTube broadcast lifecycle
+
+Operator workflow today is "go to Studio + click Go Live, come back
+to dashboard + Start encoder, ditto in reverse to stop". Two control
+surfaces. Worth collapsing to one button on the dashboard.
+
+**Design:**
+
+Replace the current encoder Stop/Start button on the YoutubeCard
+with two buttons:
+
+- **Go Live**: creates a chat-enabled broadcast via API (lift the
+  insert + bind logic out of `scripts/youtube-go-live.ts` into a
+  shared lib), then starts the encoder. Returns the watch URL.
+- **End broadcast**: stops the encoder, then calls
+  `liveBroadcasts.transition` with `broadcastStatus=complete` to
+  mark the YouTube broadcast finished. **This is the load-bearing
+  bit**: with `enableAutoStop=false` the broadcast otherwise stays
+  in `live` lifecycle forever, and the chat poll keeps burning 5u
+  per tick (~28k/day at 15s cadence). Transitioning to `complete`
+  drops it back to 1u per tick (~5.7k/day).
+
+**Files to touch:**
+
+- New `dashboard/lib/youtube-broadcast.ts` — `createBroadcast()` and
+  `endBroadcast(videoId)` helpers. Adapt from
+  `scripts/youtube-go-live.ts` (already calls liveBroadcasts.insert
+  + bind + videos.update; only `transition` is new).
+- New `dashboard/app/api/youtube/broadcast/route.ts` — POST creates
+  broadcast, DELETE ends current. Track quota via the existing
+  `recordYoutubeQuota` (insert=50u, transition=50u, bind=50u — these
+  are write ops, much pricier than the 1u read ops we're tracking
+  today, so the meter stays accurate).
+- Update `dashboard/components/youtube-card.tsx` — replace the
+  Stop/Start row with Go Live / End broadcast buttons. Same confirm
+  dialog on End. Same poll for state — but state should now reflect
+  broadcast lifecycle (read from `/api/youtube/health`, the videoId
+  presence) rather than just systemd.
+
+**Quirk to watch:** if a broadcast is ALREADY active when Go Live
+fires, `liveBroadcasts.bind` will fail (a stream can only be bound
+to one active broadcast). Either error out clearly or auto-end the
+existing one first. Suggest the latter — it's what the operator
+would want anyway.
+
+**Re-test the auto-broadcast chat assumption:** I theorised
+yesterday that YouTube Studio's auto-broadcast doesn't have
+`enableLiveChat=true` set, but never actually verified after the
+`/liveChat/messages` URL fix. If a test from Studio's Go Live ends
+up working with chat, this whole feature might be unnecessary —
+the operator can just use Studio + dashboard Start/Stop side by
+side. Worth 2 minutes of testing before building.
+
+**Estimated time:** ~45-60 min if we build it. Skip if the Studio
+test passes.
+
+---
+
 ## 2026-04-29 — YouTube full launch + encoder + Lena reply mode — LIVE
 
 PR 2 (encoder) installed on Orion. End-to-end YouTube path now LIVE:
