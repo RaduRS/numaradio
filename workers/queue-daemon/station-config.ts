@@ -13,6 +13,8 @@ export interface StationConfigBlock {
 export interface StationConfig {
   autoHost: StationConfigBlock;
   worldAside: StationConfigBlock;
+  /** YouTube chat poll cadence in ms (operator-tunable). */
+  youtubeChatPollMs: number;
 }
 
 export interface StationConfigCacheOpts {
@@ -30,6 +32,7 @@ const BLOCK_FALLBACK: StationConfigBlock = {
 const FALLBACK: StationConfig = {
   autoHost: BLOCK_FALLBACK,
   worldAside: BLOCK_FALLBACK,
+  youtubeChatPollMs: 90_000,
 };
 
 export class StationConfigCache {

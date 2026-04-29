@@ -80,6 +80,10 @@ export interface YoutubeChatLoopOpts {
    *  Defaults to `/@lena\b/i`. Set null to disable (every message
    *  becomes a candidate). */
   triggerPattern?: RegExp | null;
+  /** Optional callback fired with the cost (in YouTube quota units)
+   *  of each underlying API call. Wired to YoutubeQuotaUsage in
+   *  production, omitted in tests. */
+  recordQuota?: (units: number) => void | Promise<void>;
 }
 
 export interface YoutubeChatLoop {
@@ -129,6 +133,7 @@ export function createYoutubeChatLoop(
       refreshToken: opts.refreshToken,
       fetcher,
       now,
+      recordQuota: opts.recordQuota,
     });
 
   // Per-author timestamps for the sliding-window rate limiter.

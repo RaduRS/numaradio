@@ -178,6 +178,11 @@ model Station {
   worldAsideMode        AutoHostMode @default(auto)
   worldAsideForcedUntil DateTime?
   worldAsideForcedBy    String?
+  /// YouTube live-chat poll cadence in ms. Operator-tunable from the
+  /// dashboard. Lower = lower shoutout latency, higher quota burn.
+  /// 90000 (90s) is the safe default for 24/7 broadcast under the 10k
+  /// daily quota; can drop to 30s for a few-hour-per-day stream.
+  youtubeChatPollMs   Int           @default(90000)
   createdAt             DateTime     @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -573,4 +578,16 @@ model MusicSubmission {
 
   @@index([status, createdAt])
   @@index([email, status])
+}
+
+/// Per-day YouTube Data API quota counter. Self-tracked because the
+/// API doesn't expose live quota usage. Each call site increments by
+/// the documented unit cost (3u for liveBroadcasts+streams+videos
+/// snapshot, 5u for liveChat/messages, 1u for liveBroadcasts.list
+/// off-air check). The `date` is YYYY-MM-DD in Pacific Time — Google
+/// resets the quota at midnight PT.
+model YoutubeQuotaUsage {
+  date      DateTime @id @db.Date
+  unitsUsed Int      @default(0)
+  updatedAt DateTime @updatedAt
 }

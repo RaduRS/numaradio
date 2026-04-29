@@ -6,16 +6,20 @@
 // dashboard health" runbook) and never expires unless the user revokes
 // access in Google Account settings.
 //
-// Quota cost per snapshot:
+// Quota cost per snapshot (recorded into YoutubeQuotaUsage table per
+// call so the dashboard's quota meter stays accurate):
 //   liveBroadcasts.list  → 1 unit (find current active broadcast)
 //   liveStreams.list     → 1 unit (stream health: good/ok/bad/noData)
 //   videos.list          → 1 unit (concurrent viewers)
-// Total: 3 units per refresh. At 60s polling that's 4,320/day — well
-// under the 10k default quota.
+// Total: 3 units per refresh when live, 2 when off-air (one extra
+// liveBroadcasts.list for "upcoming"). At 60s polling that's
+// 2,880-4,320/day — well under the 10k default quota.
 //
 // Caching: in-process 30s TTL so the dashboard's 30s polling doesn't
 // also burn API quota (it's a 1:1 already, but if multiple operators
 // open the dashboard at once we don't multiply the cost).
+
+import { recordYoutubeQuota } from "./youtube-quota";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
@@ -108,6 +112,7 @@ async function api<T>(
   path: string,
   params: Record<string, string>,
   token: string,
+  costUnits: number,
 ): Promise<T> {
   const url = new URL(`${API_BASE}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -115,6 +120,10 @@ async function api<T>(
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
+  // Record on response (success OR failure) — Google charges quota
+  // either way as long as the request reached their backend. We
+  // don't await — fire-and-forget keeps the response path snappy.
+  void recordYoutubeQuota(costUnits);
   if (!r.ok) {
     const text = await r.text().catch(() => "");
     throw new Error(`youtube api ${path} ${r.status}: ${text.slice(0, 200)}`);
@@ -177,6 +186,7 @@ export async function fetchYoutubeSnapshot(
         maxResults: "1",
       },
       token,
+      1,
     );
     const active = broadcasts.items?.[0];
 
@@ -192,6 +202,7 @@ export async function fetchYoutubeSnapshot(
           maxResults: "1",
         },
         token,
+        1,
       );
       const next = upcoming.items?.[0];
       snap = {
@@ -214,6 +225,7 @@ export async function fetchYoutubeSnapshot(
           "/liveStreams",
           { part: "id,status", id: streamId },
           token,
+          1,
         );
         health = streams.items?.[0]?.status?.healthStatus?.status ?? null;
       }
@@ -224,6 +236,7 @@ export async function fetchYoutubeSnapshot(
         "/videos",
         { part: "liveStreamingDetails", id: videoId },
         token,
+        1,
       );
       const viewersRaw = videos.items?.[0]?.liveStreamingDetails?.concurrentViewers;
       if (viewersRaw) {

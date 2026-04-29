@@ -8,6 +8,8 @@
 // (~1u per snapshot, 60s cache → 1,440u/day even with constant
 // homepage traffic).
 
+import { recordYoutubeQuota } from "./youtube-quota";
+
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 const CACHE_TTL_MS = 60_000;
@@ -77,6 +79,9 @@ export async function fetchPublicYoutubeState(): Promise<PublicYoutubeState> {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
+    // 1u for liveBroadcasts.list. Fire-and-forget — the public banner
+    // shouldn't slow down because Postgres has a hiccup.
+    void recordYoutubeQuota(1);
     if (!r.ok) throw new Error(`youtube ${r.status}`);
     const j = (await r.json()) as { items?: BroadcastsListItem[] };
     const active = j.items?.[0];

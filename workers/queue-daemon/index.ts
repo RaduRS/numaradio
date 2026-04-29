@@ -21,6 +21,7 @@ import {
   DEFAULT_POLL_INTERVAL_MS as YT_CHAT_INTERVAL_MS,
   type YoutubeChatLoop,
 } from "./youtube-chat-loop.ts";
+import { recordYoutubeQuota } from "../../lib/youtube-quota.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -86,6 +87,7 @@ const stationConfig = new StationConfigCache({
         worldAsideMode: true,
         worldAsideForcedUntil: true,
         worldAsideForcedBy: true,
+        youtubeChatPollMs: true,
       },
     });
     return {
@@ -99,6 +101,7 @@ const stationConfig = new StationConfigCache({
         forcedUntil: s.worldAsideForcedUntil,
         forcedBy: s.worldAsideForcedBy,
       },
+      youtubeChatPollMs: s.youtubeChatPollMs,
     };
   },
 });
@@ -593,22 +596,36 @@ async function main() {
       refreshToken: ytRefreshToken,
       shoutoutEndpoint: ytShoutoutEndpoint,
       internalSecret: ytInternalSecret,
+      recordQuota: recordYoutubeQuota,
     });
-    const ytTick = () =>
-      ytChatLoop!
-        .tick()
-        .then((r) => {
-          if (r.dispatched > 0 || r.failed > 0) {
-            console.log(
-              `[yt-chat] tick: dispatched=${r.dispatched} held/skipped=${r.skippedRateLimit + r.skippedOwner + r.skippedLength} failed=${r.failed} liveChatId=${r.liveChatId ?? "none"}`,
-            );
-          }
-        })
-        .catch((e) => console.error("[yt-chat] tick error", e));
-    // First tick 30s after boot so OAuth and other systems are warm.
+    // Self-rescheduling tick reads the (cached) Station config each
+    // time, so when an operator drops the slider in the dashboard
+    // the new cadence picks up within ~10 s (next tick) without a
+    // daemon restart. Hard floor of 15 s — anything tighter is a
+    // quota footgun.
+    const MIN_POLL_MS = 15_000;
+    const MAX_POLL_MS = 600_000;
+    const ytTick = async () => {
+      try {
+        const r = await ytChatLoop!.tick();
+        if (r.dispatched > 0 || r.failed > 0) {
+          console.log(
+            `[yt-chat] tick: dispatched=${r.dispatched} held/skipped=${r.skippedRateLimit + r.skippedOwner + r.skippedLength} failed=${r.failed} liveChatId=${r.liveChatId ?? "none"}`,
+          );
+        }
+      } catch (e) {
+        console.error("[yt-chat] tick error", e);
+      }
+      const cfg = await stationConfig.read().catch(() => null);
+      const nextDelay = Math.min(
+        MAX_POLL_MS,
+        Math.max(MIN_POLL_MS, cfg?.youtubeChatPollMs ?? YT_CHAT_INTERVAL_MS),
+      );
+      setTimeout(ytTick, nextDelay);
+    };
+    // First tick 30 s after boot so OAuth + Liquidsoap are warm.
     setTimeout(ytTick, 30_000);
-    setInterval(ytTick, YT_CHAT_INTERVAL_MS);
-    console.log("[queue-daemon] YouTube chat poller enabled (90s cadence)");
+    console.log("[queue-daemon] YouTube chat poller enabled (cadence read from Station.youtubeChatPollMs each tick)");
   } else {
     console.log(
       "[queue-daemon] YouTube chat poller DISABLED — set YOUTUBE_OAUTH_* env to enable",

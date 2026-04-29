@@ -49,6 +49,10 @@ export interface YoutubeChatClientOpts {
   fetcher?: typeof fetch;
   /** Override clock for deterministic tests. */
   now?: () => number;
+  /** Optional callback to record YouTube Data API quota units after
+   *  each call. Wired to the YoutubeQuotaUsage table in production;
+   *  omitted in unit tests. */
+  recordQuota?: (units: number) => void | Promise<void>;
 }
 
 export interface YoutubeChatClient {
@@ -157,6 +161,13 @@ export function createYoutubeChatClient(
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
+    // Per-call quota: liveBroadcasts.list = 1u, liveChat/messages = 5u.
+    // Record on response (Google charges whether or not we got a 2xx).
+    // Fire-and-forget so a Postgres blip can't slow the chat tick.
+    if (opts.recordQuota) {
+      const cost = path.startsWith("/liveChat") ? 5 : 1;
+      void opts.recordQuota(cost);
+    }
     if (!r.ok) {
       const text = await r.text().catch(() => "");
       throw new Error(`youtube ${path} ${r.status}: ${text.slice(0, 200)}`);

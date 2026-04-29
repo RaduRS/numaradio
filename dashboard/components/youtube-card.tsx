@@ -1,10 +1,22 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { YoutubeBroadcastSnapshot } from "@/lib/youtube";
+import { usePolling } from "@/hooks/use-polling";
 
 interface Props {
   data: YoutubeBroadcastSnapshot | null;
   isStale: boolean;
+}
+
+interface QuotaPayload {
+  quota: {
+    date: string;
+    unitsUsed: number;
+    limit: number;
+    resetsInSeconds: number;
+  };
+  youtubeChatPollMs: number;
 }
 
 interface PillStyle {
@@ -96,12 +108,77 @@ function fmtViewers(n: number | null): string {
   return `${Math.round(n / 1000)}k`;
 }
 
+function fmtResetsIn(seconds: number): string {
+  if (seconds <= 0) return "any moment";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function quotaBarColor(pct: number): string {
+  if (pct >= 90) return "bg-red-500";
+  if (pct >= 75) return "bg-amber-500";
+  return "bg-accent";
+}
+
 export function YoutubeCard({ data, isStale }: Props) {
   const pill = statusPill(data);
   const watchUrl = data?.videoId
     ? `https://www.youtube.com/watch?v=${data.videoId}`
     : null;
   const studioUrl = "https://studio.youtube.com/channel/UC/livestreaming";
+
+  // Poll quota + cadence every 60s. Same cadence as the parent's
+  // YouTube health card — keeps things in lockstep.
+  const quotaPoll = usePolling<QuotaPayload>("/api/youtube/quota", 60_000);
+  const [cadenceInput, setCadenceInput] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  // Sync local input from the server snapshot whenever it arrives,
+  // unless the user is in the middle of editing (input non-empty
+  // and different from server value).
+  useEffect(() => {
+    if (!quotaPoll.data) return;
+    const serverSeconds = Math.round(quotaPoll.data.youtubeChatPollMs / 1000);
+    setCadenceInput((prev) => (prev === "" ? String(serverSeconds) : prev));
+  }, [quotaPoll.data]);
+
+  const onSaveCadence = async () => {
+    setSaveErr(null);
+    const seconds = Number(cadenceInput);
+    if (!Number.isFinite(seconds) || seconds < 15 || seconds > 600) {
+      setSaveErr("15–600 s only");
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await fetch("/api/youtube/chat-cadence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtubeChatPollMs: seconds * 1000 }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `HTTP ${r.status}`);
+      }
+      quotaPoll.refresh();
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : "save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const quota = quotaPoll.data?.quota;
+  const used = quota?.unitsUsed ?? 0;
+  const limit = quota?.limit ?? 10_000;
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const serverCadenceSec = quotaPoll.data
+    ? Math.round(quotaPoll.data.youtubeChatPollMs / 1000)
+    : null;
+  const cadenceDirty =
+    serverCadenceSec !== null && cadenceInput !== String(serverCadenceSec);
 
   return (
     <Card className={`bg-bg-1 border-line ${isStale ? "opacity-70" : ""}`}>
@@ -179,6 +256,56 @@ export function YoutubeCard({ data, isStale }: Props) {
             {data.error.slice(0, 200)}
           </div>
         )}
+
+        <div className="flex flex-col gap-2 border-t border-line pt-3">
+          <div className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute">
+            <span>API Quota · today</span>
+            <span>{quota ? `resets in ${fmtResetsIn(quota.resetsInSeconds)}` : "—"}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-fg-mute/15">
+              <div
+                className={`h-full transition-all duration-300 ${quotaBarColor(pct)}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="font-mono text-xs tabular-nums text-fg">
+              {used.toLocaleString()}/{limit.toLocaleString()}
+              <span className="ml-1 text-fg-mute">({pct}%)</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-line pt-3">
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute">
+            Chat poll cadence (15–600 s) · lower = lower latency, higher quota
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={15}
+              max={600}
+              step={5}
+              value={cadenceInput}
+              onChange={(e) => setCadenceInput(e.target.value)}
+              className="w-24 rounded-md border border-line bg-bg-1 px-2 py-1 font-mono text-sm tabular-nums text-fg focus:border-accent focus:outline-none"
+              aria-label="Chat poll cadence in seconds"
+              disabled={saving}
+            />
+            <span className="font-mono text-xs text-fg-mute">s</span>
+            <button
+              type="button"
+              onClick={onSaveCadence}
+              disabled={!cadenceDirty || saving}
+              className="rounded-md border border-line px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-fg-dim transition-colors enabled:hover:border-accent/50 enabled:hover:text-accent disabled:opacity-40"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            {saveErr && (
+              <span className="font-mono text-[11px] text-red-400">{saveErr}</span>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
