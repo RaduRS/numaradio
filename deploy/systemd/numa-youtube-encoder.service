@@ -26,6 +26,11 @@ ExecStartPre=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrom
 # directory on every start. `+` runs as root despite User=marku.
 ExecStartPre=+/bin/sh -c 'umount /tmp/.X11-unix 2>/dev/null; mkdir -p /tmp/.X11-unix; chmod 1777 /tmp/.X11-unix'
 ExecStart=/usr/local/bin/numa-youtube-encoder.sh
+# Belt-and-braces cleanup. systemd's default KillMode=control-group
+# already SIGTERMs every child in the cgroup, but the script does
+# `exec ffmpeg` which replaces the bash trap. Run the same kill
+# patterns as ExecStartPre so a stop leaves no stragglers.
+ExecStopPost=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true; pkill -f "[f]fmpeg.*x11grab.*-i :99" || true'
 Restart=on-failure
 RestartSec=15s
 # Resource caps — Chromium can leak memory over weeks. Force a clean

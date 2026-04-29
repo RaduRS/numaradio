@@ -17,13 +17,12 @@ export const dynamic = "force-dynamic";
 const SERVICE = "numa-youtube-encoder";
 const ALLOWED_ACTIONS = new Set(["start", "stop", "restart"]);
 
-function runSystemctl(
+function run(
+  cmd: string,
   args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn("sudo", ["-n", "systemctl", ...args], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
@@ -36,9 +35,10 @@ function runSystemctl(
 }
 
 export async function GET(): Promise<NextResponse> {
-  // `is-active` exits 0 with "active" / non-zero with the actual
+  // `is-active` doesn't need sudo — any user can read systemd
+  // state. Exit code 0 with "active" / non-zero with the actual
   // state ("inactive", "failed", "activating") — both are useful.
-  const r = await runSystemctl(["is-active", SERVICE]);
+  const r = await run("systemctl", ["is-active", SERVICE]);
   const state = (r.stdout.trim() || r.stderr.trim() || "unknown") as string;
   return NextResponse.json(
     { state, ok: true },
@@ -63,7 +63,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const rawEmail = req.headers.get("cf-access-authenticated-user-email") ?? "";
   const operator = /^[^@\s]+@[^@\s]+$/.test(rawEmail) ? rawEmail : "operator";
 
-  const r = await runSystemctl([action, SERVICE]);
+  // start/stop/restart need root → use sudo. The numa-nopasswd
+  // sudoers drop-in permits these specific commands without a
+  // password prompt.
+  const r = await run("sudo", ["-n", "systemctl", action, SERVICE]);
   if (r.code !== 0) {
     return NextResponse.json(
       { ok: false, error: r.stderr || "systemctl returned non-zero" },
