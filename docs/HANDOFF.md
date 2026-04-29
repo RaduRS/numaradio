@@ -1,6 +1,125 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-04-28 (evening)
+Last updated: 2026-04-29 (evening)
+
+---
+
+## 2026-04-29 — YouTube full launch + encoder + Lena reply mode — LIVE
+
+PR 2 (encoder) installed on Orion. End-to-end YouTube path now LIVE:
+broadcast → chat poll → reply / shoutout → on air. Several gotchas
+hit during install + a chat-bridge bug (PR 4 had the wrong API URL
+all along — never worked in prod until today).
+
+**Encoder install gotchas (all fixed in repo, baked into the systemd
+unit at `deploy/systemd/numa-youtube-encoder.service`):**
+
+- WSL2/WSLg makes `/tmp/.X11-unix` a read-only tmpfs → Xvfb can't
+  bind. Fix: `ExecStartPre=+` umounts and recreates with chmod 1777
+  on every start. Harmless on a real Linux VPS.
+- `pkill -f "Xvfb :99"` in ExecStartPre matched the shell's own
+  argv → killed itself. Fix: `[X]vfb` regex trick (the regex matches
+  "Xvfb" but the literal "[X]vfb" in shell argv doesn't match the
+  regex).
+- Orphan ffmpeg from a smoke-test (`--smoke`) survived a restart and
+  competed for Xvfb frames → real encoder pushed choppy video →
+  YouTube buffered minutes ahead of live. Fix: ExecStartPre also
+  kills `[f]fmpeg.*x11grab.*-i :99` and removes the smoke FLV.
+- `StartLimitBurst` / `StartLimitIntervalSec` only work in `[Unit]`
+  on modern systemd, NOT `[Service]`.
+- ffmpeg's default `thread_queue_size=8` too small for 1920x1080
+  x11grab → "Thread message queue blocking" warnings + frame drops.
+  Bumped to 1024 video / 512 audio.
+- libx264 preset is `ultrafast` (was `veryfast`) — Chrome's
+  single-threaded render thread needs CPU more than ffmpeg does. Top
+  showed Chrome at 98% on one core, ffmpeg at 10% — the bottleneck
+  is render, not encode.
+- Setting `ENCODER_FRAMERATE=15` in `/etc/numa/env` is the current
+  config. 1080p15 fits comfortably on Orion's 12700H.
+
+**PR 4 chat poller bugs that shipped silently with the original PR
+(all fixed today):**
+
+- Endpoint URL was `/liveChatMessages` (one word) → returned Google
+  edge-router 404 (zero-byte text/html). Correct path is
+  `/liveChat/messages` with a slash. The doc resource name
+  ("liveChatMessages.list") misled the original author.
+- Default dispatch URL was `https://api.numaradio.com/api/internal/
+  youtube-chat-shoutout` — that subdomain is Icecast/Orion via
+  cloudflared, not Vercel. Vercel app is `numaradio.com`. Cloudflare
+  ate dispatches with HTML 404 silently. Now defaults to
+  `numaradio.com/...`.
+- Daemon **filters channel-owner + moderator messages by design** —
+  when testing, post from a non-owner account.
+- Per-author rate limit: 3 dispatches/hour, sliding window. Excess
+  is dropped silently — no log line. Silence ≠ broken, just rate-
+  limited. (See `workers/queue-daemon/youtube-chat-loop.ts`
+  `AUTHOR_HOUR_LIMIT`.)
+
+**YouTube auto-broadcast quirk (worked around with new script):**
+when an encoder pushes RTMP into a "Default" stream with auto-start,
+YouTube auto-creates a broadcast — but with `enableLiveChat` unset
+at the API level. The watch-page chat shows fine, but
+`/liveChat/messages` returns empty for that broadcast. Fix:
+`scripts/youtube-go-live.ts` calls `liveBroadcasts.insert` with
+`enableLiveChat=true`, `enableAutoStart=true`,
+`enableAutoStop=false`, then binds it to the existing stream.
+Encoder's running RTMP picks it up. Run once per session:
+
+```
+cd ~/saas/numaradio && npx tsx scripts/youtube-go-live.ts
+```
+
+Requires OAuth refresh token with `youtube.force-ssl` scope (the
+original `youtube.readonly` token works for read-only PR 3/4
+polling but can't insert/bind broadcasts). Token re-grabbed from
+OAuth Playground today; same client ID/secret.
+
+**Lena conversational reply mode (NEW):** PR 4 originally treated
+every `@lena` message as a shoutout to be read out, which felt
+wrong for messages that were addressed TO Lena ("thanks for this
+one", "you're amazing", "tuning in from Tokyo"). Classifier is now
+tri-state — `shoutout` / `reply` / `noise`. Reply path generates a
+fresh 1-2 sentence response from Lena via MiniMax
+(`lib/lena-reply.ts`) and dispatches to the dashboard's
+`/api/internal/shoutout` with `skipHumanize=true` (skip the
+"narrate the listener's words" rewrite). Shoutout path unchanged.
+Borderline messages bias to reply.
+
+**Operator override (NEW):** `approveShoutout` now accepts blocked
+rows too, not just held — so if NanoClaw blocks a shoutout and the
+operator says "actually approve it", the override works. Hard
+guard remains "hasn't aired" (no duplicate audio). Audit trail
+preserves the original block reason: `approved_by:operator
+revived_from_blocked prior=<original>`.
+
+**Dashboard YouTube card additions:**
+- Quota meter (today's spend / 10000 daily limit, color-coded at
+  75/90%, reset countdown in Pacific Time).
+- Operator-tunable chat-poll cadence input (15-600 s, daemon picks
+  up the change within 10 s — no restart).
+- New endpoints: `GET /api/youtube/quota`, `POST
+  /api/youtube/chat-cadence`.
+- Schema: new `YoutubeQuotaUsage` table (date PK in PT,
+  unitsUsed). New `Station.youtubeChatPollMs` column. Migration
+  `20260429192000_add_youtube_quota_and_chat_poll_ms` applied.
+- Dashboard polling dropped 30s → 60s to fit combined daily quota
+  under 10k.
+
+**Day-to-day workflow:**
+- Going live fresh: end any current broadcast in Studio →
+  `npx tsx scripts/youtube-go-live.ts` → encoder auto-attaches.
+- New stream key → edit `/etc/numa/env` + `sudo systemctl restart
+  numa-youtube-encoder`.
+- Frontend `/live` change → same restart (Chromium tab doesn't
+  auto-reload).
+
+**VPS migration plan** (see `~/saas/MIGRATION.md`): Hetzner CX33
+€7.49/mo or CPX32 €14.99/mo. Encoder profile recommendations by
+tier baked in. Updated today with the 1080p15 / ultrafast /
+thread_queue_size / pkill / X11-unix learnings.
+
+---
 
 **Older deploy notes are in `docs/HANDOFF-archive.md`.** This file
 keeps only the last few days of actionable state, anything not-yet-

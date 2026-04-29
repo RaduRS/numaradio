@@ -19,6 +19,10 @@ interface QuotaPayload {
   youtubeChatPollMs: number;
 }
 
+interface EncoderState {
+  state: string;
+}
+
 interface PillStyle {
   label: string;
   bg: string;
@@ -132,6 +136,42 @@ export function YoutubeCard({ data, isStale }: Props) {
   // Poll quota + cadence every 60s. Same cadence as the parent's
   // YouTube health card — keeps things in lockstep.
   const quotaPoll = usePolling<QuotaPayload>("/api/youtube/quota", 60_000);
+  // Encoder state (systemd is-active) every 30s. Drives the
+  // Stop/Start button label.
+  const encoderPoll = usePolling<EncoderState>("/api/youtube/encoder", 30_000);
+  const [encoderBusy, setEncoderBusy] = useState(false);
+  const [encoderErr, setEncoderErr] = useState<string | null>(null);
+
+  const encoderState = encoderPoll.data?.state ?? "unknown";
+  const encoderActive = encoderState === "active";
+
+  const onEncoderAction = async (action: "stop" | "start") => {
+    setEncoderErr(null);
+    if (
+      action === "stop" &&
+      !confirm("Stop the YouTube encoder? The stream will go dark on YouTube.")
+    ) {
+      return;
+    }
+    setEncoderBusy(true);
+    try {
+      const r = await fetch("/api/youtube/encoder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `HTTP ${r.status}`);
+      }
+      // Give systemd a beat to settle before we reflect the new state.
+      setTimeout(() => encoderPoll.refresh(), 1500);
+    } catch (e) {
+      setEncoderErr(e instanceof Error ? e.message : "action failed");
+    } finally {
+      setEncoderBusy(false);
+    }
+  };
   const [cadenceInput, setCadenceInput] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -273,6 +313,44 @@ export function YoutubeCard({ data, isStale }: Props) {
               {used.toLocaleString()}/{limit.toLocaleString()}
               <span className="ml-1 text-fg-mute">({pct}%)</span>
             </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-line pt-3">
+          <div className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute">
+            <span>Encoder · Orion</span>
+            <span
+              className={
+                encoderActive
+                  ? "text-accent"
+                  : encoderState === "unknown"
+                    ? "text-fg-mute"
+                    : "text-amber-400"
+              }
+            >
+              {encoderState}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onEncoderAction(encoderActive ? "stop" : "start")}
+              disabled={encoderBusy || encoderState === "unknown"}
+              className={`rounded-md border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors disabled:opacity-40 ${
+                encoderActive
+                  ? "border-red-500/40 text-red-300 enabled:hover:bg-red-500/10"
+                  : "border-accent/40 text-accent enabled:hover:bg-accent/10"
+              }`}
+            >
+              {encoderBusy
+                ? "Working…"
+                : encoderActive
+                  ? "Stop encoder"
+                  : "Start encoder"}
+            </button>
+            {encoderErr && (
+              <span className="font-mono text-[11px] text-red-400">{encoderErr}</span>
+            )}
           </div>
         </div>
 
