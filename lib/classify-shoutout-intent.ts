@@ -1,28 +1,39 @@
 /**
- * "Is this YouTube chat message worth airing as a shoutout?" classifier.
+ * Three-way classifier for YouTube live chat messages: should this be
+ * aired as a shoutout, replied to conversationally by Lena, or skipped
+ * as noise?
  *
  * Used only for messages coming in via the YouTube live chat poller
  * (workers/queue-daemon/youtube-chat-loop.ts) — booth submissions on
- * numaradio.com self-select for intent (a listener went out of their
- * way to fill in the form). YouTube chat doesn't have that filter, so
- * we add this lightweight LLM check before burning a moderation call
- * on noise like "lol" or "first".
+ * numaradio.com always go through the shoutout path because the form
+ * itself self-selects for that intent.
  *
- * Returns either { worthy: true } or { worthy: false; reason }. The
- * reason is short and machine-readable so it can land in the Shoutout
- * audit log (deliveryStatus="filtered").
+ * Returns { category, worthy, reason }:
+ *   - "shoutout" → message dedicates / shouts out to someone or shares
+ *     a listening context (verbatim-worthy text the host should narrate)
+ *   - "reply"    → message is addressed TO Lena (thanks, hello, comment
+ *     about the show, simple question) — generate a fresh 1-2 sentence
+ *     response from Lena rather than reading the listener's words
+ *   - "noise"    → low-effort, skip
  *
- * Fail-open: if MiniMax is unreachable we let the message through and
- * lean on the existing moderator/held flow downstream.
+ * `worthy` is provided as a back-compat boolean (true for shoutout|reply,
+ * false for noise) so older callers that only branched on worthy keep
+ * working unchanged.
+ *
+ * Fail-open: if MiniMax is unreachable we return shoutout to keep the
+ * existing pipeline running.
  */
 
 const MINIMAX_URL = "https://api.minimax.io/anthropic/v1/messages";
 const CLASSIFIER_MODEL =
   process.env.MINIMAX_INTENT_MODEL ?? "MiniMax-M2.7";
 
-export type IntentDecision = "worthy" | "noise" | "skip";
+export type IntentCategory = "shoutout" | "reply" | "noise";
 
 export interface IntentResult {
+  category: IntentCategory;
+  /** True when category is "shoutout" or "reply". Kept for older
+   *  callers that only branched on a boolean. */
   worthy: boolean;
   reason: string;
 }
@@ -39,30 +50,41 @@ interface MinimaxResponse {
   content?: Array<MinimaxText | MinimaxThinking>;
 }
 
-const SYSTEM_PROMPT = `You decide whether a YouTube live chat message should be aired aloud on a 24/7 AI radio station hosted by Lena.
+const SYSTEM_PROMPT = `You triage a YouTube live chat message on a 24/7 AI radio station hosted by Lena. Decide one of THREE outcomes:
 
-The radio is intimate and mood-driven — listeners type messages, the host reads the worthy ones over music. We air messages that show genuine intent: shoutouts, dedications, requests, reactions with substance, questions, "playing this for…" notes, mood reports, place check-ins, thank-yous.
+1. "shoutout" — the listener wants Lena to dedicate / shout out / read their message TO someone else (a friend, family, place, group). Lena will narrate it on air to the whole listener pool.
+2. "reply" — the message is addressed TO Lena herself: a thank-you, a comment about the show or music, a simple question, a place check-in WITHOUT a recipient. Lena should answer back conversationally (1-2 sentences).
+3. "noise" — low-effort or empty. Skip silently.
 
-We DO NOT air pure noise: "lol", "first", "hi", single emojis, single repeated chars, "test", "ping", spam URLs, low-effort one-word reactions ("nice", "ok", "yes"), greetings without content ("hey", "yo"), bot pings.
+Heuristics:
+- "shoutout to <someone>", "playing this for <someone>", "hi to my friends in <place>", "dedicating this to <X>" → shoutout
+- "thanks", "you're awesome", "this is so chill", "love this song", "good morning lena", direct questions to Lena, "tuning in from Tokyo" (no recipient) → reply
+- single words, "lol", "first", "test", emoji-only, "hi"/"yo" alone → noise
 
-Borderline goes WORTHY. The downstream moderator handles abusive content separately — your only job is "low-effort noise" vs "real intent".
+Borderline messages go to "reply" rather than "shoutout" — a fresh Lena reply is always interesting; reading a flat message can feel awkward.
 
-Reply with EXACTLY one of these JSON shapes, no prose, no markdown:
-{"d":"worthy"}
+Reply with EXACTLY one of these JSON shapes, nothing else:
+{"d":"shoutout"}
+{"d":"reply"}
 {"d":"noise","r":"<short reason: lol|emoji|greeting|too_short|spam|test|empty>"}
 
 Examples (input → output):
 "lol" → {"d":"noise","r":"low_effort"}
 "first" → {"d":"noise","r":"first_comment"}
 "hi" → {"d":"noise","r":"greeting"}
-"hey lena" → {"d":"worthy"}
-"shoutout to my brother in Bucharest" → {"d":"worthy"}
-"can you play something dreamy?" → {"d":"worthy"}
-"this is hitting different at 2am" → {"d":"worthy"}
-"thanks for keeping me company tonight" → {"d":"worthy"}
+"hey lena" → {"d":"reply"}
+"shoutout to my brother in Bucharest" → {"d":"shoutout"}
+"playing this for my mom on her birthday" → {"d":"shoutout"}
+"can you play something dreamy?" → {"d":"reply"}
+"this is hitting different at 2am" → {"d":"reply"}
+"thanks for keeping me company tonight" → {"d":"reply"}
+"big thank you for this one" → {"d":"reply"}
+"you're amazing lena" → {"d":"reply"}
+"how long have you been on tonight?" → {"d":"reply"}
 "🔥🔥🔥" → {"d":"noise","r":"emoji_only"}
 "yo" → {"d":"noise","r":"greeting"}
-"first listening from Tokyo" → {"d":"worthy"}
+"first listening from Tokyo" → {"d":"reply"}
+"hey friends in Berlin, hope your night is good" → {"d":"shoutout"}
 "test" → {"d":"noise","r":"test"}`;
 
 export interface ClassifyOpts {
@@ -75,12 +97,19 @@ export async function classifyShoutoutIntent(
 ): Promise<IntentResult> {
   const fetcher = opts.fetcher ?? fetch;
   const text = rawText.trim();
-  if (text.length < 4) return { worthy: false, reason: "too_short" };
+  if (text.length < 4) {
+    return { category: "noise", worthy: false, reason: "too_short" };
+  }
 
   const apiKey = process.env.MINIMAX_API_KEY;
   if (!apiKey) {
-    // Fail-open — we let it through; the existing moderator still runs.
-    return { worthy: true, reason: "classifier_not_configured" };
+    // Fail-open — we let it through as a shoutout; the existing
+    // moderator still runs.
+    return {
+      category: "shoutout",
+      worthy: true,
+      reason: "classifier_not_configured",
+    };
   }
 
   let res: Response;
@@ -104,6 +133,7 @@ export async function classifyShoutoutIntent(
     // Fail-open on a hung classifier so a YouTube outage in MiniMax
     // doesn't black-hole the whole pipeline.
     return {
+      category: "shoutout",
       worthy: true,
       reason:
         err instanceof Error && err.name === "TimeoutError"
@@ -113,14 +143,22 @@ export async function classifyShoutoutIntent(
   }
 
   if (!res.ok) {
-    return { worthy: true, reason: `classifier_http_${res.status}` };
+    return {
+      category: "shoutout",
+      worthy: true,
+      reason: `classifier_http_${res.status}`,
+    };
   }
 
   let json: MinimaxResponse;
   try {
     json = (await res.json()) as MinimaxResponse;
   } catch {
-    return { worthy: true, reason: "classifier_parse_error" };
+    return {
+      category: "shoutout",
+      worthy: true,
+      reason: "classifier_parse_error",
+    };
   }
 
   const textBlock = (json.content ?? []).find(
@@ -137,17 +175,33 @@ export function parseIntentReply(reply: string): IntentResult {
   const m = reply.match(/\{[^{}]*"d"\s*:\s*"(\w+)"[^{}]*\}/);
   if (!m) {
     // Couldn't parse — fail-open.
-    return { worthy: true, reason: "classifier_no_decision" };
+    return {
+      category: "shoutout",
+      worthy: true,
+      reason: "classifier_no_decision",
+    };
   }
   const decision = m[1].toLowerCase();
-  if (decision === "worthy") return { worthy: true, reason: "ok" };
+  if (decision === "shoutout" || decision === "worthy") {
+    // "worthy" is the legacy token from before tri-state — treat
+    // as shoutout for back-compat.
+    return { category: "shoutout", worthy: true, reason: "ok" };
+  }
+  if (decision === "reply") {
+    return { category: "reply", worthy: true, reason: "ok" };
+  }
   if (decision === "noise") {
     const reasonMatch = reply.match(/"r"\s*:\s*"([^"]+)"/);
     return {
+      category: "noise",
       worthy: false,
       reason: reasonMatch ? reasonMatch[1].slice(0, 32) : "noise",
     };
   }
   // Unknown decision token — fail-open.
-  return { worthy: true, reason: `classifier_unknown:${decision.slice(0, 16)}` };
+  return {
+    category: "shoutout",
+    worthy: true,
+    reason: `classifier_unknown:${decision.slice(0, 16)}`,
+  };
 }

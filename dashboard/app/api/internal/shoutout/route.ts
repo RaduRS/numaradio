@@ -25,6 +25,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     text?: unknown;
     requesterName?: unknown;
     requestId?: unknown;
+    skipHumanize?: unknown;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -39,6 +40,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     typeof body.requesterName === "string" ? body.requesterName : undefined;
   const requestId =
     typeof body.requestId === "string" ? body.requestId : undefined;
+  const skipHumanize = body.skipHumanize === true;
 
   if (!shoutoutRowId) {
     return NextResponse.json(
@@ -78,6 +80,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       source: { kind: "booth", shoutoutRowId, requesterName },
       requestId,
       pool,
+      skipHumanize,
     });
   } catch (e) {
     if (e instanceof ShoutoutError) {

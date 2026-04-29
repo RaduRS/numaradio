@@ -16,6 +16,7 @@ import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { moderateShoutout } from "@/lib/moderate";
 import { classifyShoutoutIntent } from "@/lib/classify-shoutout-intent";
+import { generateLenaReply } from "@/lib/lena-reply";
 import { internalAuthOk } from "@/lib/internal-auth";
 
 export const dynamic = "force-dynamic";
@@ -118,12 +119,15 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  // YouTube-specific intent filter — separates "real shoutout" from
-  // "lol"/"first"/"hi". Booth submissions skip this (the form itself
-  // self-selects for intent). Fail-open: if the classifier can't
-  // decide, fall through to moderation as if it said worthy.
+  // YouTube-specific intent filter. Tri-state:
+  //   shoutout — listener wants a dedication aired (existing flow:
+  //     moderate → host-rewrite → TTS → on air)
+  //   reply    — listener addressed Lena directly (new flow:
+  //     moderate → generate Lena reply → TTS direct, skipHumanize)
+  //   noise    — skip (lol / first / hi / emoji-only)
+  // Fail-open: if the classifier can't decide it returns shoutout.
   const intent = await classifyShoutoutIntent(rawText);
-  if (!intent.worthy) {
+  if (intent.category === "noise") {
     return NextResponse.json({
       ok: true,
       status: "filtered",
@@ -236,7 +240,41 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const moderatedText = moderation.text;
+  const isReply = intent.category === "reply";
   after(async () => {
+    let textToAir = moderatedText;
+    let skipHumanize = false;
+
+    if (isReply) {
+      // Generate Lena's conversational response. Failure here means
+      // we can't air anything sensible — drop quietly rather than
+      // falling back to the host-rewrite of the listener's words
+      // (which sounded wrong: "inRhino said big thank you" is awkward
+      // when the listener was thanking Lena, not the audience).
+      const reply = await generateLenaReply(moderatedText, { displayName });
+      if (!reply.text) {
+        await prisma.shoutout.update({
+          where: { id: shoutout.id },
+          data: {
+            deliveryStatus: "failed",
+            moderationReason: `reply_gen_${reply.reason}`,
+          },
+        });
+        console.warn(
+          `yt-chat-shoutout: reply generation failed for ${shoutout.id} (${reply.reason})`,
+        );
+        return;
+      }
+      textToAir = reply.text;
+      skipHumanize = true;
+      // Persist what Lena will actually say so the dashboard's
+      // Recent feed shows the reply, not the listener's question.
+      await prisma.shoutout.update({
+        where: { id: shoutout.id },
+        data: { cleanText: textToAir },
+      });
+    }
+
     try {
       const internalRes = await fetch(INTERNAL_SHOUTOUT_URL, {
         method: "POST",
@@ -246,8 +284,9 @@ export async function POST(req: Request): Promise<NextResponse> {
         },
         body: JSON.stringify({
           shoutoutRowId: shoutout.id,
-          text: moderatedText,
+          text: textToAir,
           requesterName,
+          skipHumanize,
         }),
       });
       if (!internalRes.ok) {
