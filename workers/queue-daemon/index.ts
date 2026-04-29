@@ -579,9 +579,12 @@ async function main() {
   const ytClientId = process.env.YOUTUBE_OAUTH_CLIENT_ID;
   const ytClientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET;
   const ytRefreshToken = process.env.YOUTUBE_OAUTH_REFRESH_TOKEN;
+  // The internal endpoint lives on the Vercel app at numaradio.com.
+  // api.numaradio.com is Icecast/Orion, not Vercel — pointing this at
+  // the api subdomain returns Cloudflare's HTML 404 page.
   const ytShoutoutEndpoint =
     process.env.YOUTUBE_CHAT_SHOUTOUT_URL ??
-    "https://api.numaradio.com/api/internal/youtube-chat-shoutout";
+    "https://numaradio.com/api/internal/youtube-chat-shoutout";
   const ytInternalSecret = process.env.INTERNAL_API_SECRET;
   if (ytClientId && ytClientSecret && ytRefreshToken && ytInternalSecret) {
     ytChatLoop = createYoutubeChatLoop({
