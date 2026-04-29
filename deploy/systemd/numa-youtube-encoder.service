@@ -9,6 +9,10 @@ User=marku
 EnvironmentFile=/etc/numa/env
 # Belt-and-braces: kill any zombies from a previous run before starting.
 ExecStartPre=/bin/sh -c 'pkill -f "Xvfb :99" || true; pkill -f "google-chrome.*--display=:99" || true; pkill -f "chromium.*--display=:99" || true'
+# WSL2 (WSLg) bind-mounts /tmp/.X11-unix as a read-only tmpfs, so Xvfb's
+# unix socket creation fails. Replace it with a writable, sticky-bit
+# directory on every start. `+` runs as root despite User=marku.
+ExecStartPre=+/bin/sh -c 'umount /tmp/.X11-unix 2>/dev/null; mkdir -p /tmp/.X11-unix; chmod 1777 /tmp/.X11-unix'
 ExecStart=/usr/local/bin/numa-youtube-encoder.sh
 Restart=on-failure
 RestartSec=15s
