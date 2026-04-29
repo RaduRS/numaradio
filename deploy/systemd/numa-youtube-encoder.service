@@ -2,13 +2,21 @@
 Description=Numa Radio — YouTube 24/7 broadcast encoder
 After=network-online.target numa-liquidsoap.service
 Wants=network-online.target
+# Crash-loop protection — if the encoder fails 5 times in 5 minutes,
+# stop trying. An operator should investigate before letting it spin
+# (e.g. revoked stream key, network outage, broken /live page).
+StartLimitBurst=5
+StartLimitIntervalSec=300
 
 [Service]
 Type=simple
 User=marku
 EnvironmentFile=/etc/numa/env
 # Belt-and-braces: kill any zombies from a previous run before starting.
-ExecStartPre=/bin/sh -c 'pkill -f "Xvfb :99" || true; pkill -f "google-chrome.*--display=:99" || true; pkill -f "chromium.*--display=:99" || true'
+# `[X]vfb` is a regex that matches "Xvfb" but the literal "[X]vfb" in
+# the shell's own argv does not match the regex — without that trick
+# pkill -f would SIGTERM its own /bin/sh and fail the whole start.
+ExecStartPre=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true'
 # WSL2 (WSLg) bind-mounts /tmp/.X11-unix as a read-only tmpfs, so Xvfb's
 # unix socket creation fails. Replace it with a writable, sticky-bit
 # directory on every start. `+` runs as root despite User=marku.
@@ -16,11 +24,6 @@ ExecStartPre=+/bin/sh -c 'umount /tmp/.X11-unix 2>/dev/null; mkdir -p /tmp/.X11-
 ExecStart=/usr/local/bin/numa-youtube-encoder.sh
 Restart=on-failure
 RestartSec=15s
-# Crash-loop protection — if the encoder fails 5 times in 5 minutes,
-# stop trying. An operator should investigate before letting it spin
-# (e.g. revoked stream key, network outage, broken /live page).
-StartLimitBurst=5
-StartLimitIntervalSec=300
 # Resource caps — Chromium can leak memory over weeks. Force a clean
 # restart once a day so we always run from a fresh Chromium process.
 RuntimeMaxSec=86400
