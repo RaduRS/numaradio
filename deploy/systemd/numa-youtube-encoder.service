@@ -16,7 +16,11 @@ EnvironmentFile=/etc/numa/env
 # `[X]vfb` is a regex that matches "Xvfb" but the literal "[X]vfb" in
 # the shell's own argv does not match the regex — without that trick
 # pkill -f would SIGTERM its own /bin/sh and fail the whole start.
-ExecStartPre=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true'
+# We also kill orphan ffmpegs that match our x11grab :99 input — a
+# leftover smoke-test or unclean restart can otherwise sit forever
+# stealing Xvfb frames and CPU, which makes the real encoder choppy
+# enough that YouTube buffers minutes ahead of live.
+ExecStartPre=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true; pkill -f "[f]fmpeg.*x11grab.*-i :99" || true; rm -f /tmp/numa-encoder-smoke.flv'
 # WSL2 (WSLg) bind-mounts /tmp/.X11-unix as a read-only tmpfs, so Xvfb's
 # unix socket creation fails. Replace it with a writable, sticky-bit
 # directory on every start. `+` runs as root despite User=marku.
