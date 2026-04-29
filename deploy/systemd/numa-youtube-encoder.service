@@ -31,6 +31,11 @@ ExecStart=/usr/local/bin/numa-youtube-encoder.sh
 # `exec ffmpeg` which replaces the bash trap. Run the same kill
 # patterns as ExecStartPre so a stop leaves no stragglers.
 ExecStopPost=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true; pkill -f "[f]fmpeg.*x11grab.*-i :99" || true'
+# ffmpeg exits with 255 on SIGTERM (clean shutdown via systemctl
+# stop) and 143 on direct SIGTERM. Without this, systemd marks the
+# unit "failed" after a stop and the dashboard sees state="failed"
+# even though everything stopped fine.
+SuccessExitStatus=143 255
 Restart=on-failure
 RestartSec=15s
 # Resource caps — Chromium can leak memory over weeks. Force a clean
