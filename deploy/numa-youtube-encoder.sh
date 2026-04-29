@@ -135,12 +135,21 @@ fi
 # `exec` so ffmpeg becomes the foreground process — systemd's
 # Restart=on-failure then catches encoder crashes correctly. Cleanup
 # trap still fires on signals because trap is inherited.
+# thread_queue_size: ffmpeg's default of 8 frames is too small once
+# x11grab is reading 1920x1080 raw frames from a software-rasterized
+# Chromium — Chrome's render loop briefly stalls when the page does
+# heavy CSS work (blur, gradients), the input queue overflows, and the
+# stream stutters. 1024 video frames + 512 audio chunks gives enough
+# headroom to ride through render hiccups. Output to RTMP is unchanged;
+# YouTube sees a smoother CFR feed.
 exec ffmpeg \
   -hide_banner -loglevel warning \
+  -thread_queue_size 1024 \
   -f x11grab -framerate "${ENCODER_FRAMERATE}" -video_size "${WIDTH}x${HEIGHT}" -i "${DISPLAY_NUM}" \
+  -thread_queue_size 512 \
   -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -i "${ICECAST_URL}" \
   -map 0:v -map 1:a \
-  -c:v libx264 -preset veryfast -tune zerolatency \
+  -c:v libx264 -preset ultrafast -tune zerolatency \
   -b:v "${VBITRATE_K}" -maxrate "${VBITRATE_K}" -bufsize "${VBUFSIZE_K}" \
   -g "${GOP}" -keyint_min "${GOP}" -sc_threshold 0 \
   -pix_fmt yuv420p -profile:v high -level 4.1 \
