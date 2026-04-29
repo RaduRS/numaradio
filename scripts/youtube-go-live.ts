@@ -21,6 +21,15 @@
 // /etc/numa/env, dashboard/.env.local, and Vercel env.
 
 import "../lib/load-env";
+import { config as loadDotenv } from "dotenv";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
+// OAuth creds for YouTube live tooling live in dashboard/.env.local
+// (alongside the dashboard's YouTube health card), not the root
+// .env.local. Pull them in so this script can run from the repo root.
+const dashEnv = join(process.cwd(), "dashboard", ".env.local");
+if (existsSync(dashEnv)) loadDotenv({ path: dashEnv, override: false });
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
