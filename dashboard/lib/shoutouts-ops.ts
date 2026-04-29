@@ -60,11 +60,20 @@ async function classifyMissInto(
   );
   if (rows.length === 0) return "not_found";
   if (rows[0].deliveryStatus === "aired") return "already_aired";
+  // After the approve-revives-blocked change, the only remaining
+  // path that lands here is a row that's failed/pending/etc — call
+  // it not_held since that's the closest existing label.
   return "not_held";
 }
 
 export async function approveShoutout(input: ApproveInput): Promise<ApproveResult> {
   const { id, operator, pool, generate } = input;
+  // Approve covers two flows: held → allowed (the original moderation
+  // flow) AND blocked → allowed (operator overrides a NanoClaw or
+  // moderator block). The only hard guard is "hasn't already aired"
+  // because re-airing duplicates audio. The previous moderationReason
+  // is preserved by prefixing the new one — the audit trail tells you
+  // it was revived from a block, not just held.
   const reserved = await pool.query<{
     id: string;
     rawText: string;
@@ -73,11 +82,15 @@ export async function approveShoutout(input: ApproveInput): Promise<ApproveResul
   }>(
     `UPDATE "Shoutout"
         SET "moderationStatus" = 'allowed',
-            "moderationReason" = $2,
+            "moderationReason" = CASE
+              WHEN "moderationStatus" = 'blocked'
+                THEN $2 || ' revived_from_blocked prior=' || COALESCE("moderationReason", '')
+              ELSE $2
+            END,
             "deliveryStatus"   = 'pending',
             "updatedAt"        = NOW()
       WHERE id = $1
-        AND "moderationStatus" = 'held'
+        AND "moderationStatus" IN ('held', 'blocked')
         AND "deliveryStatus"   != 'aired'
       RETURNING id, "rawText", "cleanText", "requesterName"`,
     [id, `approved_by:${operator}`],

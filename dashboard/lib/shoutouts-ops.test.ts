@@ -76,13 +76,17 @@ test("approveShoutout returns already_aired when row is aired", async () => {
   assert.deepEqual(result, { ok: false, code: "already_aired" });
 });
 
-test("approveShoutout returns not_held when row is not in held state", async () => {
+test("approveShoutout returns not_held when row is in a non-revivable state (failed/aired-already-handled)", async () => {
+  // After the revive-blocked change, the only paths to not_held are
+  // rows that aren't held *and* aren't blocked (e.g., delivery=failed
+  // with moderation=allowed). Simulate that with a row in a state
+  // the conditional UPDATE won't match.
   const { pool } = fakePool({
     results: [
       { rowCount: 0, rows: [] },
       {
         rowCount: 1,
-        rows: [{ id: "x", deliveryStatus: "blocked", moderationStatus: "blocked" }],
+        rows: [{ id: "x", deliveryStatus: "failed", moderationStatus: "allowed" }],
       },
     ],
   });
@@ -93,6 +97,40 @@ test("approveShoutout returns not_held when row is not in held state", async () 
     generate: okGenerator(),
   });
   assert.deepEqual(result, { ok: false, code: "not_held" });
+});
+
+test("approveShoutout revives blocked rows: flips blocked→allowed and airs", async () => {
+  // Operator override after a NanoClaw / moderator block. Same
+  // conditional UPDATE matches the row; we still get airing.
+  const { pool, calls } = fakePool({
+    results: [
+      {
+        rowCount: 1,
+        rows: [
+          {
+            id: "x",
+            rawText: "shoutout to my brother",
+            cleanText: null,
+            requesterName: "Sam",
+          },
+        ],
+      },
+      { rowCount: 1, rows: [] }, // final UPDATE → aired
+    ],
+  });
+  const result = await approveShoutout({
+    id: "x",
+    operator: "telegram:nanoclaw",
+    pool,
+    generate: okGenerator(),
+  });
+  assert.deepEqual(result, {
+    ok: true,
+    trackId: "t-1",
+    queueItemId: "q-1",
+  });
+  assert.match(calls[0].sql, /moderationStatus" IN \('held', 'blocked'\)/);
+  assert.match(calls[0].sql, /revived_from_blocked/);
 });
 
 test("approveShoutout succeeds: flips held→allowed, generates, then marks aired", async () => {
@@ -125,7 +163,7 @@ test("approveShoutout succeeds: flips held→allowed, generates, then marks aire
   });
   // First call is the conditional UPDATE; second is the aired UPDATE.
   assert.match(calls[0].sql, /UPDATE "Shoutout"[\s\S]*moderationStatus[\s\S]*'allowed'/);
-  assert.match(calls[0].sql, /moderationStatus" = 'held'/);
+  assert.match(calls[0].sql, /moderationStatus" IN \('held', 'blocked'\)/);
   assert.match(calls[0].sql, /RETURNING/);
   assert.equal(calls[0].params[1], "approved_by:telegram:nanoclaw");
   assert.match(calls[1].sql, /deliveryStatus"    = 'aired'/);
