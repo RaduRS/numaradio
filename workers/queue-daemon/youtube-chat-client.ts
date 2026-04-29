@@ -198,8 +198,13 @@ export function createYoutubeChatClient(
     };
     if (nextPageToken) params.pageToken = nextPageToken;
 
+    // YouTube's URL is "/liveChat/messages" (with a slash), NOT
+    // "/liveChatMessages" — the latter returns the edge router's
+    // empty-body 404 because the path doesn't exist. Easy typo: the
+    // resource name in the docs ("liveChatMessages.list") looks like
+    // it should be the path, but the path uses a slash.
     const j = await api<ChatMessagesListResponse>(
-      "/liveChatMessages",
+      "/liveChat/messages",
       params,
     );
 
