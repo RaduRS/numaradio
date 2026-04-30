@@ -8,7 +8,9 @@
 # Env (loaded from /etc/numa/env via the systemd unit):
 #   YOUTUBE_STREAM_KEY  required. Get from studio.youtube.com → Go Live.
 #   BROADCAST_URL       optional. Defaults to numaradio.com/live?broadcast=1.
-#   ICECAST_URL         optional. Defaults to api.numaradio.com/stream.
+#   ICECAST_URL         optional. Defaults to http://localhost:8000/stream
+#                       (Icecast runs on the same box, so we skip the
+#                        Cloudflare round-trip for the encoder's own pull).
 #   YOUTUBE_RTMP_URL    optional. Defaults to YouTube primary ingest.
 #   ENCODER_VIDEO_BITRATE  optional. kbps for libx264, default 4500.
 #   ENCODER_AUDIO_BITRATE  optional. kbps for AAC, default 192.
@@ -29,7 +31,12 @@ fi
 # ── Config ──────────────────────────────────────────────────────────
 : "${YOUTUBE_STREAM_KEY:?YOUTUBE_STREAM_KEY is required (set in /etc/numa/env)}"
 BROADCAST_URL="${BROADCAST_URL:-https://numaradio.com/live?broadcast=1}"
-ICECAST_URL="${ICECAST_URL:-https://api.numaradio.com/stream}"
+# Default to local Icecast on the same box. Going via api.numaradio.com
+# routes WSL → Cloudflare → Cloudflare → nginx → local Icecast, and
+# Cloudflare periodically EOFs long-lived audio streams (~every 2-4h).
+# Each EOF stalls ffmpeg's mux briefly which YouTube interprets as
+# "not receiving enough video" → DEGRADED. localhost has no such limit.
+ICECAST_URL="${ICECAST_URL:-http://localhost:8000/stream}"
 YOUTUBE_RTMP_URL="${YOUTUBE_RTMP_URL:-rtmp://a.rtmp.youtube.com/live2}"
 ENCODER_VIDEO_BITRATE="${ENCODER_VIDEO_BITRATE:-4500}"
 ENCODER_AUDIO_BITRATE="${ENCODER_AUDIO_BITRATE:-192}"
