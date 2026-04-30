@@ -3,6 +3,27 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "./Skeleton";
 
+// Lucide's Youtube icon (MIT) inlined: lucide-react@1.8 in this repo lacks it.
+function YoutubeIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-label="YouTube"
+    >
+      <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+      <path d="m10 15 5-3-5-3z" />
+    </svg>
+  );
+}
+
 const POLL_MS = 30_000;
 
 type ApiShoutout = {
@@ -19,10 +40,17 @@ type Payload = { shoutouts: ApiShoutout[] };
 // the page uses the default (no suffix); the rest cycle through c2–c5.
 const AVATAR_CLASSES = ["", "c2", "c3", "c4", "c5"];
 
-function initial(name: string | undefined): string {
-  const trimmed = name?.trim();
-  if (!trimmed) return "?";
-  return trimmed[0].toUpperCase();
+// `[YT] ` prefix is added by the YouTube-chat ingest route to mark shoutouts
+// from live chat. We strip it for display and render a YouTube icon avatar.
+function parseRequester(name: string | undefined): {
+  source: "youtube" | "booth";
+  clean: string;
+} {
+  const trimmed = name?.trim() ?? "";
+  if (trimmed.startsWith("[YT]")) {
+    return { source: "youtube", clean: trimmed.replace(/^\[YT\]\s*/, "") };
+  }
+  return { source: "booth", clean: trimmed };
 }
 
 function formatRelative(iso: string, now: number): string {
@@ -62,14 +90,19 @@ function ShoutoutCard({
   featured?: boolean;
   now: number;
 }) {
+  const { source, clean } = parseRequester(item.requesterName);
   return (
     <div className={`shout-card${featured ? " featured" : ""}`}>
       <div className="shout-head">
         <div className={`shout-avatar ${avatarClass}`.trim()}>
-          {initial(item.requesterName)}
+          {source === "youtube" ? (
+            <YoutubeIcon size={18} />
+          ) : (
+            (clean[0]?.toUpperCase() ?? "?")
+          )}
         </div>
         <div className="shout-meta">
-          <div className="shout-name">{item.requesterName ?? "Anonymous"}</div>
+          <div className="shout-name">{clean || "Anonymous"}</div>
           <div className="shout-time">{formatRelative(item.airedAt, now)}</div>
         </div>
         <div className="shout-tag live">Aired</div>

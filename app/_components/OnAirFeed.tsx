@@ -6,6 +6,40 @@ import { useBroadcast } from "./useBroadcast";
 const POLL_MS = 30_000;
 const LIMIT = 20;
 
+// Lucide's Youtube icon (MIT) inlined: lucide-react@1.8 in this repo lacks it.
+function YoutubeIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-label="YouTube"
+    >
+      <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+      <path d="m10 15 5-3-5-3z" />
+    </svg>
+  );
+}
+
+// `[YT] ` prefix marks shoutouts ingested from YouTube live chat
+// (added in app/api/internal/youtube-chat-shoutout/route.ts).
+function parseRequester(name: string | undefined): {
+  source: "youtube" | "booth";
+  clean: string;
+} {
+  const trimmed = name?.trim() ?? "";
+  if (trimmed.startsWith("[YT]")) {
+    return { source: "youtube", clean: trimmed.replace(/^\[YT\]\s*/, "") };
+  }
+  return { source: "booth", clean: trimmed };
+}
+
 type ShoutsPayload = {
   shoutouts: Array<{
     id: string;
@@ -104,14 +138,20 @@ export function OnAirFeed() {
             </div>
           );
         }
-        const initial = (item.requesterName ?? "?").trim()[0]?.toUpperCase() ?? "?";
+        const { source, clean } = parseRequester(item.requesterName);
         return (
           <div key={`s-${item.id}`} className="ep-onair-item shout">
-            <div className="ep-onair-avatar">{initial}</div>
+            <div className="ep-onair-avatar">
+              {source === "youtube" ? (
+                <YoutubeIcon size={16} />
+              ) : (
+                (clean[0]?.toUpperCase() ?? "?")
+              )}
+            </div>
             <div className="ep-onair-main">
               <div className="primary">&ldquo;{item.text}&rdquo;</div>
               <div className="secondary">
-                {item.requesterName ?? "Anonymous"} · {relativeTime(item.at, now)}
+                {clean || "Anonymous"} · {relativeTime(item.at, now)}
               </div>
             </div>
           </div>
