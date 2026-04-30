@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { Skeleton } from "./Skeleton";
 
 // Lucide's Youtube icon (MIT) inlined: lucide-react@1.8 in this repo lacks it.
-function YoutubeIcon({ size = 18 }: { size?: number }) {
+// Default size = 75% so it fills the parent avatar bubble proportionally
+// (avatar is 28px on the wall, 42px on expanded player, ~65px on the
+// 1920x1080 broadcast page — fixed-pixel sizing looked tiny on the latter).
+function YoutubeIcon({ size = "75%" }: { size?: number | string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -13,7 +16,7 @@ function YoutubeIcon({ size = 18 }: { size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-label="YouTube"
@@ -96,7 +99,7 @@ function ShoutoutCard({
       <div className="shout-head">
         <div className={`shout-avatar ${avatarClass}`.trim()}>
           {source === "youtube" ? (
-            <YoutubeIcon size={18} />
+            <YoutubeIcon />
           ) : (
             (clean[0]?.toUpperCase() ?? "?")
           )}

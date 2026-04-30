@@ -7,7 +7,10 @@ const POLL_MS = 30_000;
 const LIMIT = 20;
 
 // Lucide's Youtube icon (MIT) inlined: lucide-react@1.8 in this repo lacks it.
-function YoutubeIcon({ size = 16 }: { size?: number }) {
+// Default size = 75% so it fills the parent avatar bubble proportionally
+// (the avatar is 42px on the expanded player and ~65px on the 1920x1080
+// broadcast page; fixed-pixel sizing looked tiny on the broadcast feed).
+function YoutubeIcon({ size = "75%" }: { size?: number | string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -16,7 +19,7 @@ function YoutubeIcon({ size = 16 }: { size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-label="YouTube"
@@ -143,7 +146,7 @@ export function OnAirFeed() {
           <div key={`s-${item.id}`} className="ep-onair-item shout">
             <div className="ep-onair-avatar">
               {source === "youtube" ? (
-                <YoutubeIcon size={16} />
+                <YoutubeIcon />
               ) : (
                 (clean[0]?.toUpperCase() ?? "?")
               )}
