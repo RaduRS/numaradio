@@ -272,6 +272,15 @@ log.important(
 
 source = mksafe(source)
 
+# Decouple Icecast output from the source clock. Under WSL2 the main clock
+# periodically falls 1-3s behind realtime (~22 catchup events/hr observed
+# 2026-04-30 and 2026-04-29 — chronic, hardware-level). Without buffering,
+# those stalls reach Icecast → ffmpeg's audio mux waits → video stops
+# flowing to YouTube → "videoIngestionStarved", and listeners hear hiccups.
+# `buffer` runs the output on its own clock with up to 10s of prebuffered
+# audio; brief source-clock lag drains buffer instead of stalling output.
+source = mksafe(buffer(fallible=true, buffer=3., max=10., source))
+
 output.icecast(
   %mp3(bitrate=192, samplerate=44100, stereo=true),
   host="localhost",
