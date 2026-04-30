@@ -7,7 +7,7 @@ import { Skeleton } from "./Skeleton";
 // Default size = 75% so it fills the parent avatar bubble proportionally
 // (avatar is 28px on the wall, 42px on expanded player, ~65px on the
 // 1920x1080 broadcast page — fixed-pixel sizing looked tiny on the latter).
-function YoutubeIcon({ size = "75%" }: { size?: number | string }) {
+function YoutubeIcon({ size = "100%" }: { size?: number | string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -16,7 +16,7 @@ function YoutubeIcon({ size = "75%" }: { size?: number | string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2.4"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-label="YouTube"
