@@ -10,7 +10,10 @@ const LIMIT = 20;
 // Default size = 75% so it fills the parent avatar bubble proportionally
 // (the avatar is 42px on the expanded player and ~65px on the 1920x1080
 // broadcast page; fixed-pixel sizing looked tiny on the broadcast feed).
-function YoutubeIcon({ size = "100%" }: { size?: number | string }) {
+// Default suits the ~42px expanded-player avatar. Broadcast mode
+// (1920x1080 / 65px avatar) gets bumped up via CSS in
+// app/styles/_expanded-player.css — see `.bcast-feed-scroll .ep-onair-avatar svg`.
+function YoutubeIcon({ size = "65%" }: { size?: number | string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -19,7 +22,7 @@ function YoutubeIcon({ size = "100%" }: { size?: number | string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.4"
+      strokeWidth="1.4"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-label="YouTube"
