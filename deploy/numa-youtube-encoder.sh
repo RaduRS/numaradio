@@ -152,7 +152,7 @@ fi
 exec ffmpeg \
   -hide_banner -loglevel warning \
   -thread_queue_size 1024 \
-  -f x11grab -framerate "${ENCODER_FRAMERATE}" -video_size "${WIDTH}x${HEIGHT}" -i "${DISPLAY_NUM}" \
+  -f x11grab -draw_mouse 0 -framerate "${ENCODER_FRAMERATE}" -video_size "${WIDTH}x${HEIGHT}" -i "${DISPLAY_NUM}" \
   -thread_queue_size 512 \
   -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -i "${ICECAST_URL}" \
   -map 0:v -map 1:a \
