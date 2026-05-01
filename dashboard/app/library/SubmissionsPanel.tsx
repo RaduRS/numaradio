@@ -191,6 +191,7 @@ export function SubmissionsPanel() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectingSnapshot, setRejectingSnapshot] = useState<Pending | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -287,7 +288,11 @@ export function SubmissionsPanel() {
       selectedReasons.length > 0
         ? `${selectedReasons.join("; ")}${notes ? `. Notes: ${notes}` : ""}`
         : notes;
-    const submission = data?.pending.find((p) => p.id === id);
+    // Prefer the snapshot captured when the operator opened the reject
+    // panel — the auto-refresh poll runs every 30s and may have already
+    // pruned the row from local state by the time we get here. Fall
+    // back to the live list as a defensive last resort.
+    const submission = rejectingSnapshot ?? data?.pending.find((p) => p.id === id) ?? null;
     setBusy(id);
     try {
       const r = await fetch(`/api/submissions/${id}/reject`, {
@@ -304,6 +309,7 @@ export function SubmissionsPanel() {
         toast.success("Rejected.");
       }
       setRejectingId(null);
+      setRejectingSnapshot(null);
       setRejectReason("");
       setSelectedReasons([]);
       await refresh();
@@ -564,6 +570,7 @@ export function SubmissionsPanel() {
                       variant="outline"
                       onClick={() => {
                         setRejectingId(null);
+                        setRejectingSnapshot(null);
                         setRejectReason("");
                         setSelectedReasons([]);
                       }}
@@ -608,7 +615,10 @@ export function SubmissionsPanel() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setRejectingId(p.id)}
+                    onClick={() => {
+                      setRejectingId(p.id);
+                      setRejectingSnapshot(p);
+                    }}
                     disabled={busy !== null}
                   >
                     Reject
