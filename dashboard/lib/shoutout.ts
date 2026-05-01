@@ -5,6 +5,7 @@ import { pushToDaemon } from "@/lib/library";
 import { stripMarkdown } from "@/lib/strip-markdown";
 import { radioHostTransform } from "@/lib/radio-host";
 import { humanizeScript } from "@/lib/humanize";
+import { synthesizeVertex } from "@/lib/vertex-tts";
 
 const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
 // Helena — the canonical Lena voice used across the station (auto-chatter,
@@ -14,6 +15,8 @@ const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
 // for resilience if Deepgram ever rejects Helena specifically.
 const MODEL_PRIMARY = "aura-2-helena-en";
 const MODEL_FALLBACK = "aura-asteria-en";
+
+type VoiceProvider = "deepgram" | "vertex";
 export const SHOUTOUT_MAX_CHARS = 2000;
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 
@@ -41,7 +44,7 @@ function b2PublicUrl(key: string): string {
   return `${base}/${key}`;
 }
 
-async function synthesizeMp3(text: string, apiKey: string): Promise<Buffer> {
+async function synthesizeDeepgram(text: string, apiKey: string): Promise<Buffer> {
   const tryModel = async (model: string): Promise<Response> =>
     fetch(`${DEEPGRAM_URL}?model=${model}&encoding=mp3`, {
       method: "POST",
@@ -60,6 +63,32 @@ async function synthesizeMp3(text: string, apiKey: string): Promise<Buffer> {
     throw new Error(`deepgram ${res.status}: ${await res.text()}`);
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+/** Picks the active TTS backend based on the Station.voiceProvider
+ *  column. Vertex failures auto-fall-back to Deepgram so a transient
+ *  GCP outage never silences Lena. */
+async function synthesizeMp3(
+  text: string,
+  provider: VoiceProvider,
+): Promise<Buffer> {
+  if (provider === "vertex") {
+    const project = process.env.GOOGLE_CLOUD_PROJECT;
+    if (!project) {
+      throw new Error("GOOGLE_CLOUD_PROJECT not set");
+    }
+    try {
+      return await synthesizeVertex(text, { project });
+    } catch (err) {
+      console.warn(
+        "[shoutout] vertex failed, falling back to deepgram:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  if (!apiKey) throw new Error("DEEPGRAM_API_KEY not set");
+  return synthesizeDeepgram(text, apiKey);
 }
 
 export type ShoutoutSource =
@@ -123,18 +152,24 @@ export async function generateShoutout(
     );
   }
 
-  const apiKey = process.env.DEEPGRAM_API_KEY;
-  if (!apiKey) {
-    throw new ShoutoutError(500, "deepgram_not_configured", "DEEPGRAM_API_KEY not set");
-  }
-
-  const stationQ = await input.pool.query<{ id: string }>(
-    'SELECT id FROM "Station" WHERE slug = $1 LIMIT 1',
+  const stationQ = await input.pool.query<{
+    id: string;
+    voiceProvider: VoiceProvider;
+  }>(
+    'SELECT id, "voiceProvider" FROM "Station" WHERE slug = $1 LIMIT 1',
     [STATION_SLUG],
   );
   const station = stationQ.rows[0];
   if (!station) {
     throw new ShoutoutError(500, "station_not_found", `station "${STATION_SLUG}" not found`);
+  }
+  const voiceProvider: VoiceProvider = station.voiceProvider ?? "deepgram";
+
+  if (voiceProvider === "deepgram" && !process.env.DEEPGRAM_API_KEY) {
+    throw new ShoutoutError(500, "deepgram_not_configured", "DEEPGRAM_API_KEY not set");
+  }
+  if (voiceProvider === "vertex" && !process.env.GOOGLE_CLOUD_PROJECT) {
+    throw new ShoutoutError(500, "vertex_not_configured", "GOOGLE_CLOUD_PROJECT not set");
   }
 
   let mp3: Buffer;
@@ -160,10 +195,10 @@ export async function generateShoutout(
       const humanized = await humanizeScript(plain, { requesterName });
       radioText = radioHostTransform(humanized);
     }
-    mp3 = await synthesizeMp3(radioText, apiKey);
+    mp3 = await synthesizeMp3(radioText, voiceProvider);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "synthesis failed";
-    throw new ShoutoutError(502, "deepgram_failed", msg);
+    throw new ShoutoutError(502, "tts_failed", msg);
   }
 
   const trackId = randomUUID();
@@ -182,7 +217,8 @@ export async function generateShoutout(
     shoutoutRowId:
       input.source.kind === "booth" ? input.source.shoutoutRowId : null,
     requestId: input.requestId ?? null,
-    model: MODEL_PRIMARY,
+    model: voiceProvider === "vertex" ? "gemini-3.1-flash-tts-preview" : MODEL_PRIMARY,
+    voiceProvider,
     generatedAt: new Date().toISOString(),
   };
 

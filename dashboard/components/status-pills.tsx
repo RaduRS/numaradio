@@ -1,5 +1,6 @@
 "use client";
 import type { StatusSnapshot } from "@/lib/types";
+import { VoiceProviderTile } from "@/components/voice-provider-tile";
 
 interface Props {
   data: StatusSnapshot | null;
@@ -10,7 +11,6 @@ export function StatusPills({ data, isStale }: Props) {
   const live = data?.stream.reachable ?? false;
   const listeners = data?.stream.listeners ?? null;
   const peak = data?.stream.listenerPeak ?? null;
-  const bitrate = data?.stream.bitrate ?? null;
   const visitors = data?.site?.visitors ?? null;
   const np = data?.stream.nowPlaying;
 
@@ -72,11 +72,7 @@ export function StatusPills({ data, isStale }: Props) {
           value={visitors}
           sub="people with the page open"
         />
-        <MetricTile
-          label="Stream bitrate"
-          value={bitrate !== null ? `${bitrate}` : null}
-          sub={bitrate !== null ? "kbps · mp3 / stereo" : undefined}
-        />
+        <VoiceProviderTile />
       </div>
     </section>
   );

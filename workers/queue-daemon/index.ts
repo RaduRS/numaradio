@@ -8,10 +8,14 @@ import { resolveTrackId, type TrackLookup } from "./resolve-track.ts";
 import { S3Client } from "@aws-sdk/client-s3";
 import { AutoHostOrchestrator } from "./auto-host.ts";
 import { AnnouncementOrchestrator } from "./announce.ts";
-import { StationConfigCache, type AutoHostMode } from "./station-config.ts";
+import {
+  StationConfigCache,
+  type AutoHostMode,
+  type VoiceProvider,
+} from "./station-config.ts";
 import { fetchListenerCount } from "./icecast-listeners.ts";
 import { generateChatterScript } from "./minimax-script.ts";
-import { synthesizeChatter } from "./deepgram-tts.ts";
+import { createSynthesizer } from "./synth-router.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
 import { ContextLineOrchestrator, buildStationState } from "./context-line.ts";
 import { fetchWorldAside } from "./world-aside-client.ts";
@@ -88,6 +92,7 @@ const stationConfig = new StationConfigCache({
         worldAsideForcedUntil: true,
         worldAsideForcedBy: true,
         youtubeChatPollMs: true,
+        voiceProvider: true,
       },
     });
     return {
@@ -102,8 +107,15 @@ const stationConfig = new StationConfigCache({
         forcedBy: s.worldAsideForcedBy,
       },
       youtubeChatPollMs: s.youtubeChatPollMs,
+      voiceProvider: s.voiceProvider as VoiceProvider,
     };
   },
+});
+
+const synthesize = createSynthesizer({
+  getProvider: async () => (await stationConfig.read()).voiceProvider,
+  deepgramKey: process.env.DEEPGRAM_API_KEY ?? "",
+  vertexProject: process.env.GOOGLE_CLOUD_PROJECT ?? "",
 });
 
 const autoHost = new AutoHostOrchestrator({
@@ -180,8 +192,7 @@ const autoHost = new AutoHostOrchestrator({
       braveKey: process.env.BRAVE_API_KEY ?? "",
       minimaxKey: process.env.MINIMAX_API_KEY ?? "",
     }),
-  synthesizeSpeech: (text) =>
-    synthesizeChatter(text, { apiKey: process.env.DEEPGRAM_API_KEY ?? "" }),
+  synthesizeSpeech: synthesize,
   uploadChatter: (body, id) => {
     const bits = getChatterS3Bits();
     return uploadChatterAudio(body, id, {
@@ -228,8 +239,7 @@ const autoHost = new AutoHostOrchestrator({
 const announce = new AnnouncementOrchestrator({
   generateScript: (prompts) =>
     generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
-  synthesizeSpeech: (text) =>
-    synthesizeChatter(text, { apiKey: process.env.DEEPGRAM_API_KEY ?? "" }),
+  synthesizeSpeech: synthesize,
   uploadChatter: (body, id) => {
     const bits = getChatterS3Bits();
     return uploadChatterAudio(body, id, {

@@ -1,4 +1,5 @@
 export type AutoHostMode = "auto" | "forced_on" | "forced_off";
+export type VoiceProvider = "deepgram" | "vertex";
 
 /** Common shape for any 3-state forced-toggle block on the Station row. */
 export interface StationConfigBlock {
@@ -15,6 +16,9 @@ export interface StationConfig {
   worldAside: StationConfigBlock;
   /** YouTube chat poll cadence in ms (operator-tunable). */
   youtubeChatPollMs: number;
+  /** Which TTS backend to use for all synthesized speech (chatter,
+   *  shoutouts, world asides, replies). Toggled from the dashboard. */
+  voiceProvider: VoiceProvider;
 }
 
 export interface StationConfigCacheOpts {
@@ -33,6 +37,7 @@ const FALLBACK: StationConfig = {
   autoHost: BLOCK_FALLBACK,
   worldAside: BLOCK_FALLBACK,
   youtubeChatPollMs: 90_000,
+  voiceProvider: "deepgram",
 };
 
 export class StationConfigCache {

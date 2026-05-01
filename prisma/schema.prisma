@@ -25,6 +25,11 @@ enum AutoHostMode {
   forced_off
 }
 
+enum VoiceProvider {
+  deepgram
+  vertex
+}
+
 enum ShowBlock {
   night_shift
   morning_room
@@ -179,6 +184,7 @@ model Station {
   worldAsideMode        AutoHostMode @default(auto)
   worldAsideForcedUntil DateTime?
   worldAsideForcedBy    String?
+  voiceProvider         VoiceProvider @default(deepgram)
   /// YouTube live-chat poll cadence in ms. Operator-tunable from the
   /// dashboard. Lower = lower shoutout latency, higher quota burn.
   /// 90000 (90s) is the safe default for 24/7 broadcast under the 10k
