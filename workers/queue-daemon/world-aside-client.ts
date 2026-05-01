@@ -266,11 +266,14 @@ EVENT TIMING vs TODAY (read carefully — this is where bad lines come from):
 
 GOOD EXAMPLES (specific, real names, in voice):
 - "Heads up: Taylor Swift dropped a new single yesterday. Not in our rotation, but worth a check."
-- "OpenAI announced GPT-5 this morning. World keeps moving while the music plays — glad you're here for some of it."
+- "OpenAI rolled out GPT-5 this week. World keeps moving while the music plays — glad you're here for some of it."
 - "Lisbon's at 16°C and grey today. Soft kind of weather, fits the hour."
 - "On April 26th, 1986, Chernobyl. Forty years on. Take care of each other tonight."
 - "Coachella lineup just dropped — Olivia Rodrigo headlining. Different energy than ours, but it's a good one."
 - "Lyrid meteor shower's peaking this week. If you're outside tonight, look up."
+
+FABRICATED IMMEDIACY — NEVER USE FOR LAUNCHES/RELEASES/ANNOUNCEMENTS:
+The phrases "earlier today", "this morning", "moments ago", "minutes ago", and "a few minutes ago" are BANNED for any release/launch/announcement claim. They make stale news sound fresh and we have no way to verify the snippet is actually that new. Use "this week", "last week", "yesterday", "recently", or just past tense without timing. ("OpenAI launched GPT-5 this week" — good. "OpenAI launched GPT-5 earlier today" — banned even if it sounds punchier.) "Today" / "tonight" / "right now" are still fine for weather and astronomical events that ARE genuinely current.
 
 BAD EXAMPLES (vague, abstract, no names — never write like this):
 - "The release calendar's been piling up — plenty of new music coming down the pipe."
@@ -331,6 +334,16 @@ const CLOCK_TIME_REGEX = /\b\d{1,2}:\d{2}\s*(am|pm)?\b/i;
 // Celsius only, full stop.
 const FAHRENHEIT_REGEX = /(°\s*f\b|fahrenheit|\b\d+\s*f\b(?!\w))/i;
 
+// Catches fabricated immediacy. MiniMax kept generating "OpenAI
+// launched GPT-5.5 earlier today" for news that was actually weeks
+// old — copying the punchy shape of an example we'd given it
+// without checking the snippet age. Because we can't reliably parse
+// snippet ages from Brave, the safest defense is to ban these
+// strict-immediacy phrases outright. "Today", "tonight", "right
+// now" are NOT banned — they're legitimate for weather and astro.
+const FALSE_IMMEDIACY_REGEX =
+  /\b(earlier today|this morning|moments ago|minutes ago|a few minutes|few minutes ago)\b/i;
+
 const MAX_CHARS = 200;
 
 export function validateLine(line: string): { ok: true } | { ok: false; reason: string } {
@@ -342,6 +355,7 @@ export function validateLine(line: string): { ok: true } | { ok: false; reason: 
   if (BANNED_REGEX.test(trimmed)) return { ok: false, reason: "banned_phrase" };
   if (CLOCK_TIME_REGEX.test(trimmed)) return { ok: false, reason: "clock_time" };
   if (FAHRENHEIT_REGEX.test(trimmed)) return { ok: false, reason: "fahrenheit" };
+  if (FALSE_IMMEDIACY_REGEX.test(trimmed)) return { ok: false, reason: "false_immediacy" };
   return { ok: true };
 }
 

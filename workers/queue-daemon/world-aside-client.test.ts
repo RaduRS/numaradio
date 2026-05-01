@@ -153,6 +153,45 @@ test("validateLine accepts Celsius even when text contains 'F' as artist initial
   assert.equal(r.ok, true);
 });
 
+test("validateLine rejects fabricated immediacy phrases (the GPT-5.5 hallucination)", () => {
+  // These are the phrases MiniMax kept generating to make stale news
+  // sound fresh. The original incident: "OpenAI launched GPT-5.5 ...
+  // earlier today." All-time staleness sneaking past via punchy timing.
+  for (const bad of [
+    "OpenAI launched GPT-5.5 earlier today.",
+    "Apple announced their new chip this morning.",
+    "Spotify dropped a new feature moments ago.",
+    "Google released their model minutes ago.",
+    "Meta announced VR headset a few minutes ago.",
+  ]) {
+    const r = validateLine(bad);
+    assert.equal(r.ok, false, `expected ban for: ${bad}`);
+    if (!r.ok) assert.equal(r.reason, "false_immediacy");
+  }
+});
+
+test("validateLine still accepts legitimate timing phrases", () => {
+  // These should NOT trigger the immediacy ban.
+  for (const ok of [
+    "Tokyo's at 16°C right now. Soft kind of weather.",
+    "Lyrids peak tonight. If you're outside, look up.",
+    "Coachella lineup just dropped — Olivia Rodrigo headlining.", // "just" alone is fine
+    "Taylor Swift dropped a new single yesterday. Worth a check.",
+    "Big tech week — Apple announced their chip on Tuesday.",
+    "Lisbon was 30°C this afternoon. Cooled down nicely now.",
+  ]) {
+    const r = validateLine(ok);
+    assert.equal(r.ok, true, `expected pass for: ${ok}`);
+  }
+});
+
+test("buildPrompt system prompt forbids fabricated immediacy", () => {
+  const p = buildPrompt({ show: "X", briefing: "y", results: [], now: new Date() });
+  // The system prompt must explicitly tell the model these are off-limits
+  // for launches/releases — prompt as advisory layer, validator as enforcer.
+  assert.match(p.system, /earlier today|this morning|moments ago|minutes ago/i);
+});
+
 // ─── fetchWorldAside (integration) ──────────────────────────────────
 
 const FIXED_NOW = new Date("2026-04-26T22:00:00Z");
