@@ -18,17 +18,19 @@ export type ChatterType =
   // flow, not the auto-chatter orchestrator.
   | "listener_song_announce";
 
-// Hand-crafted 20-slot rotation: 10 back-announce, 3 shoutout CTA,
-// 3 song CTA, 1 filler, 3 world-aside, no same-type adjacency
+// Hand-crafted 20-slot rotation: 7 back-announce, 3 shoutout CTA,
+// 3 song CTA, 1 filler, 6 world-aside, no same-type adjacency
 // (verified across the slot-19 → slot-0 wrap). World asides land at
-// 4 / 10 / 16 — perfectly even spacing. Filler safety net at 14 keeps
-// listeners covered if every world_aside slot fails for a full cycle.
+// 1 / 4 / 7 / 10 / 13 / 16 — every 3 slots, perfectly even. Filler
+// safety net at 14 keeps listeners covered if every world_aside in a
+// cycle fails. Brave API budget is ~48 calls/day at 1 cycle ≈ 3h,
+// well under the 2000/month free tier.
 //   slot:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
 const ROTATION: readonly ChatterType[] = [
-  "shoutout_cta", "back_announce", "song_cta",     "back_announce",
-  "world_aside",  "back_announce", "shoutout_cta", "back_announce",
+  "shoutout_cta", "world_aside",   "song_cta",     "back_announce",
+  "world_aside",  "back_announce", "shoutout_cta", "world_aside",
   "song_cta",     "back_announce", "world_aside",  "back_announce",
-  "shoutout_cta", "back_announce", "filler",       "back_announce",
+  "shoutout_cta", "world_aside",   "filler",       "back_announce",
   "world_aside",  "back_announce", "song_cta",     "back_announce",
 ];
 

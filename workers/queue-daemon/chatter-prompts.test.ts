@@ -8,13 +8,13 @@ import {
 } from "./chatter-prompts.ts";
 
 test("slotTypeFor matches the hand-crafted 20-slot rotation (with world_aside)", () => {
-  // World asides at slots 4, 10, 16 — perfectly even spacing (gap 6/6/6).
-  // Filler safety net at slot 14. BA preserved at 10/20.
+  // World asides at slots 1, 4, 7, 10, 13, 16 — every 3 slots.
+  // Filler safety net at slot 14. 7 back-announce slots remain.
   const expected: ChatterType[] = [
-    "shoutout_cta", "back_announce", "song_cta",     "back_announce",
-    "world_aside",  "back_announce", "shoutout_cta", "back_announce",
+    "shoutout_cta", "world_aside",   "song_cta",     "back_announce",
+    "world_aside",  "back_announce", "shoutout_cta", "world_aside",
     "song_cta",     "back_announce", "world_aside",  "back_announce",
-    "shoutout_cta", "back_announce", "filler",       "back_announce",
+    "shoutout_cta", "world_aside",   "filler",       "back_announce",
     "world_aside",  "back_announce", "song_cta",     "back_announce",
   ];
   for (let i = 0; i < 20; i++) assert.equal(slotTypeFor(i), expected[i]);
@@ -26,28 +26,28 @@ test("slotTypeFor wraps with modulo 20", () => {
   assert.equal(slotTypeFor(999), slotTypeFor(999 % 20));
 });
 
-test("slot distribution over one full cycle is BA=10 / SC=3 / SG=3 / F=1 / W=3", () => {
+test("slot distribution over one full cycle is BA=7 / SC=3 / SG=3 / F=1 / W=6", () => {
   const tally: Record<ChatterType, number> = {
     back_announce: 0, shoutout_cta: 0, song_cta: 0, filler: 0, world_aside: 0,
     // listener_song_announce is event-driven, never in the rotation.
     listener_song_announce: 0,
   };
   for (let i = 0; i < 20; i++) tally[slotTypeFor(i)] += 1;
-  assert.equal(tally.back_announce, 10);
+  assert.equal(tally.back_announce, 7);
   assert.equal(tally.shoutout_cta, 3);
   assert.equal(tally.song_cta, 3);
   assert.equal(tally.filler, 1);
-  assert.equal(tally.world_aside, 3);
+  assert.equal(tally.world_aside, 6);
   assert.equal(tally.listener_song_announce, 0,
     "listener_song_announce must never appear in the 20-slot rotation");
 });
 
-test("world_aside slots are at positions 4, 10, 16 (even spacing)", () => {
+test("world_aside slots are at positions 1, 4, 7, 10, 13, 16 (every 3 slots)", () => {
   const wIndices: number[] = [];
   for (let i = 0; i < 20; i++) {
     if (slotTypeFor(i) === "world_aside") wIndices.push(i);
   }
-  assert.deepEqual(wIndices, [4, 10, 16]);
+  assert.deepEqual(wIndices, [1, 4, 7, 10, 13, 16]);
 });
 
 test("no same-type adjacency in the 20-slot pattern (incl. wrap)", () => {
