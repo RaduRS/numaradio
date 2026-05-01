@@ -1589,35 +1589,6 @@ html[data-broadcast="encoder"] .bcast-fullscreen {
   }
 }
 
-/* Encoder lite mode — disables expensive software-compositing effects so
-   headless Chromium can sustain its target framerate on Orion's WSL2 (no
-   GPU passthrough → all rendering falls through to the CPU rasterizer).
-   The preview view (without ?broadcast=1) keeps the full polish. */
-html[data-broadcast="encoder"] .bcast-glow {
-  animation: none;
-  filter: none;
-  opacity: 0.35;
-}
-html[data-broadcast="encoder"] .bcast-grain {
-  animation: none;
-}
-html[data-broadcast="encoder"] .bcast-show-name {
-  animation: none;
-  background-position: 50% 50%;
-}
-html[data-broadcast="encoder"] .bcast-lena-halo {
-  animation: none;
-  filter: none;
-  opacity: 0.55;
-}
-html[data-broadcast="encoder"] .bcast-onair-dot,
-html[data-broadcast="encoder"] .bcast-caret {
-  animation: none;
-}
-html[data-broadcast="encoder"] .bcast-lena-quote {
-  backdrop-filter: none;
-}
-
 /* Keep ON AIR + TUNED IN pills on one row even with long show names
    (e.g. "DAYLIGHT CHANNEL"). Shrinks just enough to fit the squeezed
    right grid column. */
