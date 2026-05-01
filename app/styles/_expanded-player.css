@@ -1617,3 +1617,19 @@ html[data-broadcast="encoder"] .bcast-caret {
 html[data-broadcast="encoder"] .bcast-lena-quote {
   backdrop-filter: none;
 }
+
+/* Keep ON AIR + TUNED IN pills on one row even with long show names
+   (e.g. "DAYLIGHT CHANNEL"). Shrinks just enough to fit the squeezed
+   right grid column. */
+html[data-broadcast="encoder"] .bcast-status {
+  flex-wrap: nowrap;
+  min-width: 0;
+  white-space: nowrap;
+}
+html[data-broadcast="encoder"] .bcast-onair,
+html[data-broadcast="encoder"] .bcast-listeners {
+  font-size: 0.78cqw;
+  letter-spacing: 0.14em;
+  padding: 0.55cqh 0.85cqw;
+  white-space: nowrap;
+}
