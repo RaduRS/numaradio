@@ -96,6 +96,67 @@ function fmtDur(s: number | null): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+/** Slugify a string for use in a filename (lowercase, hyphens, ASCII-ish). */
+function slugForFilename(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "submission";
+}
+
+/** Builds a markdown rejection note (email-ready draft + metadata) and
+ *  triggers a browser download. The browser saves it to whatever the
+ *  user has configured (Desktop, Downloads, or "Save As" prompt).
+ */
+function downloadRejectionMarkdown(p: Pending, reason: string): void {
+  const now = new Date();
+  const submittedAt = new Date(p.createdAt);
+  const md = `# Numa Radio — submission rejected
+
+**To:** ${p.email}
+**Subject:** Re: your submission to Numa Radio — ${p.artistName}
+
+---
+
+Hi,
+
+Thanks for sending us **${p.artistName}** (${fmtDur(p.durationSeconds)}, ${p.airingPreference === "permanent" ? "permanent rotation" : "one-off play"}) on ${submittedAt.toISOString().slice(0, 10)}. We've listened through and unfortunately won't be adding it to Numa Radio at this time.
+
+**Reason:** ${reason}
+
+We appreciate you sharing your work and welcome future submissions.
+
+— Numa Radio
+
+---
+
+## Submission record
+
+- **Submission ID:** \`${p.id}\`
+- **Artist / track name:** ${p.artistName}
+- **Contact email:** ${p.email}
+- **Duration:** ${fmtDur(p.durationSeconds)}
+- **Airing preference:** ${p.airingPreference}
+- **Submitted at:** ${submittedAt.toISOString()}
+- **Has uploaded artwork:** ${p.artworkStorageKey ? "yes" : "no"}
+- **Rejected at:** ${now.toISOString()}
+`;
+
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const dateStamp = now.toISOString().slice(0, 10);
+  a.download = `submission-reject-${dateStamp}-${slugForFilename(p.artistName)}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function SubmissionsPanel() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -173,20 +234,27 @@ export function SubmissionsPanel() {
   }
 
   async function reject(id: string) {
-    if (rejectReason.trim().length < 3) {
+    const trimmed = rejectReason.trim();
+    if (trimmed.length < 3) {
       toast.error("Reason must be at least 3 characters.");
       return;
     }
+    const submission = data?.pending.find((p) => p.id === id);
     setBusy(id);
     try {
       const r = await fetch(`/api/submissions/${id}/reject`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: rejectReason.trim() }),
+        body: JSON.stringify({ reason: trimmed }),
       });
       const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
       if (!r.ok) throw new Error(j.message ?? j.error ?? `HTTP ${r.status}`);
-      toast.success("Rejected.");
+      if (submission) {
+        downloadRejectionMarkdown(submission, trimmed);
+        toast.success("Rejected — markdown downloaded.");
+      } else {
+        toast.success("Rejected.");
+      }
       setRejectingId(null);
       setRejectReason("");
       await refresh();
