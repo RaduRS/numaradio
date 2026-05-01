@@ -36,7 +36,13 @@ const jsonLdGraph = {
       "@id": "https://numaradio.com/#org",
       name: "Numa Radio",
       url: "https://numaradio.com",
-      logo: "https://numaradio.com/apple-icon",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://numaradio.com/logo-mark.png",
+        contentUrl: "https://numaradio.com/logo-mark.png",
+        width: 512,
+        height: 512,
+      },
       sameAs: [
         "https://www.instagram.com/numa.radio/",
         "https://www.tiktok.com/@numaradio",
@@ -89,11 +95,14 @@ export const metadata: Metadata = {
     "Always-on AI radio. Fresh tracks, live energy, listener requests, hosted by Lena.",
   applicationName: "Numa Radio",
   manifest: "/manifest.webmanifest",
-  icons: {
-    icon: [{ url: "/logo-mark.png", sizes: "512x512", type: "image/png" }],
-    apple: [{ url: "/logo-mark.png", sizes: "512x512", type: "image/png" }],
-    shortcut: [{ url: "/logo-mark.png", sizes: "512x512", type: "image/png" }],
-  },
+  // Favicon strategy: Next.js generates the canonical icons from
+  // app/icon.tsx (192/512/maskable) and app/apple-icon.tsx, plus
+  // app/favicon.ico for the legacy .ico endpoint. Google prefers
+  // favicons whose declared size is a multiple of 48 (48, 96, 144,
+  // 192, …) — so we don't redeclare /logo-mark.png at 512×512 in
+  // metadata.icons; that misled Google's favicon picker. The Next
+  // icon route serves 192×192, which is the multiple-of-48 size
+  // Google looks for.
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
