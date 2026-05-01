@@ -215,10 +215,10 @@ test("forced_off skips even when listeners=50", async () => {
   assert.equal(orch.state.slotCounter, 0);
 });
 
-test("auto mode skips when listeners < 5", async () => {
+test("auto mode skips when listeners < 3", async () => {
   const { deps, pushes } = fakeDeps({
     config: async () => configFor("auto"),
-    getListenerCount: async () => 4,
+    getListenerCount: async () => 2,
   });
   const orch = new AutoHostOrchestrator(deps);
   await orch.runChatter();
@@ -226,10 +226,10 @@ test("auto mode skips when listeners < 5", async () => {
   assert.equal(orch.state.slotCounter, 0);
 });
 
-test("auto mode speaks when listeners >= 5", async () => {
+test("auto mode speaks when listeners >= 3", async () => {
   const { deps, pushes } = fakeDeps({
     config: async () => configFor("auto"),
-    getListenerCount: async () => 5,
+    getListenerCount: async () => 3,
   });
   const orch = new AutoHostOrchestrator(deps);
   await orch.runChatter();
@@ -258,7 +258,7 @@ test("expired forced_on lazy-reverts then re-evaluates in auto (skips on low lis
   assert.equal(pushes.length, 0); // reverted to auto, listeners=0, skip
 });
 
-test("expired forced_off lazy-reverts and then speaks when listeners>=5", async () => {
+test("expired forced_off lazy-reverts and then speaks when listeners>=3", async () => {
   const { deps, pushes, reverts } = fakeDeps({
     config: async () => configFor("forced_off", "2000-01-01T00:00:00Z"),
     getListenerCount: async () => 10,

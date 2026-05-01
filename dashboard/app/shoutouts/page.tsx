@@ -466,7 +466,7 @@ export default function ShoutoutsPage() {
               autoHost?.mode === "forced_off" ? "bg-fg-mute/30" :
               autoHost?.mode === "forced_on" ? "bg-accent" :
               // auto: dot reflects computed state
-              (listenerCount ?? 0) >= 5 ? "bg-accent" : "bg-fg-mute/30"
+              (listenerCount ?? 0) >= 3 ? "bg-accent" : "bg-fg-mute/30"
             }`}
             aria-hidden
           />
@@ -480,9 +480,9 @@ export default function ShoutoutsPage() {
               ) : autoHost.mode === "auto" ? (
                 listenerCount === null
                   ? "Auto — currently On (listener count unavailable)"
-                  : listenerCount >= 5
+                  : listenerCount >= 3
                     ? `Auto — currently On (${listenerCount} listeners)`
-                    : `Auto — currently Off (${listenerCount} listeners, need 5+)`
+                    : `Auto — currently Off (${listenerCount} listeners, need 3+)`
               ) : autoHost.mode === "forced_on" ? (
                 `Forced On · ${formatRevertCountdown(autoHost.forcedUntil, nowTick)}`
               ) : (
@@ -535,7 +535,7 @@ export default function ShoutoutsPage() {
             className={`h-2 w-2 rounded-full shrink-0 ${
               worldAside?.mode === "forced_off" ? "bg-fg-mute/30"
                 : autoHost?.mode === "forced_off" ? "bg-fg-mute/30"
-                : autoHost?.mode === "auto" && (listenerCount ?? 0) < 5 ? "bg-fg-mute/30"
+                : autoHost?.mode === "auto" && (listenerCount ?? 0) < 3 ? "bg-fg-mute/30"
                 : "bg-accent"
             }`}
             aria-hidden
@@ -551,8 +551,8 @@ export default function ShoutoutsPage() {
                 `Disabled · ${formatRevertCountdown(worldAside.forcedUntil, nowTick)} · slots fall back to filler`
               ) : autoHost?.mode === "forced_off" ? (
                 "Silent — auto-chatter is off"
-              ) : autoHost?.mode === "auto" && listenerCount !== null && listenerCount < 5 ? (
-                `Silent — auto-chatter waiting for 5+ listeners (${listenerCount} now)`
+              ) : autoHost?.mode === "auto" && listenerCount !== null && listenerCount < 3 ? (
+                `Silent — auto-chatter waiting for 3+ listeners (${listenerCount} now)`
               ) : worldAside.mode === "forced_on" ? (
                 `Forced On · ${formatRevertCountdown(worldAside.forcedUntil, nowTick)} · 3 of 20 slots become asides`
               ) : (
@@ -752,7 +752,7 @@ export default function ShoutoutsPage() {
               ) : filteredEvents.length === 0 ? (
                 <div className="px-4 py-8 text-sm text-fg-mute text-center">
                   {logFilter === "all"
-                    ? autoHost?.mode === "forced_on" || (autoHost?.mode === "auto" && (listenerCount ?? 0) >= 5)
+                    ? autoHost?.mode === "forced_on" || (autoHost?.mode === "auto" && (listenerCount ?? 0) >= 3)
                       ? "Waiting for the first voice event…"
                       : "Nothing on air yet. Set auto-chatter mode above, submit a shoutout, or compose one."
                     : `No ${FILTER_LABELS[logFilter].toLowerCase()} yet.`}

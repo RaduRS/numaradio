@@ -276,7 +276,7 @@ export class AutoHostOrchestrator {
       }
       if (cfg.autoHost.mode === "auto") {
         const listeners = await this.deps.getListenerCount();
-        if (listeners === null || listeners < 5) {
+        if (listeners === null || listeners < 3) {
           this.state.markFailure();
           return;
         }

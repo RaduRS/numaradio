@@ -5,7 +5,7 @@ import { internalAuthOk } from "@/lib/internal-auth";
 export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
-const FORCE_WINDOW_MS = 20 * 60 * 1000;
+const FORCE_WINDOW_MS = 30 * 60 * 1000;
 
 type AutoHostMode = "auto" | "forced_on" | "forced_off";
 
@@ -15,8 +15,8 @@ interface Body {
 }
 
 // Legacy tool shape for the NanoClaw agent. Translates `enabled` booleans
-// into the tri-state model: true → forced_on for 20 min, false → forced_off
-// for 20 min. GET derives `enabled` differently from POST's input:
+// into the tri-state model: true → forced_on for 30 min, false → forced_off
+// for 30 min. GET derives `enabled` differently from POST's input:
 //
 //   POST `enabled: true`  → forced_on
 //   POST `enabled: false` → forced_off

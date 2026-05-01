@@ -11,7 +11,7 @@ import { getDbPool } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
-const FORCE_WINDOW_MS = 20 * 60 * 1000;
+const FORCE_WINDOW_MS = 30 * 60 * 1000;
 
 type AutoHostMode = "auto" | "forced_on" | "forced_off";
 
@@ -93,7 +93,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
     console.info(
       `action=world_aside_set mode=${body.mode} user=${user}` +
-        (isForced ? ` expires_in=20m` : ""),
+        (isForced ? ` expires_in=30m` : ""),
     );
     const row = r.rows[0]!;
     return NextResponse.json({
