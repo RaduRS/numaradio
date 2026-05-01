@@ -8,14 +8,15 @@ import {
 } from "./chatter-prompts.ts";
 
 test("slotTypeFor matches the hand-crafted 20-slot rotation (with world_aside)", () => {
-  // World asides at slots 1, 4, 7, 10, 13, 16 — every 3 slots.
+  // World asides at slots 4, 7, 10, 13, 16, 19 — every 3 slots.
   // Filler safety net at slot 14. 7 back-announce slots remain.
+  // Slot 1 stays as back_announce.
   const expected: ChatterType[] = [
-    "shoutout_cta", "world_aside",   "song_cta",     "back_announce",
+    "shoutout_cta", "back_announce", "song_cta",     "back_announce",
     "world_aside",  "back_announce", "shoutout_cta", "world_aside",
     "song_cta",     "back_announce", "world_aside",  "back_announce",
     "shoutout_cta", "world_aside",   "filler",       "back_announce",
-    "world_aside",  "back_announce", "song_cta",     "back_announce",
+    "world_aside",  "back_announce", "song_cta",     "world_aside",
   ];
   for (let i = 0; i < 20; i++) assert.equal(slotTypeFor(i), expected[i]);
 });
@@ -42,12 +43,12 @@ test("slot distribution over one full cycle is BA=7 / SC=3 / SG=3 / F=1 / W=6", 
     "listener_song_announce must never appear in the 20-slot rotation");
 });
 
-test("world_aside slots are at positions 1, 4, 7, 10, 13, 16 (every 3 slots)", () => {
+test("world_aside slots are at positions 4, 7, 10, 13, 16, 19 (every 3 slots)", () => {
   const wIndices: number[] = [];
   for (let i = 0; i < 20; i++) {
     if (slotTypeFor(i) === "world_aside") wIndices.push(i);
   }
-  assert.deepEqual(wIndices, [1, 4, 7, 10, 13, 16]);
+  assert.deepEqual(wIndices, [4, 7, 10, 13, 16, 19]);
 });
 
 test("no same-type adjacency in the 20-slot pattern (incl. wrap)", () => {

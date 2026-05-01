@@ -149,6 +149,7 @@ enum WorkflowStatus {
 }
 
 enum SubmissionStatus {
+  uploading
   pending
   approved
   rejected

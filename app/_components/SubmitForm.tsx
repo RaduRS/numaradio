@@ -68,27 +68,86 @@ export function SubmitForm() {
     const v = validate();
     setFieldErrors(v);
     if (Object.keys(v).length > 0) return;
+    if (!audio) return; // validate() already guards but TS needs the narrowing
     setState({ kind: "submitting" });
 
-    const fd = new FormData();
-    fd.append("name", name.trim());
-    fd.append("email", email.trim());
-    fd.append("vouched", "true");
-    fd.append("airingPreference", airingPreference);
-    if (audio) fd.append("audio", audio);
-    if (artwork) fd.append("artwork", artwork);
+    const artKind: "png" | "jpeg" | null =
+      artwork
+        ? artwork.type === "image/png"
+          ? "png"
+          : "jpeg"
+        : null;
 
     try {
-      const res = await fetch("/api/submissions", { method: "POST", body: fd });
-      const json = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
+      // Step 1 — init: server validates metadata + reserves a row, returns presigned URLs
+      const initRes = await fetch("/api/submissions/init", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          vouched: true,
+          airingPreference,
+          audioSize: audio.size,
+          artworkKind: artKind,
+          artworkSize: artwork?.size ?? null,
+        }),
+      });
+      const initJson = (await initRes.json().catch(() => ({}))) as {
+        ok?: boolean; id?: string; audioPutUrl?: string; audioContentType?: string;
+        artworkPutUrl?: string | null; artworkContentType?: string | null;
+        error?: string; message?: string;
       };
-      if (!res.ok) {
+      if (!initRes.ok || !initJson.id || !initJson.audioPutUrl) {
         setState({
           kind: "error",
-          message: json.message ?? `Submission failed (HTTP ${res.status}).`,
+          message: initJson.message ?? `Could not start upload (HTTP ${initRes.status}).`,
+        });
+        return;
+      }
+
+      // Step 2 — direct PUT to B2 (bypasses Vercel's 4.5 MB body cap)
+      const audioPut = await fetch(initJson.audioPutUrl, {
+        method: "PUT",
+        headers: { "content-type": initJson.audioContentType ?? "audio/mpeg" },
+        body: audio,
+      });
+      if (!audioPut.ok) {
+        setState({
+          kind: "error",
+          message: `Audio upload failed (HTTP ${audioPut.status}). Please try again.`,
+        });
+        return;
+      }
+
+      if (artwork && initJson.artworkPutUrl) {
+        const artPut = await fetch(initJson.artworkPutUrl, {
+          method: "PUT",
+          headers: { "content-type": initJson.artworkContentType ?? "image/jpeg" },
+          body: artwork,
+        });
+        if (!artPut.ok) {
+          setState({
+            kind: "error",
+            message: `Artwork upload failed (HTTP ${artPut.status}). Please try again.`,
+          });
+          return;
+        }
+      }
+
+      // Step 3 — finalize: server fetches files, magic-byte validates, flips to pending
+      const finRes = await fetch("/api/submissions/finalize", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: initJson.id, hasArtwork: !!artwork }),
+      });
+      const finJson = (await finRes.json().catch(() => ({}))) as {
+        ok?: boolean; error?: string; message?: string;
+      };
+      if (!finRes.ok) {
+        setState({
+          kind: "error",
+          message: finJson.message ?? `Submission failed at finalize (HTTP ${finRes.status}).`,
         });
         return;
       }

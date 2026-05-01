@@ -5,6 +5,7 @@ import {
   HeadObjectCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function getEnv(name: string): string {
   const v = process.env[name];
@@ -43,6 +44,31 @@ export async function putObject(
       ContentType: contentType,
       CacheControl: cacheControl,
     }),
+  );
+}
+
+/**
+ * Presign a PUT URL so the browser can upload directly to B2 without
+ * the request body passing through our serverless function (which is
+ * capped at 4.5 MB on Vercel Hobby). Bakes the exact ContentType and
+ * ContentLength into the signature so a malicious caller can't swap
+ * in a different file type or size after the URL is issued.
+ */
+export async function presignPut(
+  key: string,
+  contentType: string,
+  contentLength: number,
+  expiresIn = 60,
+): Promise<string> {
+  return getSignedUrl(
+    s3(),
+    new PutObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+      ContentType: contentType,
+      ContentLength: contentLength,
+    }),
+    { expiresIn },
   );
 }
 
