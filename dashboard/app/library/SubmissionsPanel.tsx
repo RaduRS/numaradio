@@ -4,6 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Pending = {
   id: string;
@@ -423,25 +430,31 @@ export function SubmissionsPanel() {
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-2 items-center">
-                  <select
+                <div className="flex gap-2 items-center flex-wrap">
+                  <Select
                     value={showBySubmission[p.id] ?? "daylight_channel"}
-                    onChange={(e) =>
-                      setShowBySubmission((prev) => ({
-                        ...prev,
-                        [p.id]: e.target.value as ShowSlug,
-                      }))
-                    }
+                    onValueChange={(v) => {
+                      if (typeof v === "string" && v) {
+                        setShowBySubmission((prev) => ({ ...prev, [p.id]: v as ShowSlug }));
+                      }
+                    }}
                     disabled={busy === p.id}
-                    className="bg-bg border border-line rounded px-2 py-1 text-xs outline-none focus:border-accent"
-                    title="Show this track will be added to"
                   >
-                    {SHOW_OPTIONS.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      size="sm"
+                      className="h-8 text-xs font-mono w-[200px] disabled:opacity-50"
+                      title="Show this track will be added to on approve"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SHOW_OPTIONS.map((s) => (
+                        <SelectItem key={s.value} value={s.value} className="text-xs font-mono">
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     size="sm"
                     onClick={() => approve(p.id)}
