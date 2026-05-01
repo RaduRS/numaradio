@@ -149,8 +149,9 @@ export function BroadcastStage({ broadcast }: Props) {
         </div>
         {broadcast ? (
           <div className="bcast-cta-line">
-            Type <strong>@lena</strong> in chat
+            Type <strong>@lena</strong>
             <span className="bcast-caret" aria-hidden />
+            + a message in chat
             <span className="bcast-cta-tail">— hear her read it on air.</span>
           </div>
         ) : (
