@@ -196,6 +196,19 @@ export function SubmissionsPanel() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [findEmail, setFindEmail] = useState("");
   const [showBySubmission, setShowBySubmission] = useState<Record<string, ShowSlug>>({});
+  const [reviewedOpen, setReviewedOpen] = useState(false);
+
+  // Restore the operator's last preference for the Recently-reviewed
+  // disclosure. Defaults to collapsed on first visit. Read in useEffect
+  // (not initial state) to avoid SSR/CSR hydration mismatch.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("numa.dashboard.submissions.reviewedOpen");
+      if (stored === "1") setReviewedOpen(true);
+    } catch {
+      // localStorage might be blocked (private mode); fine, default stays collapsed
+    }
+  }, []);
   const [findRows, setFindRows] = useState<Reviewed[] | null>(null);
   const [findLoading, setFindLoading] = useState(false);
   const [sweepStatus, setSweepStatus] = useState<SweepStatus | null>(null);
@@ -661,7 +674,22 @@ export function SubmissionsPanel() {
         </details>
 
         {data.reviewed.length > 0 && (
-          <details className="mt-2" open>
+          <details
+            className="mt-2"
+            open={reviewedOpen}
+            onToggle={(e) => {
+              const open = (e.currentTarget as HTMLDetailsElement).open;
+              setReviewedOpen(open);
+              try {
+                window.localStorage.setItem(
+                  "numa.dashboard.submissions.reviewedOpen",
+                  open ? "1" : "0",
+                );
+              } catch {
+                // ignore storage failures
+              }
+            }}
+          >
             <summary className="text-xs uppercase tracking-widest text-fg-mute cursor-pointer">
               Recently reviewed ({data.reviewed.length})
             </summary>
