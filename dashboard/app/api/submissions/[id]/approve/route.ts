@@ -29,6 +29,9 @@ export async function POST(
 
   const { id } = await params;
 
+  const requestBody = (await req.json().catch(() => ({}))) as { show?: unknown };
+  const show = typeof requestBody.show === "string" ? requestBody.show : undefined;
+
   let res: Response;
   try {
     res = await fetch(`${PUBLIC_SITE}/api/internal/submissions/${id}/approve`, {
@@ -37,7 +40,7 @@ export async function POST(
         "content-type": "application/json",
         "x-internal-secret": secret,
       },
-      body: JSON.stringify({ operatorEmail: operatorEmail(req) }),
+      body: JSON.stringify({ operatorEmail: operatorEmail(req), show }),
     });
   } catch (e) {
     return NextResponse.json(

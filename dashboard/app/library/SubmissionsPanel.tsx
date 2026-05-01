@@ -64,6 +64,14 @@ function fmtSweepIn(d: Date): string {
 
 const PUBLIC_SITE = "https://numaradio.com";
 
+const SHOW_OPTIONS = [
+  { value: "night_shift", label: "Night Shift · 00–05" },
+  { value: "morning_room", label: "Morning Room · 05–10" },
+  { value: "daylight_channel", label: "Daylight Channel · 10–17" },
+  { value: "prime_hours", label: "Prime Hours · 17–24" },
+] as const;
+type ShowSlug = (typeof SHOW_OPTIONS)[number]["value"];
+
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (ms < 60_000) return "just now";
@@ -88,6 +96,7 @@ export function SubmissionsPanel() {
   const [rejectReason, setRejectReason] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [findEmail, setFindEmail] = useState("");
+  const [showBySubmission, setShowBySubmission] = useState<Record<string, ShowSlug>>({});
   const [findRows, setFindRows] = useState<Reviewed[] | null>(null);
   const [findLoading, setFindLoading] = useState(false);
   const [sweepStatus, setSweepStatus] = useState<SweepStatus | null>(null);
@@ -138,10 +147,16 @@ export function SubmissionsPanel() {
   async function approve(id: string) {
     setBusy(id);
     try {
-      const r = await fetch(`/api/submissions/${id}/approve`, { method: "POST" });
+      const show = showBySubmission[id] ?? "daylight_channel";
+      const r = await fetch(`/api/submissions/${id}/approve`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ show }),
+      });
       const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
       if (!r.ok) throw new Error(j.message ?? j.error ?? `HTTP ${r.status}`);
-      toast.success("Approved — track ingested.");
+      const showLabel = SHOW_OPTIONS.find((s) => s.value === show)?.label ?? show;
+      toast.success(`Approved → ${showLabel}`);
       await refresh();
     } catch (err) {
       toast.error(`Approve failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -408,7 +423,25 @@ export function SubmissionsPanel() {
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={showBySubmission[p.id] ?? "daylight_channel"}
+                    onChange={(e) =>
+                      setShowBySubmission((prev) => ({
+                        ...prev,
+                        [p.id]: e.target.value as ShowSlug,
+                      }))
+                    }
+                    disabled={busy === p.id}
+                    className="bg-bg border border-line rounded px-2 py-1 text-xs outline-none focus:border-accent"
+                    title="Show this track will be added to"
+                  >
+                    {SHOW_OPTIONS.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
                   <Button
                     size="sm"
                     onClick={() => approve(p.id)}

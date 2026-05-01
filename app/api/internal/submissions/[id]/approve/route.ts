@@ -41,6 +41,14 @@ export async function POST(
       ? (body as { operatorEmail: string }).operatorEmail
       : "operator";
 
+  const VALID_SHOWS = ["night_shift", "morning_room", "daylight_channel", "prime_hours"] as const;
+  type ValidShow = (typeof VALID_SHOWS)[number];
+  const requestedShow = (body as { show?: unknown }).show;
+  const show: ValidShow =
+    typeof requestedShow === "string" && (VALID_SHOWS as readonly string[]).includes(requestedShow)
+      ? (requestedShow as ValidShow)
+      : "daylight_channel";
+
   const { id } = await params;
   const submission = await prisma.musicSubmission.findUnique({ where: { id } });
   if (!submission) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -104,7 +112,7 @@ export async function POST(
   const result = await ingestTrack({
     stationId: station.id,
     audioBuffer,
-    show: "morning_room", // neutral default; operator can move via library
+    show,
     title: `Untitled — ${submission.artistName}`,
     artistDisplay: submission.artistName,
     durationSeconds: submission.durationSeconds ?? undefined,
