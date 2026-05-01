@@ -60,21 +60,13 @@ export function VoiceProviderTile() {
   const label = provider ? LABELS[provider] : null;
   const display = label?.name ?? "—";
   const sub = error ?? label?.sub ?? "loading";
+  const isVertex = provider === "vertex";
+  const ariaLabel = provider
+    ? `Voice provider, currently ${label!.name} on ${label!.sub}. Click to swap.`
+    : "Voice provider, loading";
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      disabled={!provider || pending}
-      title={
-        provider
-          ? `Click to swap to ${provider === "deepgram" ? "Leda · google" : "Helena · deepgram"}`
-          : "Loading voice provider…"
-      }
-      className={`flex flex-col gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-1)] px-4 py-3.5 sm:px-5 sm:py-4 text-left transition-colors hover:border-accent disabled:cursor-not-allowed disabled:opacity-60 ${
-        pending ? "opacity-70" : ""
-      }`}
-    >
+    <div className="flex flex-col gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-1)] px-4 py-3.5 sm:px-5 sm:py-4">
       <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute">
         Voice
       </span>
@@ -84,9 +76,30 @@ export function VoiceProviderTile() {
       >
         {display}
       </span>
-      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-mute">
-        {sub}
-      </span>
-    </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isVertex}
+          aria-label={ariaLabel}
+          onClick={toggle}
+          disabled={!provider || pending}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            isVertex
+              ? "bg-accent border-accent"
+              : "bg-[var(--bg-2)] border-[var(--line)]"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+              isVertex ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+        </button>
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-mute">
+          {sub}
+        </span>
+      </div>
+    </div>
   );
 }
