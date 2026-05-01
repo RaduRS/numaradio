@@ -74,15 +74,18 @@ async function synthesizeMp3(
 ): Promise<Buffer> {
   if (provider === "vertex") {
     const project = process.env.GOOGLE_CLOUD_PROJECT;
-    if (!project) {
-      throw new Error("GOOGLE_CLOUD_PROJECT not set");
-    }
-    try {
-      return await synthesizeVertex(text, { project });
-    } catch (err) {
+    if (project) {
+      try {
+        return await synthesizeVertex(text, { project });
+      } catch (err) {
+        console.warn(
+          "[shoutout] vertex failed, falling back to deepgram:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    } else {
       console.warn(
-        "[shoutout] vertex failed, falling back to deepgram:",
-        err instanceof Error ? err.message : err,
+        "[shoutout] vertex selected but GOOGLE_CLOUD_PROJECT not set — falling back to deepgram",
       );
     }
   }
@@ -165,11 +168,11 @@ export async function generateShoutout(
   }
   const voiceProvider: VoiceProvider = station.voiceProvider ?? "deepgram";
 
-  if (voiceProvider === "deepgram" && !process.env.DEEPGRAM_API_KEY) {
+  // Deepgram is the always-available fallback. Require its key
+  // regardless of provider — synthesizeMp3 falls back to it whenever
+  // vertex is misconfigured or fails.
+  if (!process.env.DEEPGRAM_API_KEY) {
     throw new ShoutoutError(500, "deepgram_not_configured", "DEEPGRAM_API_KEY not set");
-  }
-  if (voiceProvider === "vertex" && !process.env.GOOGLE_CLOUD_PROJECT) {
-    throw new ShoutoutError(500, "vertex_not_configured", "GOOGLE_CLOUD_PROJECT not set");
   }
 
   let mp3: Buffer;
