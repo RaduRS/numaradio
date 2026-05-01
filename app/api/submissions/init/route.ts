@@ -98,53 +98,91 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
   if (!station) return fail("no_station", "Server misconfiguration.", 500);
 
-  // Per-email rate-limit applies to ALL non-terminal statuses. A stale
-  // `uploading` row (>30 min old) means the previous attempt never
-  // completed — sweep it (and its B2 objects, if any) so the artist
-  // isn't locked out by their own abandoned submission.
-  const existing = await prisma.musicSubmission.findFirst({
-    where: { email: normEmail, status: { in: ["pending", "uploading"] } },
-    select: { id: true, status: true, createdAt: true },
-  });
-  if (existing) {
-    const ageMs = Date.now() - existing.createdAt.getTime();
-    const isStaleUploading = existing.status === "uploading" && ageMs > 30 * 60 * 1000;
-    if (isStaleUploading) {
-      const stale = existing.id;
-      await Promise.all([
-        deleteObject(audioStorageKey(stale)).catch(() => undefined),
-        deleteObject(artworkStorageKey(stale, "png")).catch(() => undefined),
-        deleteObject(artworkStorageKey(stale, "jpeg")).catch(() => undefined),
-      ]);
-      await prisma.musicSubmission.delete({ where: { id: stale } }).catch(() => undefined);
-    } else {
+  // The partial unique index on (email) WHERE status IN ('pending',
+  // 'uploading') is the source of truth — let it enforce one-active-
+  // submission-per-email, then handle the conflict here. Removes the
+  // findFirst→delete→create TOCTOU race the previous version had.
+  let submission: { id: string };
+  try {
+    submission = await prisma.musicSubmission.create({
+      data: {
+        stationId: station.id,
+        artistName: normalizeName(name),
+        email: normEmail,
+        ipHash: ipHashOf(req),
+        audioStorageKey: "", // populated by finalize
+        artworkStorageKey: null,
+        airingPreference: airingPref,
+        status: "uploading",
+        vouched: true,
+      },
+      select: { id: true },
+    });
+  } catch (err) {
+    if (
+      typeof err !== "object" || err === null ||
+      !("code" in err) || (err as { code: unknown }).code !== "P2002"
+    ) {
+      throw err;
+    }
+    // Unique violation — there's an existing pending or uploading row.
+    // If it's a stale `uploading`, sweep it and retry once. Otherwise
+    // rate-limit the caller.
+    const conflict = await prisma.musicSubmission.findFirst({
+      where: { email: normEmail, status: { in: ["pending", "uploading"] } },
+      select: { id: true, status: true, createdAt: true },
+    });
+    const stale =
+      conflict !== null &&
+      conflict.status === "uploading" &&
+      Date.now() - conflict.createdAt.getTime() > 30 * 60 * 1000;
+    if (!stale || conflict === null) {
       return fail(
         "pending_exists",
-        existing.status === "uploading"
+        conflict?.status === "uploading"
           ? "You started a submission a moment ago — give it a minute to finish, or refresh and try again."
           : "You've already got a submission pending. We'll respond before you can send another.",
         429,
       );
     }
+    // Sweep stale row + B2 objects atomically (deleteMany guards on the
+    // status + age in case another request raced past), then retry.
+    await Promise.all([
+      deleteObject(audioStorageKey(conflict.id)).catch(() => undefined),
+      deleteObject(artworkStorageKey(conflict.id, "png")).catch(() => undefined),
+      deleteObject(artworkStorageKey(conflict.id, "jpeg")).catch(() => undefined),
+    ]);
+    await prisma.musicSubmission.deleteMany({
+      where: {
+        id: conflict.id,
+        status: "uploading",
+        createdAt: { lt: new Date(Date.now() - 30 * 60 * 1000) },
+      },
+    });
+    submission = await prisma.musicSubmission.create({
+      data: {
+        stationId: station.id,
+        artistName: normalizeName(name),
+        email: normEmail,
+        ipHash: ipHashOf(req),
+        audioStorageKey: "",
+        artworkStorageKey: null,
+        airingPreference: airingPref,
+        status: "uploading",
+        vouched: true,
+      },
+      select: { id: true },
+    });
   }
 
-  const submission = await prisma.musicSubmission.create({
-    data: {
-      stationId: station.id,
-      artistName: normalizeName(name),
-      email: normEmail,
-      ipHash: ipHashOf(req),
-      audioStorageKey: "", // populated by finalize
-      artworkStorageKey: null,
-      airingPreference: airingPref,
-      status: "uploading",
-      vouched: true,
-    },
-    select: { id: true },
-  });
-
+  // Presigned URL TTL: 600s (10 min). 90s was tight — a 10 MB MP3 on a
+  // 1 Mbps uplink takes ~80 s just for the audio PUT, leaving the
+  // artwork URL at near-zero margin since both URLs are signed at the
+  // same wall-clock instant. 10 min is plenty for slow connections,
+  // and the URL is tied to a specific Content-Type + Content-Length
+  // so a longer TTL doesn't meaningfully expand the attack surface.
   const audioKey = audioStorageKey(submission.id);
-  const audioPutUrl = await presignPut(audioKey, "audio/mpeg", audioSize as number, 90);
+  const audioPutUrl = await presignPut(audioKey, "audio/mpeg", audioSize as number, 600);
 
   let artworkPutUrl: string | null = null;
   let artKey: string | null = null;
@@ -154,7 +192,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       artKey,
       artKind === "png" ? "image/png" : "image/jpeg",
       artworkSize as number,
-      90,
+      600,
     );
   }
 
@@ -165,6 +203,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     audioContentType: "audio/mpeg",
     artworkPutUrl,
     artworkContentType: artKind ? (artKind === "png" ? "image/png" : "image/jpeg") : null,
-    expiresInSeconds: 90,
+    expiresInSeconds: 600,
   });
 }

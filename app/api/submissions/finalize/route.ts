@@ -17,7 +17,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getObject, deleteObject, objectExists } from "@/lib/storage";
 import { probeDurationSeconds } from "@/lib/probe-duration";
-import { sniffMp3, sniffImage } from "@/lib/submissions";
+import {
+  sniffMp3,
+  sniffImage,
+  audioStorageKey,
+  artworkStorageKey,
+} from "@/lib/submissions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -49,10 +54,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return fail("not_uploading", `Submission is in '${submission.status}' state, cannot finalize.`, 409);
   }
 
-  const audioKey = `submissions/${id}.mp3`;
+  const audioKey = audioStorageKey(id);
+  const pngKey = artworkStorageKey(id, "png");
+  const jpgKey = artworkStorageKey(id, "jpeg");
+
+  // Best-effort sweep of every B2 object that could exist for this id.
+  // Used on every failure path so we never leave orphans behind, regardless
+  // of which upload(s) the browser completed before finalize was called.
+  const sweepAllB2 = async (): Promise<void> => {
+    await Promise.all([
+      deleteObject(audioKey).catch(() => undefined),
+      deleteObject(pngKey).catch(() => undefined),
+      deleteObject(jpgKey).catch(() => undefined),
+    ]);
+  };
 
   // Verify the upload actually happened
   if (!(await objectExists(audioKey))) {
+    await sweepAllB2();
     await prisma.musicSubmission.delete({ where: { id } }).catch(() => undefined);
     return fail("audio_not_uploaded", "The audio upload did not complete. Please try again.", 409);
   }
@@ -65,7 +84,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   if (!sniffMp3(audioBuffer)) {
-    await deleteObject(audioKey).catch(() => undefined);
+    // Browser may have already PUT the artwork before finalize fired —
+    // sweep both paths so we don't leave orphan artwork in B2.
+    await sweepAllB2();
     await prisma.musicSubmission.delete({ where: { id } }).catch(() => undefined);
     return fail("bad_mp3", "That file doesn't look like a valid MP3.");
   }
@@ -73,13 +94,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Optional artwork — if the browser said it was uploading one, find + verify it
   let artKey: string | null = null;
   if (hasArtwork) {
-    const pngKey = `submissions/${id}.png`;
-    const jpgKey = `submissions/${id}.jpg`;
     if (await objectExists(pngKey)) artKey = pngKey;
     else if (await objectExists(jpgKey)) artKey = jpgKey;
 
     if (!artKey) {
-      await deleteObject(audioKey).catch(() => undefined);
+      await sweepAllB2();
       await prisma.musicSubmission.delete({ where: { id } }).catch(() => undefined);
       return fail("artwork_not_uploaded", "The artwork upload did not complete. Please try again.", 409);
     }
@@ -87,8 +106,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const artBuf = await getObject(artKey);
     const kind = sniffImage(artBuf);
     if (!kind) {
-      await deleteObject(artKey).catch(() => undefined);
-      await deleteObject(audioKey).catch(() => undefined);
+      await sweepAllB2();
       await prisma.musicSubmission.delete({ where: { id } }).catch(() => undefined);
       return fail("bad_artwork", "Artwork must be a PNG or JPEG image.");
     }
