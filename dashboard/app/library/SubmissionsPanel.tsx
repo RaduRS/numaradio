@@ -79,6 +79,16 @@ const SHOW_OPTIONS = [
 ] as const;
 type ShowSlug = (typeof SHOW_OPTIONS)[number]["value"];
 
+const REJECT_REASONS = [
+  "Audio quality not radio-ready (mastering, distortion, low bitrate)",
+  "Genre doesn't fit the station's character",
+  "Track length unsuitable (too short or too long)",
+  "Vocals or lyrics don't fit the station tone",
+  "Sounds derivative, generic, or unfinished",
+  "Copyright or clearance concerns",
+  "Technical issue with the file (corrupt, wrong format)",
+] as const;
+
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (ms < 60_000) return "just now";
@@ -111,9 +121,25 @@ function slugForFilename(s: string): string {
  *  triggers a browser download. The browser saves it to whatever the
  *  user has configured (Desktop, Downloads, or "Save As" prompt).
  */
-function downloadRejectionMarkdown(p: Pending, reason: string): void {
+function downloadRejectionMarkdown(
+  p: Pending,
+  reasons: string[],
+  notes: string,
+): void {
   const now = new Date();
   const submittedAt = new Date(p.createdAt);
+  const reasonsBlock =
+    reasons.length > 0
+      ? `**Reasons:**\n\n${reasons.map((r) => `- ${r}`).join("\n")}`
+      : "";
+  const notesBlock = notes ? `**Additional notes:** ${notes}` : "";
+  const reasonForEmail =
+    reasons.length === 1 && !notes
+      ? reasons[0].toLowerCase()
+      : reasons.length > 0
+        ? `${reasons.map((r) => r.toLowerCase()).join("; ")}${notes ? `. ${notes}` : ""}`
+        : notes;
+
   const md = `# Numa Radio — submission rejected
 
 **To:** ${p.email}
@@ -125,7 +151,7 @@ Hi,
 
 Thanks for sending us **${p.artistName}** (${fmtDur(p.durationSeconds)}, ${p.airingPreference === "permanent" ? "permanent rotation" : "one-off play"}) on ${submittedAt.toISOString().slice(0, 10)}. We've listened through and unfortunately won't be adding it to Numa Radio at this time.
 
-**Reason:** ${reason}
+**Reason:** ${reasonForEmail}
 
 We appreciate you sharing your work and welcome future submissions.
 
@@ -133,7 +159,11 @@ We appreciate you sharing your work and welcome future submissions.
 
 ---
 
-## Submission record
+## Reviewer record
+
+${[reasonsBlock, notesBlock].filter(Boolean).join("\n\n")}
+
+## Submission
 
 - **Submission ID:** \`${p.id}\`
 - **Artist / track name:** ${p.artistName}
@@ -162,6 +192,7 @@ export function SubmissionsPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [findEmail, setFindEmail] = useState("");
   const [showBySubmission, setShowBySubmission] = useState<Record<string, ShowSlug>>({});
@@ -234,29 +265,34 @@ export function SubmissionsPanel() {
   }
 
   async function reject(id: string) {
-    const trimmed = rejectReason.trim();
-    if (trimmed.length < 3) {
-      toast.error("Reason must be at least 3 characters.");
+    const notes = rejectReason.trim();
+    if (selectedReasons.length === 0 && notes.length < 3) {
+      toast.error("Pick at least one reason or write a note (3+ chars).");
       return;
     }
+    const combinedReason =
+      selectedReasons.length > 0
+        ? `${selectedReasons.join("; ")}${notes ? `. Notes: ${notes}` : ""}`
+        : notes;
     const submission = data?.pending.find((p) => p.id === id);
     setBusy(id);
     try {
       const r = await fetch(`/api/submissions/${id}/reject`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: trimmed }),
+        body: JSON.stringify({ reason: combinedReason }),
       });
       const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
       if (!r.ok) throw new Error(j.message ?? j.error ?? `HTTP ${r.status}`);
       if (submission) {
-        downloadRejectionMarkdown(submission, trimmed);
+        downloadRejectionMarkdown(submission, [...selectedReasons], notes);
         toast.success("Rejected — markdown downloaded.");
       } else {
         toast.success("Rejected.");
       }
       setRejectingId(null);
       setRejectReason("");
+      setSelectedReasons([]);
       await refresh();
     } catch (err) {
       toast.error(`Reject failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -468,11 +504,36 @@ export function SubmissionsPanel() {
               />
 
               {rejectingId === p.id ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3 rounded border border-line bg-bg-1/40 p-3">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute">
+                    Why rejecting?
+                  </div>
+                  <ul className="flex flex-col gap-1.5">
+                    {REJECT_REASONS.map((r) => {
+                      const checked = selectedReasons.includes(r);
+                      return (
+                        <li key={r}>
+                          <label className="flex items-start gap-2 text-xs cursor-pointer hover:text-fg">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setSelectedReasons((prev) =>
+                                  checked ? prev.filter((x) => x !== r) : [...prev, r],
+                                )
+                              }
+                              className="mt-0.5 accent-accent"
+                            />
+                            <span className={checked ? "text-fg" : "text-fg-mute"}>{r}</span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
                   <textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="Why are we rejecting this? (stored, not sent yet)"
+                    placeholder="Additional notes (optional, plain text)…"
                     rows={2}
                     className="bg-bg border border-line rounded p-2 text-sm outline-none focus:border-accent"
                   />
@@ -491,6 +552,7 @@ export function SubmissionsPanel() {
                       onClick={() => {
                         setRejectingId(null);
                         setRejectReason("");
+                        setSelectedReasons([]);
                       }}
                     >
                       Cancel
