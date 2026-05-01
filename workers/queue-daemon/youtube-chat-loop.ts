@@ -141,6 +141,9 @@ export function createYoutubeChatLoop(
   let totalDispatched = 0;
   let lastTickAt: string | null = null;
   let lastError: LoopSnapshot["lastError"] = null;
+  // Most recently observed liveChatId (or null when off-air). Hoisted out
+  // of tick() so /status can show it without waiting for a tick to finish.
+  let lastLiveChatId: string | null = null;
 
   function rateLimitOk(authorChannelId: string): boolean {
     const cutoffDay = now() - DAY_MS;
@@ -148,18 +151,24 @@ export function createYoutubeChatLoop(
     let stamps = authorWindow.get(authorChannelId) ?? [];
     // Prune anything older than the day window.
     stamps = stamps.filter((t) => t > cutoffDay);
-    if (stamps.length >= AUTHOR_DAY_LIMIT) {
-      authorWindow.set(authorChannelId, stamps);
-      return false;
-    }
+    authorWindow.set(authorChannelId, stamps);
+    if (stamps.length >= AUTHOR_DAY_LIMIT) return false;
     const inLastHour = stamps.filter((t) => t > cutoffHour).length;
-    if (inLastHour >= AUTHOR_HOUR_LIMIT) {
-      authorWindow.set(authorChannelId, stamps);
-      return false;
-    }
+    if (inLastHour >= AUTHOR_HOUR_LIMIT) return false;
+    return true;
+  }
+
+  /**
+   * Commit a rate-limit slot only after a dispatch has succeeded.
+   * Splitting check (rateLimitOk) from commit (this) avoids burning
+   * a slot when the dispatch endpoint fails — otherwise a brief
+   * Vercel hiccup could exhaust an author's 3/hr budget on errors
+   * the listener never even saw.
+   */
+  function rateLimitCommit(authorChannelId: string): void {
+    const stamps = authorWindow.get(authorChannelId) ?? [];
     stamps.push(now());
     authorWindow.set(authorChannelId, stamps);
-    return true;
   }
 
   async function dispatch(
@@ -233,8 +242,10 @@ export function createYoutubeChatLoop(
       // Off-air. Drop any cached messages so we restart cleanly when
       // the broadcast comes back.
       client.reset();
+      lastLiveChatId = null;
       return result;
     }
+    lastLiveChatId = liveChatId;
     result.liveChatId = liveChatId;
 
     let fetched: { messages: YoutubeChatMessage[] } = { messages: [] };
@@ -291,6 +302,7 @@ export function createYoutubeChatLoop(
       const cleanedMsg = { ...msg, text: trimmed };
       const dispatchResult = await dispatch(cleanedMsg);
       if (dispatchResult.ok) {
+        rateLimitCommit(msg.authorChannelId);
         result.dispatched += 1;
         totalDispatched += 1;
         log(
@@ -309,11 +321,12 @@ export function createYoutubeChatLoop(
   function reset(): void {
     client.reset();
     authorWindow.clear();
+    lastLiveChatId = null;
   }
 
   function snapshot(): LoopSnapshot {
     return {
-      liveChatId: null, // updated only inside tick(); snapshot is best-effort
+      liveChatId: lastLiveChatId,
       authorWindowSize: authorWindow.size,
       totalDispatched,
       lastTickAt,
