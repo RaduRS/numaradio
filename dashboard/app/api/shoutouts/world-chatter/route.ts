@@ -28,12 +28,32 @@ function isValidMode(v: unknown): v is AutoHostMode {
 export async function GET(): Promise<NextResponse> {
   try {
     const pool = getDbPool();
-    const r = await pool.query<StationRow>(
-      `SELECT "worldAsideMode", "worldAsideForcedUntil", "worldAsideForcedBy"
-         FROM "Station" WHERE slug = $1 LIMIT 1`,
+    // Eager revert if the forced window has elapsed — same pattern as
+    // the auto-host route. See note there for the why.
+    const reverted = await pool.query<StationRow>(
+      `UPDATE "Station"
+         SET "worldAsideMode" = 'auto',
+             "worldAsideForcedUntil" = NULL,
+             "worldAsideForcedBy" = NULL,
+             "updatedAt" = NOW()
+       WHERE slug = $1
+         AND "worldAsideMode" != 'auto'
+         AND "worldAsideForcedUntil" IS NOT NULL
+         AND "worldAsideForcedUntil" <= NOW()
+       RETURNING "worldAsideMode", "worldAsideForcedUntil", "worldAsideForcedBy"`,
       [STATION_SLUG],
     );
-    const row = r.rows[0];
+    let row: StationRow | undefined;
+    if (reverted.rowCount === 1) {
+      row = reverted.rows[0];
+    } else {
+      const r = await pool.query<StationRow>(
+        `SELECT "worldAsideMode", "worldAsideForcedUntil", "worldAsideForcedBy"
+           FROM "Station" WHERE slug = $1 LIMIT 1`,
+        [STATION_SLUG],
+      );
+      row = r.rows[0];
+    }
     if (!row) {
       return NextResponse.json(
         { ok: false, error: `station "${STATION_SLUG}" not found` },

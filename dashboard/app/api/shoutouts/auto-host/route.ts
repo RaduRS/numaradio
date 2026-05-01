@@ -21,12 +21,36 @@ function isValidMode(v: unknown): v is AutoHostMode {
 export async function GET(): Promise<NextResponse> {
   try {
     const pool = getDbPool();
-    const r = await pool.query<StationRow>(
-      `SELECT "autoHostMode", "autoHostForcedUntil", "autoHostForcedBy"
-         FROM "Station" WHERE slug = $1 LIMIT 1`,
+    // If forcedUntil has elapsed, eagerly revert to auto here so the
+    // dashboard shows the new state immediately. The queue daemon's
+    // own lazy revert (next runChatter tick) is the same atomic UPDATE
+    // — both paths converge on (mode='auto', forcedUntil=NULL). Without
+    // this, the operator sees "Reverting…" hang for up to ~3 minutes
+    // (one music-track gap) waiting for the daemon to tick.
+    const reverted = await pool.query<StationRow>(
+      `UPDATE "Station"
+         SET "autoHostMode" = 'auto',
+             "autoHostForcedUntil" = NULL,
+             "autoHostForcedBy" = NULL,
+             "updatedAt" = NOW()
+       WHERE slug = $1
+         AND "autoHostMode" != 'auto'
+         AND "autoHostForcedUntil" IS NOT NULL
+         AND "autoHostForcedUntil" <= NOW()
+       RETURNING "autoHostMode", "autoHostForcedUntil", "autoHostForcedBy"`,
       [STATION_SLUG],
     );
-    const row = r.rows[0];
+    let row: StationRow | undefined;
+    if (reverted.rowCount === 1) {
+      row = reverted.rows[0];
+    } else {
+      const r = await pool.query<StationRow>(
+        `SELECT "autoHostMode", "autoHostForcedUntil", "autoHostForcedBy"
+           FROM "Station" WHERE slug = $1 LIMIT 1`,
+        [STATION_SLUG],
+      );
+      row = r.rows[0];
+    }
     if (!row) {
       return NextResponse.json(
         { ok: false, error: `station "${STATION_SLUG}" not found` },
