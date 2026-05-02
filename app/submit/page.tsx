@@ -193,7 +193,7 @@ export default function SubmitPage() {
             <div className="submit-step">
               <span className="step-tag">Step 02</span>
               <span className="step-label">We listen</span>
-              <span className="step-note">~1 – 2 weeks</span>
+              <span className="step-note">~24 – 48 hours</span>
             </div>
             <div className="submit-arrow">→</div>
             <div className="submit-step">
