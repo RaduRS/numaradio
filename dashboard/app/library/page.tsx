@@ -213,15 +213,10 @@ export default function LibraryPage() {
   const [regenerating, setRegenerating] = useState<Set<string>>(new Set());
   // In-page preview: one shared <audio> element so only one track plays
   // at a time. Click another row → that one starts, the previous stops.
+  // (The `previewTrack` derivation is below `const tracks = ...` to avoid
+  // a temporal-dead-zone reference; defined just before its consumer.)
   const [previewId, setPreviewId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const previewTrack = useMemo(
-    () => (previewId ? (tracks.find((t) => t.id === previewId) ?? null) : null),
-    // tracks is rebuilt from tracksPoll.data each render — depending on its
-    // identity is fine here, the find is O(N) on a small list
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [previewId, tracksPoll.data],
-  );
 
   function togglePreview(track: LibraryTrack) {
     if (!track.audioStreamUrl) return;
@@ -243,6 +238,13 @@ export default function LibraryPage() {
   const [regenHint, setRegenHint] = useState("");
 
   const tracks = tracksPoll.data?.tracks ?? [];
+  const previewTrack = useMemo(
+    () => (previewId ? (tracks.find((t) => t.id === previewId) ?? null) : null),
+    // tracks is rebuilt from tracksPoll.data each render — depending on its
+    // identity is fine here, the find is O(N) on a small list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [previewId, tracksPoll.data],
+  );
 
   // Shoutouts are deleted from the DB by /api/internal/shoutout-ended
   // immediately after they air, so the library should rarely see one.
