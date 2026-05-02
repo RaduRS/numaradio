@@ -1,6 +1,6 @@
 import "../lib/load-env.ts";
 import { randomBytes } from "node:crypto";
-import { writeFile, rename } from "node:fs/promises";
+import { writeFile, rename, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -12,9 +12,66 @@ export type RefreshResult = {
   cyclePlayed: number;
   poolSize: number;
   cycleWrapped: boolean;
+  /** True when this refresh wrote the operator's manually-ordered queue
+   *  (read from MANUAL_PATH) instead of an auto-shuffled pool. */
+  manualMode: boolean;
 };
 
 const PLAYLIST_PATH = process.env.NUMA_PLAYLIST_PATH ?? "/etc/numa/playlist.m3u";
+const MANUAL_PATH = process.env.NUMA_MANUAL_ROTATION_PATH ?? "/etc/numa/manual-rotation.json";
+
+export type ManualRotation = { trackIds: string[]; setAt: number };
+
+export async function readManualRotation(path: string = MANUAL_PATH): Promise<ManualRotation | null> {
+  try {
+    const raw = await readFile(path, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.trackIds)) return null;
+    return { trackIds: parsed.trackIds.filter((x: unknown): x is string => typeof x === "string"), setAt: Number(parsed.setAt) || Date.now() };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    console.error(`[refresh-rotation] failed to read ${path}:`, err);
+    return null;
+  }
+}
+
+export async function writeManualRotation(trackIds: string[], path: string = MANUAL_PATH): Promise<void> {
+  const payload: ManualRotation = { trackIds, setAt: Date.now() };
+  const suffix = randomBytes(4).toString("hex");
+  const tmpPath = join(tmpdir(), `manual-rotation-${process.pid}-${Date.now()}-${suffix}.json`);
+  await writeFile(tmpPath, JSON.stringify(payload), "utf8");
+  await rename(tmpPath, path);
+}
+
+export async function clearManualRotation(path: string = MANUAL_PATH): Promise<void> {
+  try { await unlink(path); }
+  catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+}
+
+/**
+ * Build the m3u content from a manual track-id list. Drops ids that are no
+ * longer in the library (deleted/unready) and ids already in cycleExclude
+ * (already aired in current cycle, or currently playing — bridge against
+ * immediate repeat). Order is preserved verbatim — no shuffle.
+ */
+export function buildManualPlaylist(
+  library: RotationTrack[],
+  manualIds: string[],
+  cycleExclude: Set<string>,
+): { content: string; remainingIds: string[] } {
+  const byId = new Map(library.map((t) => [t.id, t]));
+  const remaining: RotationTrack[] = [];
+  for (const id of manualIds) {
+    if (cycleExclude.has(id)) continue;
+    const t = byId.get(id);
+    if (t) remaining.push(t);
+  }
+  const content = remaining.length === 0 ? "" : remaining.map((t) => t.url).join("\n") + "\n";
+  return { content, remainingIds: remaining.map((t) => t.id) };
+}
 
 /**
  * Walk PlayHistory (most recent first) collecting distinct track ids until
@@ -142,6 +199,36 @@ export async function runRefresh(
     bridgeExclude.add(nowPlayingId);
   }
 
+  // Manual rotation override: if the operator has dropped a manual order
+  // from the dashboard, write THAT (verbatim, no shuffle) instead of the
+  // auto-shuffled cycle. Tracks already aired in the current cycle (or
+  // currently playing — bridge) are filtered out so the operator can't
+  // accidentally request an immediate repeat. When the manual list is
+  // exhausted the file is deleted and the next refresh falls back to
+  // generational shuffle automatically.
+  const manual = await readManualRotation();
+  if (manual) {
+    const { content: manualContent, remainingIds } = buildManualPlaylist(library, manual.trackIds, cycleExclude);
+    if (remainingIds.length > 0) {
+      const suffix = randomBytes(4).toString("hex");
+      const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
+      await writeFile(tmpPath, manualContent, "utf8");
+      await rename(tmpPath, PLAYLIST_PATH);
+      return {
+        librarySize: library.length,
+        cyclePlayed: cycleExclude.size,
+        poolSize: remainingIds.length,
+        cycleWrapped: false,
+        manualMode: true,
+      };
+    }
+    // Manual list exhausted — clear the sentinel and fall through to
+    // normal generational refresh. The bridge in buildPlaylist excludes
+    // nowPlaying, so the seam between the last manual track and the
+    // first auto track can't repeat.
+    await clearManualRotation();
+  }
+
   const cycleWrapped = library.length > 0 && library.every((t) => cycleExclude.has(t.id));
   const content = buildPlaylist(library, cycleExclude, bridgeExclude);
 
@@ -157,6 +244,7 @@ export async function runRefresh(
       ? Math.max(library.length - bridgeExclude.size, 0)
       : Math.max(library.length - cycleExclude.size, 0),
     cycleWrapped,
+    manualMode: false,
   };
 }
 
@@ -180,7 +268,7 @@ async function main() {
     });
     const sample = tracks.map((t) => t.title).join(", ");
     console.log(
-      `[refresh-rotation] library=${result.librarySize} cyclePlayed=${result.cyclePlayed} poolSize=${result.poolSize} wrapped=${result.cycleWrapped} wrote=${PLAYLIST_PATH} sample=[${sample}]`,
+      `[refresh-rotation] library=${result.librarySize} cyclePlayed=${result.cyclePlayed} poolSize=${result.poolSize} wrapped=${result.cycleWrapped} manual=${result.manualMode} wrote=${PLAYLIST_PATH} sample=[${sample}]`,
     );
   } finally {
     await prisma.$disconnect();

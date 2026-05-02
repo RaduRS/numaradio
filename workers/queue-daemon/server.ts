@@ -74,12 +74,17 @@ export type RefreshRotationResult = {
   cyclePlayed: number;
   poolSize: number;
   cycleWrapped: boolean;
+  manualMode: boolean;
 };
+
+export type SetManualRotationBody = { trackIds: string[] };
 
 export interface ServerDeps {
   pushHandler(body: PushBody): Promise<{ queueItemId: string }>;
   onTrackHandler(body: OnTrackBody): Promise<void>;
   refreshRotationHandler(): Promise<RefreshRotationResult>;
+  setManualRotationHandler(body: SetManualRotationBody): Promise<RefreshRotationResult>;
+  clearManualRotationHandler(): Promise<RefreshRotationResult>;
   statusHandler(): StatusSnapshot;
   /** Set the next chatter type. Validates the type or throws. */
   chatterOverrideHandler(body: ChatterOverrideBody): { ok: true };
@@ -164,6 +169,24 @@ export function createHandler(deps: ServerDeps): RequestListener {
       }
       if (req.method === "POST" && req.url === "/refresh-rotation") {
         const result = await deps.refreshRotationHandler();
+        return sendJson(res, 200, result);
+      }
+      if (req.method === "POST" && req.url === "/manual-rotation") {
+        const text = await readBody(req);
+        let body: SetManualRotationBody;
+        try { body = JSON.parse(text); }
+        catch { return sendJson(res, 400, { error: "invalid json" }); }
+        if (!body || !Array.isArray(body.trackIds)) {
+          return sendJson(res, 400, { error: "trackIds must be an array" });
+        }
+        if (body.trackIds.some((x) => typeof x !== "string")) {
+          return sendJson(res, 400, { error: "trackIds must be strings" });
+        }
+        const result = await deps.setManualRotationHandler(body);
+        return sendJson(res, 200, result);
+      }
+      if (req.method === "DELETE" && req.url === "/manual-rotation") {
+        const result = await deps.clearManualRotationHandler();
         return sendJson(res, 200, result);
       }
       if (req.method === "POST" && req.url === "/chatter-override") {

@@ -26,6 +26,7 @@ import { ArtworkPreview } from "@/components/ui/artwork-preview";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
 import { SubmissionsPanel } from "./SubmissionsPanel";
+import { UpcomingQueue } from "@/components/upcoming-queue";
 import type {
   DaemonFailure,
   DaemonPush,
@@ -331,6 +332,9 @@ export default function LibraryPage() {
 
       {/* ── Music submissions panel ───────────────────────── */}
       <SubmissionsPanel />
+
+      {/* ── Up Next: drag-and-drop rotation override ──────── */}
+      <UpcomingQueue />
 
       {/* ── Sticky control bar: search + filter chips ──────── */}
       <div className="sticky top-14 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-bg/95 backdrop-blur border-b border-line flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">

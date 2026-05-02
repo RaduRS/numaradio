@@ -233,7 +233,53 @@ export type RotationRefreshResult = {
   cyclePlayed: number;
   poolSize: number;
   cycleWrapped: boolean;
+  manualMode: boolean;
 };
+
+export async function setManualRotation(
+  trackIds: string[],
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 5_000,
+): Promise<{ ok: true; result: RotationRefreshResult } | { ok: false; status: number; error: string }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetcher(`${DAEMON_URL}/manual-rotation`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trackIds }),
+      signal: ctl.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) return { ok: false, status: res.status, error: text || `HTTP ${res.status}` };
+    return { ok: true, result: JSON.parse(text) as RotationRefreshResult };
+  } catch (e) {
+    return { ok: false, status: 502, error: e instanceof Error ? e.message : "daemon unreachable" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function clearManualRotation(
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 5_000,
+): Promise<{ ok: true; result: RotationRefreshResult } | { ok: false; status: number; error: string }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetcher(`${DAEMON_URL}/manual-rotation`, {
+      method: "DELETE",
+      signal: ctl.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) return { ok: false, status: res.status, error: text || `HTTP ${res.status}` };
+    return { ok: true, result: JSON.parse(text) as RotationRefreshResult };
+  } catch (e) {
+    return { ok: false, status: 502, error: e instanceof Error ? e.message : "daemon unreachable" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function requestRotationRefresh(
   fetcher: typeof fetch = fetch,

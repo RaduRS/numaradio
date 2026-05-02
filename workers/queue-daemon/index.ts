@@ -19,7 +19,7 @@ import { createSynthesizer } from "./synth-router.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
 import { ContextLineOrchestrator, buildStationState } from "./context-line.ts";
 import { fetchWorldAside } from "./world-aside-client.ts";
-import { runRefresh as refreshRotation } from "../../scripts/refresh-rotation.ts";
+import { runRefresh as refreshRotation, writeManualRotation, clearManualRotation as clearManualRotationFile } from "../../scripts/refresh-rotation.ts";
 import {
   createYoutubeChatLoop,
   DEFAULT_POLL_INTERVAL_MS as YT_CHAT_INTERVAL_MS,
@@ -565,6 +565,14 @@ async function main() {
       statusHandler,
       chatterOverrideHandler,
       refreshRotationHandler: () => refreshRotation(prisma),
+      setManualRotationHandler: async (body) => {
+        await writeManualRotation(body.trackIds);
+        return refreshRotation(prisma);
+      },
+      clearManualRotationHandler: async () => {
+        await clearManualRotationFile();
+        return refreshRotation(prisma);
+      },
     }),
   );
   server.listen(HTTP_PORT, "127.0.0.1", () => {

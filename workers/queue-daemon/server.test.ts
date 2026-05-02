@@ -39,6 +39,21 @@ function mkDeps(over: Partial<ServerDeps> = {}): TestDeps {
       cyclePlayed: 0,
       poolSize: 0,
       cycleWrapped: false,
+      manualMode: false,
+    }),
+    setManualRotationHandler: async () => ({
+      librarySize: 0,
+      cyclePlayed: 0,
+      poolSize: 0,
+      cycleWrapped: false,
+      manualMode: true,
+    }),
+    clearManualRotationHandler: async () => ({
+      librarySize: 0,
+      cyclePlayed: 0,
+      poolSize: 0,
+      cycleWrapped: false,
+      manualMode: false,
     }),
     ...over,
   };
@@ -151,6 +166,58 @@ test("POST /chatter-override forwards a valid type to the handler", async () => 
     assert.equal(status, 200);
     assert.equal(json.ok, true);
     assert.deepEqual(deps.__overrides[0], { type: "world_aside" });
+  });
+});
+
+test("POST /manual-rotation forwards trackIds and returns the handler's RefreshResult", async () => {
+  let received: unknown = null;
+  const deps = mkDeps({
+    setManualRotationHandler: async (body) => {
+      received = body;
+      return { librarySize: 70, cyclePlayed: 5, poolSize: 3, cycleWrapped: false, manualMode: true };
+    },
+  });
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/manual-rotation", { trackIds: ["a", "b", "c"] });
+    assert.equal(status, 200);
+    assert.equal(json.manualMode, true);
+    assert.equal(json.poolSize, 3);
+    assert.deepEqual(received, { trackIds: ["a", "b", "c"] });
+  });
+});
+
+test("POST /manual-rotation 400s when trackIds is not an array", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/manual-rotation", { trackIds: "nope" });
+    assert.equal(status, 400);
+    assert.match(json.error, /trackIds/);
+  });
+});
+
+test("POST /manual-rotation 400s when trackIds contains non-strings", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/manual-rotation", { trackIds: ["a", 42, "c"] });
+    assert.equal(status, 400);
+    assert.match(json.error, /strings/);
+  });
+});
+
+test("DELETE /manual-rotation clears manual mode and returns the post-clear refresh", async () => {
+  let cleared = false;
+  const deps = mkDeps({
+    clearManualRotationHandler: async () => {
+      cleared = true;
+      return { librarySize: 70, cyclePlayed: 5, poolSize: 65, cycleWrapped: false, manualMode: false };
+    },
+  });
+  await withServer(deps, async (port) => {
+    const res = await fetch(`http://127.0.0.1:${port}/manual-rotation`, { method: "DELETE" });
+    const json = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(cleared, true);
+    assert.equal(json.manualMode, false);
   });
 });
 

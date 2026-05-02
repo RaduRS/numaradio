@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlaylist, cyclePlayedFrom } from "./refresh-rotation.ts";
+import { buildPlaylist, buildManualPlaylist, cyclePlayedFrom } from "./refresh-rotation.ts";
 
 type T = { id: string; url: string; title: string };
 const t = (id: string, url: string): T => ({ id, url, title: id });
@@ -112,6 +112,43 @@ test("simulated full cycle: every track airs exactly once before any repeat", ()
   }
 
   assert.equal(new Set(history).size, library.length, "every track aired exactly once");
+});
+
+test("buildManualPlaylist preserves the operator's order verbatim", () => {
+  const library: T[] = [t("a", "u-a"), t("b", "u-b"), t("c", "u-c"), t("d", "u-d")];
+  const r = buildManualPlaylist(library, ["c", "a", "d"], new Set());
+  assert.deepEqual(r.remainingIds, ["c", "a", "d"]);
+  assert.equal(r.content, "u-c\nu-a\nu-d\n");
+});
+
+test("buildManualPlaylist drops ids that already aired in the current cycle (manual-mode bridge)", () => {
+  // Operator put A in their order, but A already played this cycle —
+  // dropping it prevents a second airing inside one cycle.
+  const library: T[] = [t("a", "u-a"), t("b", "u-b"), t("c", "u-c")];
+  const r = buildManualPlaylist(library, ["a", "b", "c"], new Set(["a"]));
+  assert.deepEqual(r.remainingIds, ["b", "c"]);
+});
+
+test("buildManualPlaylist drops the currently-playing track (seam bridge into manual mode)", () => {
+  // Operator put the currently-playing track at position 0 — drop it so
+  // it can't air twice in a row.
+  const library: T[] = [t("a", "u-a"), t("b", "u-b"), t("c", "u-c")];
+  const r = buildManualPlaylist(library, ["a", "b"], new Set(["a"]));
+  assert.deepEqual(r.remainingIds, ["b"]);
+  assert.equal(r.content, "u-b\n");
+});
+
+test("buildManualPlaylist drops ids no longer in the library (deleted/unready)", () => {
+  const library: T[] = [t("a", "u-a"), t("b", "u-b")];
+  const r = buildManualPlaylist(library, ["a", "ghost", "b"], new Set());
+  assert.deepEqual(r.remainingIds, ["a", "b"]);
+});
+
+test("buildManualPlaylist returns empty content when nothing remains (caller falls back to auto)", () => {
+  const library: T[] = [t("a", "u-a"), t("b", "u-b")];
+  const r = buildManualPlaylist(library, ["a", "b"], new Set(["a", "b"]));
+  assert.deepEqual(r.remainingIds, []);
+  assert.equal(r.content, "");
 });
 
 test("simulated cycle wrap: first pick of cycle N+1 is not the last of cycle N", () => {
