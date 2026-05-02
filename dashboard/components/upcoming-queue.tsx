@@ -114,12 +114,15 @@ function SortableRow({ track, position }: { track: UpcomingTrack; position: numb
       ) : (
         <div className="w-8 h-8 rounded-sm shrink-0 bg-[var(--bg-2)] border border-line/60" aria-hidden />
       )}
-      <div className="min-w-0 flex-1 flex items-baseline gap-2">
-        <span className="text-sm text-fg truncate">{track.title}</span>
-        {track.artist ? (
-          <span className="text-xs text-fg-dim truncate">{track.artist}</span>
-        ) : null}
-      </div>
+      <span className="text-sm text-fg truncate min-w-0 flex-1" title={track.title}>
+        {track.title}
+      </span>
+      <span
+        className="text-xs text-fg-dim truncate shrink-0 w-32 hidden sm:inline"
+        title={track.artist ?? "No artist"}
+      >
+        {track.artist ?? "—"}
+      </span>
       <span
         className="font-mono text-[10px] text-fg-mute shrink-0 w-24 truncate hidden sm:inline"
         title={track.genre ?? "No genre"}
@@ -291,6 +294,7 @@ export function UpcomingQueue() {
                 <span className="w-6 shrink-0 text-right">#</span>
                 <span className="w-8 shrink-0" aria-hidden /> {/* art */}
                 <span className="flex-1 min-w-0">Track</span>
+                <span className="w-32 shrink-0 hidden sm:inline">Artist</span>
                 <span className="w-24 shrink-0 hidden sm:inline">Genre</span>
                 <span className="w-32 shrink-0 hidden md:inline text-center">Show</span>
                 <span className="w-12 shrink-0 text-right" title="Days since added to library">Days</span>
