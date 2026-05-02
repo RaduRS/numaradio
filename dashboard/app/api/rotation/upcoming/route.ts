@@ -15,6 +15,8 @@ export type UpcomingTrack = {
   title: string;
   artist: string | null;
   durationSeconds: number | null;
+  artworkUrl: string | null;
+  ageDays: number | null;
 };
 
 async function fileExists(p: string): Promise<boolean> {
@@ -44,12 +46,34 @@ export async function GET(req: Request): Promise<NextResponse> {
   // Resolve to titles via Postgres. Order-preserving join — the m3u order
   // is authoritative, so we re-sort the DB result by ids' position.
   const pool = getDbPool();
-  const result = await pool.query<{ id: string; title: string; artist_display: string | null; duration_seconds: number | null }>(
-    `SELECT id, title, "artistDisplay" AS artist_display, "durationSeconds" AS duration_seconds
-     FROM "Track" WHERE id = ANY($1::text[])`,
+  const result = await pool.query<{
+    id: string;
+    title: string;
+    artist_display: string | null;
+    duration_seconds: number | null;
+    artwork_url: string | null;
+    created_at: Date;
+  }>(
+    `SELECT
+       t.id,
+       t.title,
+       t."artistDisplay" AS artist_display,
+       t."durationSeconds" AS duration_seconds,
+       t."createdAt" AS created_at,
+       art."publicUrl" AS artwork_url
+     FROM "Track" t
+     LEFT JOIN LATERAL (
+       SELECT "publicUrl"
+       FROM "TrackAsset"
+       WHERE "trackId" = t.id AND "assetType" = 'artwork_primary'
+       ORDER BY "createdAt" DESC
+       LIMIT 1
+     ) art ON true
+     WHERE t.id = ANY($1::text[])`,
     [ids],
   );
   const byId = new Map(result.rows.map((r) => [r.id, r]));
+  const now = Date.now();
 
   const tracks: UpcomingTrack[] = ids.map((id, i) => {
     const r = byId.get(id);
@@ -59,6 +83,8 @@ export async function GET(req: Request): Promise<NextResponse> {
       title: r?.title ?? "(unknown)",
       artist: r?.artist_display ?? null,
       durationSeconds: r?.duration_seconds ?? null,
+      artworkUrl: r?.artwork_url ?? null,
+      ageDays: r?.created_at ? Math.floor((now - r.created_at.getTime()) / 86400000) : null,
     };
   });
 

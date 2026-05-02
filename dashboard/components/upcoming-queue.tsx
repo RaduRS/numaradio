@@ -29,6 +29,8 @@ type UpcomingTrack = {
   title: string;
   artist: string | null;
   durationSeconds: number | null;
+  artworkUrl: string | null;
+  ageDays: number | null;
 };
 
 type UpcomingResponse = {
@@ -45,6 +47,16 @@ function fmtDur(s: number | null): string {
   return `${m}:${ss.toString().padStart(2, "0")}`;
 }
 
+function fmtAge(days: number | null): { label: string; cls: string } {
+  if (days === null || days === undefined) return { label: "—", cls: "text-fg-dim" };
+  if (days === 0) return { label: "today", cls: "text-accent" };
+  if (days === 1) return { label: "1d", cls: "text-accent" };
+  if (days < 7) return { label: `${days}d`, cls: "text-accent" };
+  if (days < 30) return { label: `${days}d`, cls: "text-fg" };
+  if (days < 365) return { label: `${Math.floor(days / 30)}mo`, cls: "text-fg-mute" };
+  return { label: `${Math.floor(days / 365)}y`, cls: "text-fg-dim" };
+}
+
 function SortableRow({ track, position }: { track: UpcomingTrack; position: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id });
   const style = {
@@ -52,6 +64,7 @@ function SortableRow({ track, position }: { track: UpcomingTrack; position: numb
     transition,
     opacity: isDragging ? 0.4 : 1,
   };
+  const age = fmtAge(track.ageDays);
   return (
     <li
       ref={setNodeRef}
@@ -71,12 +84,29 @@ function SortableRow({ track, position }: { track: UpcomingTrack; position: numb
       <span className="font-mono text-[11px] tabular-nums text-fg-dim w-6 shrink-0 text-right">
         {position}
       </span>
+      {track.artworkUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={track.artworkUrl}
+          alt=""
+          loading="lazy"
+          className="w-8 h-8 rounded-sm object-cover shrink-0 border border-line/60"
+        />
+      ) : (
+        <div className="w-8 h-8 rounded-sm shrink-0 bg-[var(--bg-2)] border border-line/60" aria-hidden />
+      )}
       <div className="min-w-0 flex-1 flex items-baseline gap-2">
         <span className="text-sm text-fg truncate">{track.title}</span>
         {track.artist ? (
           <span className="text-xs text-fg-dim truncate">{track.artist}</span>
         ) : null}
       </div>
+      <span
+        className={`font-mono text-[10px] uppercase tabular-nums shrink-0 w-12 text-right ${age.cls}`}
+        title={track.ageDays === null ? "Unknown age" : `Added ${track.ageDays} day${track.ageDays === 1 ? "" : "s"} ago`}
+      >
+        {age.label}
+      </span>
       <span className="font-mono text-[10px] tabular-nums text-fg-dim shrink-0 w-10 text-right">
         {fmtDur(track.durationSeconds)}
       </span>
