@@ -1,7 +1,6 @@
 "use client";
 import { usePolling } from "@/hooks/use-polling";
 import { StatusPills } from "@/components/status-pills";
-import { RotationCard } from "@/components/rotation-card";
 import { ServicesCard } from "@/components/services-card";
 import { HealthCard } from "@/components/health-card";
 import { LogsCard } from "@/components/logs-card";
@@ -65,7 +64,6 @@ export default function OperatorDashboard() {
         onAction={shoutoutsPoll.refresh}
         hideWhenEmpty
       />
-      <RotationCard />
       <ServicesCard data={data} onActionComplete={refresh} />
       <HealthCard data={data} />
       <LogsCard />

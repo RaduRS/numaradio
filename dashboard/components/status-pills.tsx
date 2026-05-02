@@ -1,6 +1,7 @@
 "use client";
 import type { StatusSnapshot } from "@/lib/types";
 import { VoiceProviderTile } from "@/components/voice-provider-tile";
+import { ReshuffleButton } from "@/components/reshuffle-button";
 
 interface Props {
   data: StatusSnapshot | null;
@@ -38,24 +39,27 @@ export function StatusPills({ data, isStale }: Props) {
           {live ? "Stream is live" : "Stream is down"}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--bg-1)] px-5 py-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute">
-            Now playing
-          </span>
-          {np ? (
-            <div className="flex min-w-0 items-baseline gap-3">
-              <span className="truncate text-lg font-medium text-fg">
-                {np.title}
-              </span>
-              {np.artist ? (
-                <span className="truncate text-sm text-fg-dim">
-                  {np.artist}
+        <div className="flex min-w-0 items-center gap-4 rounded-xl border border-[var(--line)] bg-[var(--bg-1)] px-5 py-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-mute">
+              Now playing
+            </span>
+            {np ? (
+              <div className="flex min-w-0 items-baseline gap-3">
+                <span className="truncate text-lg font-medium text-fg">
+                  {np.title}
                 </span>
-              ) : null}
-            </div>
-          ) : (
-            <span className="text-sm text-fg-mute">No title metadata.</span>
-          )}
+                {np.artist ? (
+                  <span className="truncate text-sm text-fg-dim">
+                    {np.artist}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <span className="text-sm text-fg-mute">No title metadata.</span>
+            )}
+          </div>
+          <ReshuffleButton />
         </div>
       </div>
 
