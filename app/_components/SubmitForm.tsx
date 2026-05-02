@@ -22,6 +22,55 @@ function fmtStamp(d: Date): string {
   return `${d.getUTCFullYear()}.${pad(d.getUTCMonth() + 1)}.${pad(d.getUTCDate())} · ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
 }
 
+/**
+ * Direct-to-B2 PUT with one transparent retry on transient errors.
+ * B2 has been observed to return 413 / 503 / connection-reset on the
+ * first attempt for some clients (Firefox + Linux + larger files most
+ * commonly), with the second attempt succeeding immediately. We retry
+ * 413 + 5xx + network errors only; auth / signature mismatches (400 /
+ * 403) fail fast since retrying won't help.
+ */
+async function putWithRetry(
+  url: string,
+  body: Blob | File,
+  contentType: string,
+): Promise<Response> {
+  let last: Response | null = null;
+  for (const delay of [0, 800]) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    try {
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "content-type": contentType },
+        body,
+      });
+      if (res.ok) return res;
+      last = res;
+      // Retry only on transient: 413 (transient B2 hiccup) and 5xx.
+      // 4xx other than 413 = bad request / signature, retry won't fix.
+      if (res.status !== 413 && (res.status < 500 || res.status >= 600)) {
+        return res;
+      }
+    } catch {
+      // Network error — fall through to retry.
+    }
+  }
+  return last ?? new Response(null, { status: 0, statusText: "no response" });
+}
+
+function explainPutFailure(status: number, what: string, sizeBytes: number, maxMb: number): string {
+  if (status === 413 || sizeBytes > maxMb * 1024 * 1024) {
+    return `${what} upload rejected as too large. Please use a file ${maxMb} MB or smaller. (Yours is ${fmtBytes(sizeBytes)}.)`;
+  }
+  if (status === 0) {
+    return `${what} upload failed — looks like a network drop. Please check your connection and try again.`;
+  }
+  if (status >= 500) {
+    return `${what} upload hit a temporary server error (HTTP ${status}). Please try again in a moment.`;
+  }
+  return `${what} upload failed (HTTP ${status}). Please try again.`;
+}
+
 export function SubmitForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -116,30 +165,33 @@ export function SubmitForm() {
         return;
       }
 
-      // Step 2 — direct PUT to B2 (bypasses Vercel's 4.5 MB body cap)
-      const audioPut = await fetch(initJson.audioPutUrl, {
-        method: "PUT",
-        headers: { "content-type": initJson.audioContentType ?? "audio/mpeg" },
-        body: audio,
-      });
+      // Step 2 — direct PUT to B2 (bypasses Vercel's 4.5 MB body cap).
+      // putWithRetry transparently retries once on 413 / 5xx / network
+      // error — those are the transient B2 failures users were hitting
+      // mid-upload, where a manual second attempt always worked.
+      const audioPut = await putWithRetry(
+        initJson.audioPutUrl,
+        audio,
+        initJson.audioContentType ?? "audio/mpeg",
+      );
       if (!audioPut.ok) {
         setState({
           kind: "error",
-          message: `Audio upload failed (HTTP ${audioPut.status}). Please try again.`,
+          message: explainPutFailure(audioPut.status, "Audio", audio.size, MAX_AUDIO_MB),
         });
         return;
       }
 
       if (artwork && initJson.artworkPutUrl) {
-        const artPut = await fetch(initJson.artworkPutUrl, {
-          method: "PUT",
-          headers: { "content-type": initJson.artworkContentType ?? "image/jpeg" },
-          body: artwork,
-        });
+        const artPut = await putWithRetry(
+          initJson.artworkPutUrl,
+          artwork,
+          initJson.artworkContentType ?? "image/jpeg",
+        );
         if (!artPut.ok) {
           setState({
             kind: "error",
-            message: `Artwork upload failed (HTTP ${artPut.status}). Please try again.`,
+            message: explainPutFailure(artPut.status, "Artwork", artwork.size, MAX_ART_MB),
           });
           return;
         }
