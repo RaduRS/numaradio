@@ -225,10 +225,33 @@ export function SubmitForm() {
   function pickedAudio(f: File | null) {
     setAudio(f);
     if (!f && audioInputRef.current) audioInputRef.current.value = "";
+    // Surface size errors INLINE the moment a file is picked, instead
+    // of waiting for the user to hit Send (the button stays disabled
+    // either way, which left them puzzled at "Fill the fields above").
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (f && f.size > MAX_AUDIO_MB * 1024 * 1024) {
+        const mb = (f.size / 1_048_576).toFixed(1);
+        next.audio = `MP3 must be ${MAX_AUDIO_MB} MB or smaller. Yours is ${mb} MB — please trim or re-export at a lower bitrate.`;
+      } else {
+        delete next.audio;
+      }
+      return next;
+    });
   }
   function pickedArtwork(f: File | null) {
     setArtwork(f);
     if (!f && artworkInputRef.current) artworkInputRef.current.value = "";
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (f && f.size > MAX_ART_MB * 1024 * 1024) {
+        const mb = (f.size / 1_048_576).toFixed(1);
+        next.artwork = `Artwork must be ${MAX_ART_MB} MB or smaller. Yours is ${mb} MB.`;
+      } else {
+        delete next.artwork;
+      }
+      return next;
+    });
   }
 
   // ── Confirmation state ───────────────────────────────────
@@ -522,7 +545,21 @@ export function SubmitForm() {
             ? "Uploading…"
             : canSubmit
             ? "Ready to send"
-            : "Fill the fields above"}
+            : (errs.audio
+                ? errs.audio
+                : errs.artwork
+                ? errs.artwork
+                : errs.trackTitle
+                ? errs.trackTitle
+                : errs.trackGenre
+                ? errs.trackGenre
+                : errs.name
+                ? errs.name
+                : errs.email
+                ? errs.email
+                : errs.vouched
+                ? errs.vouched
+                : "Fill the fields above")}
         </span>
         <button type="submit" className="submit-btn" disabled={!canSubmit}>
           {state.kind === "submitting" ? (
