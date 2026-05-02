@@ -27,6 +27,7 @@ import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
 import { SubmissionsPanel } from "./SubmissionsPanel";
 import { UpcomingQueue } from "@/components/upcoming-queue";
+import { LibraryPreviewBar } from "@/components/library-preview-bar";
 import type {
   DaemonFailure,
   DaemonPush,
@@ -214,6 +215,13 @@ export default function LibraryPage() {
   // at a time. Click another row → that one starts, the previous stops.
   const [previewId, setPreviewId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const previewTrack = useMemo(
+    () => (previewId ? (tracks.find((t) => t.id === previewId) ?? null) : null),
+    // tracks is rebuilt from tracksPoll.data each render — depending on its
+    // identity is fine here, the find is O(N) on a small list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [previewId, tracksPoll.data],
+  );
 
   function togglePreview(track: LibraryTrack) {
     if (!track.audioStreamUrl) return;
@@ -812,6 +820,32 @@ export default function LibraryPage() {
           onEnded clears the row's playing state so the icon flips back to
           Play when the track finishes naturally. */}
       <audio ref={audioRef} onEnded={() => setPreviewId(null)} preload="none" />
+
+      {/* Floating preview bar with scrub slider — visible whenever a row is
+          selected for preview (regardless of paused state). Adds bottom
+          padding to the main content so the bar doesn't cover the last row. */}
+      {previewTrack ? (
+        <>
+          <div className="h-20" aria-hidden />
+          <LibraryPreviewBar
+            audioRef={audioRef}
+            trackTitle={previewTrack.title}
+            trackArtist={previewTrack.artist}
+            artworkUrl={previewTrack.artworkUrl}
+            onTogglePlay={() => {
+              const audio = audioRef.current;
+              if (!audio) return;
+              if (audio.paused) audio.play().catch(() => undefined);
+              else audio.pause();
+            }}
+            onClose={() => {
+              const audio = audioRef.current;
+              if (audio) { audio.pause(); audio.currentTime = 0; }
+              setPreviewId(null);
+            }}
+          />
+        </>
+      ) : null}
     </main>
   );
 }

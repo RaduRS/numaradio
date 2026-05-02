@@ -48,6 +48,31 @@ const MAX_TEXT = 240;
  *  but "calendar" doesn't trigger by accident. */
 const DEFAULT_TRIGGER = /@lena\b/i;
 
+/** After stripping the trigger we drop messages whose remaining text is
+ *  not predominantly Latin script. Lena's TTS (`aura-2-helena-en`) is
+ *  English-only — Bengali / CJK / Arabic / Cyrillic input produces either
+ *  silence or garbled phonemes on air, and the moderator + radio-host
+ *  rewrite are tuned for English. Matches what mainstream English-language
+ *  stations (Capital, Kiss, Radio 1) do with non-English chat input. */
+export function isLatinScript(text: string): boolean {
+  // Strip whitespace, ASCII punctuation, digits, common European Latin
+  // diacritics, and emoji. What's left is the "script signal". If 80%+
+  // of those characters are basic Latin (a-zA-Z), accept; otherwise
+  // reject. The 80% threshold tolerates one-off accented words or stray
+  // foreign characters in an otherwise English message.
+  const stripped = text
+    .replace(/\s+/g, "")
+    .replace(/[\d\p{P}\p{S}]/gu, "");
+  if (stripped.length === 0) return true; // pure punctuation/numbers — let length filter handle
+  let latin = 0;
+  for (const ch of stripped) {
+    // Basic Latin + Latin-1 Supplement + Latin Extended-A/B (covers
+    // ASCII a-z, accents like é à ñ ü, ß, etc.)
+    if (/[A-ɏ]/.test(ch)) latin += 1;
+  }
+  return latin / stripped.length >= 0.8;
+}
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 export type DispatchResult =
@@ -104,6 +129,10 @@ export interface TickResult {
   skippedRateLimit: number;
   skippedLength: number;
   skippedNoTrigger: number;
+  /** Predominantly non-Latin script — Bengali / CJK / Arabic / Cyrillic
+   *  etc. — dropped before dispatch because Lena's English-only TTS
+   *  can't read them. */
+  skippedNonLatin: number;
   failed: number;
 }
 
@@ -225,6 +254,7 @@ export function createYoutubeChatLoop(
       skippedRateLimit: 0,
       skippedLength: 0,
       skippedNoTrigger: 0,
+      skippedNonLatin: 0,
       failed: 0,
     };
 
@@ -288,6 +318,13 @@ export function createYoutubeChatLoop(
       // a message that's only "@lena" doesn't sneak through.
       if (trimmed.length < MIN_TEXT || trimmed.length > MAX_TEXT) {
         result.skippedLength += 1;
+        continue;
+      }
+      // Filter 3b: script. Deepgram aura-2-helena-en is English-only and
+      // garbles non-Latin script on air. Drop early so we don't waste a
+      // moderation API call + TTS attempt on something that can't be read out.
+      if (!isLatinScript(trimmed)) {
+        result.skippedNonLatin += 1;
         continue;
       }
       // Filter 4: per-author rate limit. Done here (not server-side)
