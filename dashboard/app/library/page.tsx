@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { usePolling } from "@/hooks/use-polling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PlayIcon, ImageIcon, Loader2Icon } from "lucide-react";
+import { PlayIcon, PauseIcon, ImageIcon, Loader2Icon } from "lucide-react";
 import { ArtworkPreview } from "@/components/ui/artwork-preview";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
@@ -210,6 +210,27 @@ export default function LibraryPage() {
   const [page, setPage] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState<Set<string>>(new Set());
+  // In-page preview: one shared <audio> element so only one track plays
+  // at a time. Click another row → that one starts, the previous stops.
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  function togglePreview(track: LibraryTrack) {
+    if (!track.audioStreamUrl) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (previewId === track.id) {
+      audio.pause();
+      setPreviewId(null);
+      return;
+    }
+    audio.src = track.audioStreamUrl;
+    audio.currentTime = 0;
+    audio.play().then(() => setPreviewId(track.id)).catch((err) => {
+      toast.error(`Preview failed: ${err.message ?? err}`);
+      setPreviewId(null);
+    });
+  }
   const [regenTarget, setRegenTarget] = useState<LibraryTrack | null>(null);
   const [regenHint, setRegenHint] = useState("");
 
@@ -489,6 +510,7 @@ export default function LibraryPage() {
                     <tr className="text-fg-mute font-mono text-[10px] uppercase tracking-[0.2em]">
                       <th className="text-left px-4 py-2.5 w-[72px]"></th>
                       <th className="text-left px-2 py-2.5">Track</th>
+                      <th className="text-center px-2 py-2.5 w-[44px]">Preview</th>
                       <th className="text-right px-3 py-2.5 w-[64px]">Time</th>
                       <th className="text-left px-3 py-2.5 w-[140px]">Genre</th>
                       <th className="text-right px-3 py-2.5 w-[90px]">Votes</th>
@@ -543,6 +565,24 @@ export default function LibraryPage() {
                                 {t.artist ?? "—"}
                               </span>
                             </div>
+                          </td>
+
+                          {/* Preview — in-page audio toggle */}
+                          <td className="px-2 py-3 text-center">
+                            <ActionIcon
+                              onClick={() => togglePreview(t)}
+                              disabled={!t.audioStreamUrl}
+                              title={
+                                !t.audioStreamUrl ? "No audio asset"
+                                : previewId === t.id ? "Pause preview"
+                                : "Preview"
+                              }
+                              tone={previewId === t.id ? "accent" : "muted"}
+                            >
+                              {previewId === t.id
+                                ? <PauseIcon size={15} strokeWidth={2} />
+                                : <PlayIcon size={15} strokeWidth={2} />}
+                            </ActionIcon>
                           </td>
 
                           {/* Time */}
@@ -768,6 +808,10 @@ export default function LibraryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Shared preview audio. Hidden — togglePreview controls it via ref.
+          onEnded clears the row's playing state so the icon flips back to
+          Play when the track finishes naturally. */}
+      <audio ref={audioRef} onEnded={() => setPreviewId(null)} preload="none" />
     </main>
   );
 }
