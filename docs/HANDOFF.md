@@ -4,245 +4,78 @@ Last updated: 2026-05-02 (evening)
 
 ---
 
-## 2026-05-02 — Big day: real submissions, B2 quota panic, end-to-end audit
+## 2026-05-02 — first real artist traction; load surfaced latent bugs
 
-First day with real artist traction (Reddit post → 50 comments → multiple
-real submissions). The submission flow held up but a chain of latent bugs
-surfaced under load. Half the day was operator-side fixes, the other half
-was an exhaustive B2 cost audit.
+Reddit post → ~50 comments + real submissions. Architecture held; one
+session of catch-up work shipped.
 
-**Big-picture takeaway:** Backblaze B2 pricing is much cheaper than the
-free-tier caps suggest — the entire "Class B quota panic" was real
-engineering work but ~$0.001 of actual liability. With a card on file,
-B2 just bills cents instead of capping. Stop watching the counter; focus
-on the demo video + Reddit traction loop.
+**Submissions/library:**
+- Form gains track title (req'd) + genre (opt) → migration
+  `20260502151255`. English-only validation across booth shoutouts +
+  song prompts + chat (`lib/text-script.ts isLatinScript`).
+- Approve route: `one_off → request_only` (was `priority_request` →
+  invisible in /library). Tier-3 artwork fallback added (show PNG if
+  no upload + no ID3). Submitter consent now discloses YouTube
+  simulcast.
+- Library: bin button (full delete inc. B2), in-page audio preview
+  with scrub bar, table-fixed (long titles can't push artwork),
+  isShoutout tightened (external_import + request_only +
+  title.startsWith("Shoutout")), genre column backfilled from
+  provenanceJson + new `lib/derive-genre.ts`. ingestTrack guarantees
+  Track.genre never null.
+- Up Next: per-show coloured pills, Artist as own column, `?limit=20`
+  with rolling-20 behaviour, "Reshuffle now" button on Now Playing.
 
-### Rotation (generational + manual override + Up Next dashboard)
+**Rotation:**
+- Generational pass replaces sliding-window (every track plays once
+  per cycle, then wraps; bridge prevents seam repeat). Manual
+  drag-and-drop override on /library writes
+  `/etc/numa/manual-rotation.json`; auto-clears on exhaustion via
+  timestamp check. m3u always has manual-remaining + auto-tail.
 
-- Replaced sliding-window "exclude last 20" rotation with a
-  **generational pass**: every track airs exactly once per cycle, then
-  the cycle wraps. Cycle membership is derived from PlayHistory by
-  walking back until the first duplicate (no schema change). Newly
-  approved tracks land naturally in the remaining cycle. Bridge fix:
-  cycle N+1's position 0 can never equal cycle N's tail.
-- Dashboard `/library` Up Next: drag-and-drop sortable list of next 20
-  tracks (`@dnd-kit/sortable`). Operator can force a custom order; the
-  daemon writes a `/etc/numa/manual-rotation.json` sentinel + the m3u
-  with manual-remaining + auto-shuffled tail. Manual mode auto-clears
-  when all manual tracks have aired (timestamp-based check vs setAt).
-  Polling pauses while operator has unsaved drag state.
-- "Reshuffle now" button on the Now Playing card calls a new
-  `POST /refresh-rotation` daemon endpoint that runs `tickOnce`
-  immediately. Toast reports pool size + wrap status.
-- Up Next columns: artwork thumbnail (32px), track title, artist
-  (separate column now), genre, show (per-show coloured pill —
-  night=blue, morning=gold, daylight=green, prime=rose), age in days,
-  duration. Header strip aligned to row column widths.
-- Library page table now uses `table-fixed` so a long track title
-  doesn't push the artwork column out of place (Cold Wave incident).
+**Audio quality:**
+- Suno MJPEG-as-video-stream bug fixed end-to-end:
+  `lib/sanitize-mp3-audio-only.ts` (ffmpeg remux to audio-only) wired
+  into suno approve before ingestTrack;
+  `scripts/scan-and-repair-multistream-tracks.ts` repaired 19/84
+  catalogue tracks; `scripts/check-cdn-hit-ratio.ts` for ongoing
+  visibility. Cloudflare cache purged for the 14 affected URLs.
+- Day-of-week added to chatter prompt context after "hope your week's
+  started right" leaked on Saturday morning. BASE_SYSTEM rule
+  literally names the leaked phrase as banned outside Monday.
+- Humanize false-positive: `isSuspiciousRewrite` was killing good
+  124-from-44 char rewrites (2.8× ratio). Replaced strict ratio with
+  absolute 320-char ceiling for short inputs. approveShoutout now
+  persists `gen.spokenText` as broadcastText, not the raw input.
 
-### Submissions (artist uploads on numaradio.com/submit)
+**NanoClaw:**
+- `groups/telegram_main` was running the generic "Andy" briefing
+  with zero radio context. Shipped
+  `nanoclaw-groups/telegram_main/CLAUDE.md` (mobile-tight variant of
+  dashboard_main) with held-shoutout reply-pattern table + auth
+  copied from dashboard_main. Container force-stopped to load.
 
-- Form now collects **track title (required)** + **genre (optional)**
-  via two new `MusicSubmission` columns (migration
-  `20260502151255_add_track_title_genre_to_submissions`). Approve
-  route uses them on the resulting Track row instead of the previous
-  "Untitled — Artist" fallback.
-- **English-only validation** on shoutout text, song prompts, artist
-  names, AND YouTube chat — `lib/text-script.ts` exports
-  `isLatinScript(text)` (≥80% Latin chars, with diacritic + emoji
-  tolerance). Drop-rate counted via `TickResult.skippedNonLatin`.
-  Matches industry pattern (Capital, Kiss, BBC R1 don't service
-  non-English chat).
-- Cover-art submission hint reads "square (1:1) · 1024×1024
-  recommended" both in the field label and inside the empty dropzone.
-  Every artwork frame in the system uses object-cover at 1:1.
-- 10 MB / 2 MB file size validation surfaces inline the moment the
-  file is picked, not when the operator clicks Send. Disabled-button
-  meta line shows the actual blocker ("MP3 must be 10 MB or smaller.
-  Yours is 10.9 MB…") instead of the misleading "Fill the fields
-  above".
-- Submission preview audio (`/api/submissions/:id/audio`): browser
-  cache `private, max-age=1800` so replay/scrub doesn't re-download
-  from B2.
-- Auto-retry on B2 PUT failures (413/5xx/network) with 800ms backoff
-  in SubmitForm. The "people hit 413, retry works" reports were
-  transient B2 hiccups.
-- Legacy `POST /api/submissions` retired to a 410 Gone stub (was
-  vulnerable to Vercel's 4.5 MB body cap; current SubmitForm uses
-  the init → direct-PUT-to-B2 → finalize pattern that bypasses
-  Vercel for the audio body).
-- Submit page review-timing copy: "Often fast · max 3 days" (was
-  misleading "1–2 weeks").
-- Privacy page + vouching checkbox now disclose **YouTube
-  simulcast** explicitly. Submitters consent to airing on the
-  audio stream AND the public YouTube broadcast. Removed the
-  "or email if you'd rather not use the form" line — emails
-  bypass the rights vouching, which now legally matters.
-- Approve route artwork cascade gains **Tier 3: show fallback
-  PNG** (`public/fallback-artwork/{show}.png`) when neither
-  submitter upload nor MP3 ID3 produces a cover. Library never
-  shows an empty thumbnail again. Operator can still hit
-  Regenerate to swap in a unique FLUX cover.
-- Operator-approved one-off submissions now map to `request_only`
-  airingPolicy (was `priority_request` which hid them from
-  /library). Music submissions visible immediately; operator
-  pushes via Play Next when ready.
+**B2 cost audit (whole-day spelunking):**
+- Real leaks: dashboard `checkB2()` HEAD'd B2 every 5s (~17k/day);
+  `Phone1Mockup.tsx` hardcoded B2-direct URL on homepage; 12 legacy
+  TrackAssets pointing at `f003.backblazeb2.com`; submission preview
+  `Cache-Control: no-store` so every scrub re-downloaded. All fixed.
+  Cloudflare Page Rule (Cache Everything + Edge TTL 1mo) + Tiered
+  Cache enabled. Hit-ratio now 99% on audio + artwork.
+- **Punchline:** B2 Class B is $0.004/10k and Cloudflare egress is
+  free via the Bandwidth Alliance. Yesterday's "quota panic" was
+  ~$0.001 of real liability. With a card on file, the daily cap
+  becomes a tap. **Stop watching the counter.** The fixes are still
+  good citizenship, not cost-saving.
 
-### Library dashboard
-
-- Trash icon on each row → confirm modal → full delete (Track +
-  TrackAssets + B2 objects + QueueItems + TrackVotes +
-  BroadcastSegments). PlayHistory + SongRequest + MusicSubmission
-  rows have trackId nulled to preserve audit. New
-  `/api/internal/library/track/[id]/delete` on Vercel; dashboard
-  proxy at `/api/library/track/[id]/delete`.
-- In-page audio preview with floating bottom player bar +
-  scrub slider (`<input type="range">`), play/pause, close. One
-  shared `<audio>` element; clicking another row's preview
-  switches without overlap.
-- `isShoutout()` filter tightened from "all external_import" to
-  "external_import + request_only + title.startsWith('Shoutout')"
-  so music submissions (also external_import + request_only) stay
-  visible.
-- Genre column: backfilled 66 tracks from
-  `provenanceJson.styleTags[0]` and other provenance hints; new
-  `lib/derive-genre.ts` keyword matcher (31 genres, "more
-  specific first" — lo-fi wins over indie, edm over dance) for
-  listener-prompt mining. `ingestTrack` has a fallback chain
-  guaranteeing `Track.genre` is never null going forward
-  (`input.genre ?? styleTags[0] ?? mood ?? sourceType-default`).
-  Live: 0 of 86 tracks have null genre.
-
-### Audio quality (Suno MJPEG video stream bug)
-
-Suno's MP3 export embeds the cover art as an MJPEG **video stream**
-rather than a static `attached_pic`. Liquidsoap's content-type guard
-expects `audio=pcm(stereo)` and intermittently failed on dual-stream
-files — `[switch.2:3] Switch to blank with forgetful transition` →
-2 minutes of silence → m3u rotates without the intended track.
-
-- New `lib/sanitize-mp3-audio-only.ts` — pipe-based ffmpeg sanitizer
-  (probes stream count, remuxes audio-only with `-map 0:a -c:a
-  copy`, lossless, preserves bitrate + ID3v2). Wired into the suno
-  approve route before `ingestTrack` so future suno ingestions are
-  always single-stream.
-- `scripts/scan-and-repair-multistream-tracks.ts` — bulk scan
-  (fetches via B2 origin to bypass CF cache). Already run: 19 of 84
-  catalogue tracks were dirty, all repaired on B2. 14 stale CF
-  cache entries purged via Cloudflare dashboard.
-- `scripts/check-cdn-hit-ratio.ts` — probes every TrackAsset, reports
-  cf-cache-status by asset type. Run anytime to confirm the CDN is
-  doing its job. Currently: 99% HIT on both audio and artwork.
-- `scripts/backfill-asset-urls-to-cdn.ts` — rewrote 12 TrackAsset
-  publicUrls from `f003.backblazeb2.com` to `cdn.numaradio.com`
-  (legacy rows minted before B2_BUCKET_PUBLIC_URL was switched).
-
-### Day-of-week chatter regression
-
-Auto-chatter said "hope your week's started right" on a Saturday
-because the prompt had `localTime` but no day-of-week signal — same
-class of bug as the 2026-04-24 "tonight at 08:40" leak.
-
-- `lib/schedule.ts`: `dayOfWeekFor()` (Mon..Sun), `weekPartFor()`
-  (start of week / midweek / end of week / weekend).
-- `chatter-prompts.ts`: `PromptContext` gains `dayOfWeek` +
-  `weekPart`. BASE_SYSTEM rule literally names "your week's started"
-  as banned outside Monday so a future prompt rewrite can't quietly
-  drop the rule. `auto-host.ts` passes both on every break.
-
-### NanoClaw operator-on-Telegram briefing
-
-`groups/telegram_main` was running the **generic NanoClaw "Andy"
-personal-assistant briefing** with zero Numa Radio context. So when
-held-shoutout notifications arrived in Telegram and the operator
-replied "approve it", the agent had no idea what tool to call, and
-no `.auth` secret in its group folder anyway.
-
-- Shipped `nanoclaw-groups/telegram_main/CLAUDE.md` — operator-
-  pocket variant of the dashboard briefing. Held-shoutout flow
-  front-and-centre with reply-pattern table ("yes" / "approve" /
-  "🟢" → call shoutout-approve). Explicit note that the approve
-  endpoint accepts BOTH held AND blocked shoutouts via the
-  operator override (the 2026-04-23 backend change), and that
-  the agent must NOT lecture the operator about why the
-  moderator flagged it.
-- `.auth` copied from dashboard_main to telegram_main, container
-  force-stopped to load the new briefing on next message.
-
-### Humanize false-positive on shoutout approval
-
-Operator approved a held YouTube shoutout via NanoClaw and Lena
-aired the listener's verbatim text ("can you give me a big
-shoutout on YouTube ?") instead of the humanized "Going out to
-inRhino, who asked for a shoutout on YouTube. There it is, straight
-from the source. We'll let it ride."
-
-Root cause: `isSuspiciousRewrite` flagged a perfectly good 124-from-
-44 char rewrite (2.8× ratio) as suspicious and silently fell back
-to the listener's raw words.
-
-- `dashboard/lib/humanize.ts`: new `MAX_REWRITE_CHARS = 320`
-  absolute ceiling instead of strict ratio for short inputs. Ratio
-  guard only kicks in for inputs ≥100 chars (where 2× = genuine
-  rambling). Strong contraction + AI-disclaimer guards preserved.
-- `dashboard/lib/shoutouts-ops.ts`: approveShoutout now persists
-  `gen.spokenText` (post-humanize) as broadcastText, not the input
-  text. Audit row reflects what listeners actually heard.
-- 8 unit tests in `humanize.test.ts` pin the regression.
-
-### B2 cost audit (the all-day spelunking)
-
-**Yesterday's Class B breakdown surfaced from B2 dashboard:**
-| Operation | Count | What it is |
-|---|---|---|
-| `s3_head_object` | 2,526 | Dashboard `/api/status` polling B2 health every 5s |
-| `b2_download_file_by_name` | 1,776 | Audio downloads: Phone1Mockup, B2-direct URLs, CDN cache misses |
-| `s3_get_object` | 103 | Server-side getObject: submission preview, approve fetches |
-
-**Fixes shipped:**
-- `dashboard/lib/health.ts` — `checkB2()` now caches result for 60s
-  in memory. Saves ~17,280 ops/day from the dashboard tab.
-- `app/_components/Phone1Mockup.tsx` — homepage-rendered phone
-  mockup had a hardcoded `f003.backblazeb2.com` artwork URL;
-  rerouted to `cdn.numaradio.com`.
-- `app/api/submissions/[id]/audio/route.ts` — preview now sends
-  `Cache-Control: private, max-age=1800` (was `no-store`). Browser
-  caches for 30 min so replay/scrub doesn't re-fetch.
-- 12 TrackAsset publicUrls rewritten from B2 origin to CDN.
-- Cloudflare Page Rule `cdn.numaradio.com/*` → Cache Everything +
-  Edge TTL 1 month + Browser TTL 1 month. Tiered Cache Topology
-  enabled (Automatic Upper Tiers — Smart Tiered is now paywalled
-  via Smart Shield).
-
-**Estimated tomorrow's Class B count:** ~600/day (was 4,405/day).
-
-**Real cost:** $0.004 per 10,000 Class B transactions = ~$0.001
-for the entire day's overage at peak yesterday. With a card on
-file the cap stops being a wall and becomes a tap. Bandwidth
-egress through Cloudflare is **free** via the B2/Cloudflare
-Bandwidth Alliance.
-
-### Schema migrations applied today
-- `20260502151255_add_track_title_genre_to_submissions` — adds
-  nullable `trackTitle` + `trackGenre` to `MusicSubmission`.
-  Marked applied + executed via `prisma db execute` (Prisma's
-  `migrate dev` refused due to migration drift).
-
-### What's NOT done / next-up
-
-- **Demo video for the magic moment**: visitor types "shoutout to
-  my mum" → cut to 90s later → Lena says it on stream. Single
-  most valuable asset for any Product Hunt launch.
-- **Product Hunt launch**: hold for 6-8 weeks, after demo video +
-  proven Reddit traction + capacity headroom. Skip Kickstarter
-  (wrong tool — it's for fundraising deliverables, not running
-  services).
-- **Reddit subreddits to keep posting in**: r/WeAreTheMusicMakers,
-  r/AIMusic, r/listentothis, r/ThisIsOurMusic.
-- **Submission backlog watch**: "Often fast · max 3 days" is now
-  load-bearing copy. Track how many `pending` submissions sit
-  > 24h.
+**What's next:**
+- 30s demo video showing visitor-types-shoutout → Lena-reads-it. The
+  single most valuable asset for any launch.
+- Hold Product Hunt 6-8 weeks until that exists. Skip Kickstarter.
+- Keep posting on r/WeAreTheMusicMakers, r/AIMusic, r/listentothis,
+  r/ThisIsOurMusic.
+- "Often fast · max 3 days" submission turnaround is now load-bearing
+  copy — watch pending submissions sitting > 24h.
 
 ---
 
