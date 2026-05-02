@@ -11,6 +11,7 @@ import {
   SONG_LIMITS,
 } from "@/lib/rate-limit";
 import { moderateSongPrompt, profanityPrefilter } from "@/lib/moderate";
+import { isLatinScript } from "@/lib/text-script";
 import {
   createSongRequest,
   queuePositionFor,
@@ -63,6 +64,20 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (typedArtist.length > ARTIST_MAX) {
     return NextResponse.json(
       { ok: false, error: "artist_name_too_long", max: ARTIST_MAX },
+      { status: 400 },
+    );
+  }
+  // Lena's TTS (and Suno's title generator) handle English best — non-Latin
+  // script in either field garbles when announced on air.
+  if (!isLatinScript(prompt)) {
+    return NextResponse.json(
+      { ok: false, error: "english_only_prompt", detail: "Song prompts are English-only right now — sorry about that." },
+      { status: 400 },
+    );
+  }
+  if (!isLatinScript(typedArtist)) {
+    return NextResponse.json(
+      { ok: false, error: "english_only_artist", detail: "Artist name needs to be in Latin characters so Lena can read it." },
       { status: 400 },
     );
   }

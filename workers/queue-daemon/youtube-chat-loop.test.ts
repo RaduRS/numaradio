@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isLatinScript } from "./youtube-chat-loop.ts";
+import { isLatinScript } from "../../lib/text-script.ts";
 
 test("isLatinScript accepts plain English", () => {
   assert.equal(isLatinScript("shoutout to Marek please"), true);

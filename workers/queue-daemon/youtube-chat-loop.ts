@@ -48,30 +48,11 @@ const MAX_TEXT = 240;
  *  but "calendar" doesn't trigger by accident. */
 const DEFAULT_TRIGGER = /@lena\b/i;
 
-/** After stripping the trigger we drop messages whose remaining text is
- *  not predominantly Latin script. Lena's TTS (`aura-2-helena-en`) is
- *  English-only — Bengali / CJK / Arabic / Cyrillic input produces either
- *  silence or garbled phonemes on air, and the moderator + radio-host
- *  rewrite are tuned for English. Matches what mainstream English-language
- *  stations (Capital, Kiss, Radio 1) do with non-English chat input. */
-export function isLatinScript(text: string): boolean {
-  // Strip whitespace, ASCII punctuation, digits, common European Latin
-  // diacritics, and emoji. What's left is the "script signal". If 80%+
-  // of those characters are basic Latin (a-zA-Z), accept; otherwise
-  // reject. The 80% threshold tolerates one-off accented words or stray
-  // foreign characters in an otherwise English message.
-  const stripped = text
-    .replace(/\s+/g, "")
-    .replace(/[\d\p{P}\p{S}]/gu, "");
-  if (stripped.length === 0) return true; // pure punctuation/numbers — let length filter handle
-  let latin = 0;
-  for (const ch of stripped) {
-    // Basic Latin + Latin-1 Supplement + Latin Extended-A/B (covers
-    // ASCII a-z, accents like é à ñ ü, ß, etc.)
-    if (/[A-ɏ]/.test(ch)) latin += 1;
-  }
-  return latin / stripped.length >= 0.8;
-}
+// Latin-script guard lives in lib/text-script.ts so the booth endpoints
+// can apply the same policy. Re-exported for any caller that imports
+// this module directly.
+export { isLatinScript } from "../../lib/text-script.ts";
+import { isLatinScript } from "../../lib/text-script.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────
 

@@ -14,6 +14,7 @@ import {
   SHOUTOUT_LIMITS,
 } from "@/lib/rate-limit";
 import { moderateShoutout } from "@/lib/moderate";
+import { isLatinScript } from "@/lib/text-script";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,13 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (rawText.length > MAX_CHARS) {
     return NextResponse.json(
       { ok: false, error: `shoutout is too long (max ${MAX_CHARS} characters)` },
+      { status: 400 },
+    );
+  }
+  // Lena's TTS is English-only — non-Latin script garbles on air.
+  if (!isLatinScript(rawText)) {
+    return NextResponse.json(
+      { ok: false, error: "Shoutouts are English-only right now — sorry about that." },
       { status: 400 },
     );
   }
