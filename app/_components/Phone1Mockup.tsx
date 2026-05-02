@@ -22,8 +22,12 @@ const TABS = [
 
 const TRACK_TITLE = "Ocean Eyes";
 const TRACK_ARTIST = "Russell Ross";
+// Routed through cdn.numaradio.com so every homepage visitor's request
+// hits the Cloudflare cache instead of B2 directly. Hardcoding f003.…
+// here was a slow drain on the B2 Class B quota — every public
+// pageview that hadn't yet been edge-cached cost one B2 download.
 const TRACK_ARTWORK =
-  "https://f003.backblazeb2.com/file/numaradio/stations/numaradio/tracks/cmo8jf20n0007wemtlhrsp6rt/artwork/primary.jpg";
+  "https://cdn.numaradio.com/file/numaradio/stations/numaradio/tracks/cmo8jf20n0007wemtlhrsp6rt/artwork/primary.jpg";
 
 export function Phone1Mockup() {
   const title = TRACK_TITLE;
