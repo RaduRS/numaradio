@@ -85,17 +85,26 @@ function SortableRow({ track, position }: { track: UpcomingTrack; position: numb
 }
 
 export function UpcomingQueue() {
-  const { data, refresh } = usePolling<UpcomingResponse>("/api/rotation/upcoming?limit=20", 5_000);
+  // No limit cap on the poll: if we cap at 20 and the operator hits Save,
+  // we send only the first 20 ids — the rest of the m3u is silently
+  // dropped by buildManualPlaylist. Sending the full m3u keeps the
+  // operator's "save" non-destructive.
+  const { data, refresh } = usePolling<UpcomingResponse>("/api/rotation/upcoming?limit=200", 5_000);
   const [order, setOrder] = useState<UpcomingTrack[] | null>(null);
   const [saving, setSaving] = useState(false);
   // Track whether the operator has unsaved local edits — if so, polling
   // overwrites are paused so a 5s tick doesn't yank the list mid-drag.
   const [dirty, setDirty] = useState(false);
+  // After a successful save, hold the local order for a few ticks so the
+  // poll doesn't briefly flash the pre-propagation snapshot back at us
+  // before the daemon's manual-mode m3u write reaches the dashboard.
+  const [pinnedUntil, setPinnedUntil] = useState(0);
 
   useEffect(() => {
     if (dirty) return; // don't clobber unsaved edits
+    if (Date.now() < pinnedUntil) return; // wait for save propagation
     if (data?.tracks) setOrder(data.tracks);
-  }, [data, dirty]);
+  }, [data, dirty, pinnedUntil]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -130,6 +139,9 @@ export function UpcomingQueue() {
       }
       toast.success(`Manual order saved — ${j.poolSize} tracks queued`);
       setDirty(false);
+      // Hold for ~3s so the post-save poll (which races the daemon's m3u
+      // rename) can't briefly flash the pre-save order back into view.
+      setPinnedUntil(Date.now() + 3000);
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "network error");

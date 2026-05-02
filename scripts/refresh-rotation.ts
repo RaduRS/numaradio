@@ -201,14 +201,28 @@ export async function runRefresh(
 
   // Manual rotation override: if the operator has dropped a manual order
   // from the dashboard, write THAT (verbatim, no shuffle) instead of the
-  // auto-shuffled cycle. Tracks already aired in the current cycle (or
-  // currently playing — bridge) are filtered out so the operator can't
-  // accidentally request an immediate repeat. When the manual list is
-  // exhausted the file is deleted and the next refresh falls back to
-  // generational shuffle automatically.
+  // auto-shuffled cycle. The "exhausted" check is tied to PlayHistory
+  // since the manual order's setAt — NOT to cycleExclude — so the manual
+  // queue can't be prematurely cleared by an unrelated priority-queue
+  // push or a concurrent runRefresh seeing a slightly fresher cycle.
+  // Bridge: the currently-playing track is always dropped from the
+  // upcoming list to prevent immediate repeats.
   const manual = await readManualRotation();
-  if (manual) {
-    const { content: manualContent, remainingIds } = buildManualPlaylist(library, manual.trackIds, cycleExclude);
+  if (manual && manual.trackIds.length > 0) {
+    const playedSince = await prisma.playHistory.findMany({
+      where: {
+        stationId: station.id,
+        trackId: { in: manual.trackIds },
+        startedAt: { gte: new Date(manual.setAt) },
+      },
+      select: { trackId: true },
+    });
+    const consumed = new Set<string>(
+      playedSince.map((p) => p.trackId).filter((x): x is string => !!x),
+    );
+    if (nowPlayingId) consumed.add(nowPlayingId);
+
+    const { content: manualContent, remainingIds } = buildManualPlaylist(library, manual.trackIds, consumed);
     if (remainingIds.length > 0) {
       const suffix = randomBytes(4).toString("hex");
       const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
@@ -226,6 +240,10 @@ export async function runRefresh(
     // normal generational refresh. The bridge in buildPlaylist excludes
     // nowPlaying, so the seam between the last manual track and the
     // first auto track can't repeat.
+    await clearManualRotation();
+  } else if (manual) {
+    // Empty trackIds list — dashboard rejects this but the daemon's
+    // raw POST /manual-rotation accepts it. Self-clear and fall through.
     await clearManualRotation();
   }
 

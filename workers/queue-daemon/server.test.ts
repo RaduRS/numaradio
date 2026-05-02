@@ -195,6 +195,15 @@ test("POST /manual-rotation 400s when trackIds is not an array", async () => {
   });
 });
 
+test("POST /manual-rotation 400s when trackIds is empty (use DELETE to clear)", async () => {
+  const deps = mkDeps();
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/manual-rotation", { trackIds: [] });
+    assert.equal(status, 400);
+    assert.match(json.error, /empty/i);
+  });
+});
+
 test("POST /manual-rotation 400s when trackIds contains non-strings", async () => {
   const deps = mkDeps();
   await withServer(deps, async (port) => {

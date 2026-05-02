@@ -182,6 +182,9 @@ export function createHandler(deps: ServerDeps): RequestListener {
         if (body.trackIds.some((x) => typeof x !== "string")) {
           return sendJson(res, 400, { error: "trackIds must be strings" });
         }
+        if (body.trackIds.length === 0) {
+          return sendJson(res, 400, { error: "trackIds cannot be empty — DELETE /manual-rotation to clear" });
+        }
         const result = await deps.setManualRotationHandler(body);
         return sendJson(res, 200, result);
       }
