@@ -151,6 +151,32 @@ test("buildManualPlaylist returns empty content when nothing remains (caller fal
   assert.equal(r.content, "");
 });
 
+test("manual + auto-tail concat: m3u carries the full upcoming pool, no duplicates at the seam", () => {
+  // Simulates what runRefresh writes when manual mode is active: the
+  // operator's remaining order followed by an auto-shuffled pool of the
+  // rest. Without the auto fill, a 2-track manual remainder would leave
+  // Liquidsoap looping a tiny m3u; with it, the queue stays full.
+  const library: T[] = Array.from({ length: 8 }, (_, i) => t(`k${i}`, `u${i}`));
+  const manualRemaining = ["k1", "k3"];
+  const cycleExclude = new Set<string>(["k0", "k7"]); // already played + nowPlaying
+  const bridgeExclude = new Set<string>(["k7"]);
+
+  const manual = buildManualPlaylist(library, manualRemaining, cycleExclude);
+  const tailExclude = new Set<string>([...cycleExclude, ...manual.remainingIds]);
+  const tail = buildPlaylist(library, tailExclude, bridgeExclude, () => 0);
+  const combined = (manual.content + tail).split("\n").filter(Boolean);
+
+  // First 2 are the manual order, verbatim
+  assert.deepEqual(combined.slice(0, 2), ["u1", "u3"]);
+  // Tail covers the remaining eligible tracks (k2, k4, k5, k6) in some order
+  const tailUrls = combined.slice(2).sort();
+  assert.deepEqual(tailUrls, ["u2", "u4", "u5", "u6"]);
+  // No duplicates at the seam
+  assert.equal(new Set(combined).size, combined.length);
+  // Bridge holds: k7 (currently playing) is nowhere
+  assert.ok(!combined.includes("u7"));
+});
+
 test("simulated cycle wrap: first pick of cycle N+1 is not the last of cycle N", () => {
   // Play through one full cycle, then take one more pick. The seam track
   // should never repeat: the bridge guarantees position 0 ≠ just-played.

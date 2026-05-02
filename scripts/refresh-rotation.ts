@@ -224,9 +224,20 @@ export async function runRefresh(
 
     const { content: manualContent, remainingIds } = buildManualPlaylist(library, manual.trackIds, consumed);
     if (remainingIds.length > 0) {
+      // Append the auto-shuffled pool of "what would play next" so the m3u
+      // always carries the full upcoming queue. Without this, when the
+      // manual remainder shrinks to 1-2 tracks Liquidsoap (mode="normal",
+      // reload=120) loops the tiny file and the dashboard's Up Next view
+      // truncates to those 1-2 entries. The tail excludes the manual
+      // remainder (don't double-count those upcoming tracks) AND the
+      // cycle-played + currently-playing (existing bridges).
+      const tailExclude = new Set<string>([...cycleExclude, ...remainingIds]);
+      const tailContent = buildPlaylist(library, tailExclude, bridgeExclude);
+      const combined = manualContent + tailContent;
+
       const suffix = randomBytes(4).toString("hex");
       const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
-      await writeFile(tmpPath, manualContent, "utf8");
+      await writeFile(tmpPath, combined, "utf8");
       await rename(tmpPath, PLAYLIST_PATH);
       return {
         librarySize: library.length,
