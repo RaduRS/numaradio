@@ -25,6 +25,8 @@ function fmtStamp(d: Date): string {
 export function SubmitForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [trackTitle, setTrackTitle] = useState("");
+  const [trackGenre, setTrackGenre] = useState("");
   const [audio, setAudio] = useState<File | null>(null);
   const [artwork, setArtwork] = useState<File | null>(null);
   const [airingPreference, setAiringPreference] =
@@ -45,6 +47,12 @@ export function SubmitForm() {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errs.email = "Enter a valid email address.";
+    }
+    if (trackTitle.trim().length < 1 || trackTitle.trim().length > 100) {
+      errs.trackTitle = "Track title is required (max 100 characters).";
+    }
+    if (trackGenre.trim().length > 50) {
+      errs.trackGenre = "Genre must be 50 characters or fewer.";
     }
     if (!audio) {
       errs.audio = "Pick an MP3 file.";
@@ -86,6 +94,8 @@ export function SubmitForm() {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
+          trackTitle: trackTitle.trim(),
+          trackGenre: trackGenre.trim() || null,
           vouched: true,
           airingPreference,
           audioSize: audio.size,
@@ -226,10 +236,45 @@ export function SubmitForm() {
         {fieldErrors.email && <span className="submit-error">{fieldErrors.email}</span>}
       </div>
 
-      {/* 03 — Track file */}
+      {/* 03 — Track title */}
       <div className="submit-field">
         <div className="submit-field-label">
           <span className="num">03</span>
+          <span className="name">Track title</span>
+        </div>
+        <input
+          type="text"
+          className={`submit-input ${fieldErrors.trackTitle ? "is-error" : ""}`}
+          value={trackTitle}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setTrackTitle(e.target.value)}
+          placeholder="The title we'll announce on air"
+          maxLength={100}
+        />
+        {fieldErrors.trackTitle && <span className="submit-error">{fieldErrors.trackTitle}</span>}
+      </div>
+
+      {/* 04 — Genre (optional) */}
+      <div className="submit-field">
+        <div className="submit-field-label">
+          <span className="num">04</span>
+          <span className="name">Genre</span>
+          <span className="hint">Optional · helps us slot it</span>
+        </div>
+        <input
+          type="text"
+          className={`submit-input ${fieldErrors.trackGenre ? "is-error" : ""}`}
+          value={trackGenre}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setTrackGenre(e.target.value)}
+          placeholder="e.g. Indie folk, Lo-fi, Synthwave"
+          maxLength={50}
+        />
+        {fieldErrors.trackGenre && <span className="submit-error">{fieldErrors.trackGenre}</span>}
+      </div>
+
+      {/* 05 — Track file */}
+      <div className="submit-field">
+        <div className="submit-field-label">
+          <span className="num">05</span>
           <span className="name">Track file</span>
           <span className="hint">MP3 · max {MAX_AUDIO_MB} MB</span>
         </div>
@@ -286,10 +331,10 @@ export function SubmitForm() {
         {fieldErrors.audio && <span className="submit-error">{fieldErrors.audio}</span>}
       </div>
 
-      {/* 04 — Cover (optional) */}
+      {/* 06 — Cover (optional) */}
       <div className="submit-field">
         <div className="submit-field-label">
-          <span className="num">04</span>
+          <span className="num">06</span>
           <span className="name">Cover</span>
           <span className="hint">Optional · PNG or JPEG · max {MAX_ART_MB} MB</span>
         </div>
@@ -350,10 +395,10 @@ export function SubmitForm() {
         )}
       </div>
 
-      {/* 05 — Airing preference */}
+      {/* 07 — Airing preference */}
       <div className="submit-field">
         <div className="submit-field-label">
-          <span className="num">05</span>
+          <span className="num">07</span>
           <span className="name">How should we air it?</span>
         </div>
         <div className="submit-airing-grid" role="radiogroup" aria-label="Airing preference">
@@ -384,10 +429,10 @@ export function SubmitForm() {
         </div>
       </div>
 
-      {/* 06 — Sign off */}
+      {/* 08 — Sign off */}
       <div className="submit-field">
         <div className="submit-field-label">
-          <span className="num">06</span>
+          <span className="num">08</span>
           <span className="name">Sign off</span>
         </div>
         <label className={`submit-vouch ${fieldErrors.vouched ? "is-error" : ""}`}>

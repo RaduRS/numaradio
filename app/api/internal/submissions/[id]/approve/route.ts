@@ -113,8 +113,12 @@ export async function POST(
     stationId: station.id,
     audioBuffer,
     show,
-    title: `Untitled — ${submission.artistName}`,
+    // Submitter-provided title (validated 1-100 chars at /api/submissions/init).
+    // Legacy rows from before that validation existed have null trackTitle —
+    // fall back to the old "Untitled — Artist" pattern so they don't crash.
+    title: submission.trackTitle?.trim() || `Untitled — ${submission.artistName}`,
     artistDisplay: submission.artistName,
+    genre: submission.trackGenre ?? undefined,
     durationSeconds: submission.durationSeconds ?? undefined,
     airingPolicy,
     sourceType: "external_import",

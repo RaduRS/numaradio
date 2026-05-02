@@ -17,8 +17,12 @@ import { presignPut, deleteObject } from "@/lib/storage";
 import {
   isValidEmail,
   isValidName,
+  isValidTrackTitle,
+  isValidTrackGenre,
   normalizeEmail,
   normalizeName,
+  normalizeTrackTitle,
+  normalizeTrackGenre,
   audioStorageKey,
   artworkStorageKey,
   MAX_AUDIO_BYTES,
@@ -42,6 +46,8 @@ function ipHashOf(req: NextRequest): string {
 type InitRequest = {
   name?: unknown;
   email?: unknown;
+  trackTitle?: unknown;
+  trackGenre?: unknown;
   vouched?: unknown;
   airingPreference?: unknown;
   audioSize?: unknown;
@@ -57,13 +63,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return fail("bad_json", "Could not parse JSON body.");
   }
 
-  const { name, email, vouched, airingPreference, audioSize, artworkKind, artworkSize } = body;
+  const { name, email, trackTitle, trackGenre, vouched, airingPreference, audioSize, artworkKind, artworkSize } = body;
 
   if (typeof name !== "string" || !isValidName(name)) {
     return fail("bad_name", "Please enter a name between 2 and 80 characters.");
   }
   if (typeof email !== "string" || !isValidEmail(email)) {
     return fail("bad_email", "Please enter a valid email address.");
+  }
+  if (typeof trackTitle !== "string" || !isValidTrackTitle(trackTitle)) {
+    return fail("bad_title", "Please enter the track title (1–100 characters).");
+  }
+  if (!isValidTrackGenre(trackGenre)) {
+    return fail("bad_genre", "Genre must be 50 characters or fewer.");
   }
   if (vouched !== true) {
     return fail("not_vouched", "You must confirm the rights and broadcast authorisation.");
@@ -108,6 +120,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       data: {
         stationId: station.id,
         artistName: normalizeName(name),
+        trackTitle: normalizeTrackTitle(trackTitle),
+        trackGenre: normalizeTrackGenre(typeof trackGenre === "string" ? trackGenre : null),
         email: normEmail,
         ipHash: ipHashOf(req),
         audioStorageKey: "", // populated by finalize

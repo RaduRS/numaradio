@@ -25,12 +25,12 @@ const CHECKLIST = [
     body: "Up to 10 MB. Upload directly through the form below — no streaming links.",
   },
   {
-    title: "Your name and track title",
-    body: "How you'd like to be credited on air, plus album / EP and year if it's part of a release.",
+    title: "Your name and the track title",
+    body: "How you'd like to be credited on air, and the song's actual name. Both required so Lena can announce it properly.",
   },
   {
-    title: "One line about the moment",
-    body: "Late-night, morning focus, long drive, heartbreak — whatever the track is for. Helps Lena slot it.",
+    title: "Genre (optional)",
+    body: "A short tag like Indie folk, Lo-fi, Synthwave. Helps Lena slot it into the right show.",
   },
   {
     title: "Rights confirmation",

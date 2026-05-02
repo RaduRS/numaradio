@@ -563,6 +563,13 @@ model MusicSubmission {
   id               String                       @id @default(cuid())
   stationId        String
   artistName       String
+  // trackTitle is nullable so the migration is non-breaking for the
+  // small handful of legacy "Untitled — Artist" rows. The submit API
+  // rejects new submissions without one, so going forward it's
+  // effectively required.
+  trackTitle       String?
+  /// Optional, free-text genre supplied by the submitter.
+  trackGenre       String?
   email            String
   ipHash           String
   audioStorageKey  String

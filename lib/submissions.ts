@@ -22,6 +22,33 @@ export function normalizeName(s: string): string {
   return s.trim();
 }
 
+export function isValidTrackTitle(s: unknown): boolean {
+  if (typeof s !== "string") return false;
+  const t = s.trim();
+  return t.length >= 1 && t.length <= 100;
+}
+
+export function normalizeTrackTitle(s: string): string {
+  // Collapse internal whitespace runs the same way the booth shoutout
+  // and song-prompt paths do — keeps Lena's announce phrasing tidy.
+  return s.trim().replace(/\s+/g, " ");
+}
+
+/** Optional. Empty/whitespace strings are normalised to null at the API
+ *  boundary so the column reflects "submitter didn't provide one"
+ *  rather than an empty string. */
+export function isValidTrackGenre(s: unknown): boolean {
+  if (s === null || s === undefined) return true;
+  if (typeof s !== "string") return false;
+  return s.trim().length <= 50;
+}
+
+export function normalizeTrackGenre(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const t = s.trim().replace(/\s+/g, " ");
+  return t.length === 0 ? null : t;
+}
+
 /**
  * MP3 magic-byte check. Tagged files start with ASCII "ID3"; raw MPEG
  * audio frames start with the 11-bit sync (0xFF followed by 0xFB / 0xF3
