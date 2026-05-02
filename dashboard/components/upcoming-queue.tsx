@@ -113,11 +113,13 @@ function SortableRow({ track, position }: { track: UpcomingTrack; position: numb
 }
 
 export function UpcomingQueue() {
-  // No limit cap on the poll: if we cap at 20 and the operator hits Save,
-  // we send only the first 20 ids — the rest of the m3u is silently
-  // dropped by buildManualPlaylist. Sending the full m3u keeps the
-  // operator's "save" non-destructive.
-  const { data, refresh } = usePolling<UpcomingResponse>("/api/rotation/upcoming?limit=200", 5_000);
+  // Show exactly the next 20. As tracks play and fall off the top,
+  // runRefresh's manual+auto-tail concat keeps the m3u full underneath,
+  // so position 21 rolls into position 20 on the next poll tick.
+  // (Truncation-on-save isn't an issue anymore: even when only 20 ids
+  // become the manual order, the daemon appends an auto-shuffled tail of
+  // the remaining library so nothing is dropped from rotation.)
+  const { data, refresh } = usePolling<UpcomingResponse>("/api/rotation/upcoming?limit=20", 5_000);
   const [order, setOrder] = useState<UpcomingTrack[] | null>(null);
   const [saving, setSaving] = useState(false);
   // Track whether the operator has unsaved local edits — if so, polling
