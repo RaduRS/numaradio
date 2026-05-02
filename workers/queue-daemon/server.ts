@@ -69,9 +69,17 @@ export interface ChatterOverrideBody {
   type: string;
 }
 
+export type RefreshRotationResult = {
+  librarySize: number;
+  cyclePlayed: number;
+  poolSize: number;
+  cycleWrapped: boolean;
+};
+
 export interface ServerDeps {
   pushHandler(body: PushBody): Promise<{ queueItemId: string }>;
   onTrackHandler(body: OnTrackBody): Promise<void>;
+  refreshRotationHandler(): Promise<RefreshRotationResult>;
   statusHandler(): StatusSnapshot;
   /** Set the next chatter type. Validates the type or throws. */
   chatterOverrideHandler(body: ChatterOverrideBody): { ok: true };
@@ -153,6 +161,10 @@ export function createHandler(deps: ServerDeps): RequestListener {
       }
       if (req.method === "GET" && req.url === "/status") {
         return sendJson(res, 200, deps.statusHandler());
+      }
+      if (req.method === "POST" && req.url === "/refresh-rotation") {
+        const result = await deps.refreshRotationHandler();
+        return sendJson(res, 200, result);
       }
       if (req.method === "POST" && req.url === "/chatter-override") {
         const text = await readBody(req);

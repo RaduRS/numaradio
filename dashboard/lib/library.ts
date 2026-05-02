@@ -228,6 +228,37 @@ export async function pushToDaemon(
   }
 }
 
+export type RotationRefreshResult = {
+  librarySize: number;
+  cyclePlayed: number;
+  poolSize: number;
+  cycleWrapped: boolean;
+};
+
+export async function requestRotationRefresh(
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 5_000,
+): Promise<{ ok: true; result: RotationRefreshResult } | { ok: false; status: number; error: string }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetcher(`${DAEMON_URL}/refresh-rotation`, {
+      method: "POST",
+      signal: ctl.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) return { ok: false, status: res.status, error: text || `HTTP ${res.status}` };
+    let parsed: RotationRefreshResult;
+    try { parsed = JSON.parse(text); }
+    catch { return { ok: false, status: 502, error: "daemon returned non-json body" }; }
+    return { ok: true, result: parsed };
+  } catch (e) {
+    return { ok: false, status: 502, error: e instanceof Error ? e.message : "daemon unreachable" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchDaemonStatus(
   fetcher: typeof fetch = fetch,
   timeoutMs = 2_000,

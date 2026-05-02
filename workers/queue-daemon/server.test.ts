@@ -34,6 +34,12 @@ function mkDeps(over: Partial<ServerDeps> = {}): TestDeps {
       __overrides.push(body);
       return { ok: true };
     },
+    refreshRotationHandler: async () => ({
+      librarySize: 0,
+      cyclePlayed: 0,
+      poolSize: 0,
+      cycleWrapped: false,
+    }),
     ...over,
   };
   return Object.assign(base, { __pushed, __onTrack, __overrides }) as TestDeps;
@@ -145,6 +151,24 @@ test("POST /chatter-override forwards a valid type to the handler", async () => 
     assert.equal(status, 200);
     assert.equal(json.ok, true);
     assert.deepEqual(deps.__overrides[0], { type: "world_aside" });
+  });
+});
+
+test("POST /refresh-rotation returns the handler's RefreshResult", async () => {
+  const deps = mkDeps({
+    refreshRotationHandler: async () => ({
+      librarySize: 72,
+      cyclePlayed: 24,
+      poolSize: 48,
+      cycleWrapped: false,
+    }),
+  });
+  await withServer(deps, async (port) => {
+    const { status, json } = await hit(port, "/refresh-rotation", {});
+    assert.equal(status, 200);
+    assert.equal(json.librarySize, 72);
+    assert.equal(json.poolSize, 48);
+    assert.equal(json.cycleWrapped, false);
   });
 });
 

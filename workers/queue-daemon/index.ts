@@ -564,6 +564,7 @@ async function main() {
       onTrackHandler,
       statusHandler,
       chatterOverrideHandler,
+      refreshRotationHandler: () => refreshRotation(prisma),
     }),
   );
   server.listen(HTTP_PORT, "127.0.0.1", () => {
