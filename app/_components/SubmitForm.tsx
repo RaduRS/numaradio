@@ -411,7 +411,7 @@ export function SubmitForm() {
         <div className="submit-field-label">
           <span className="num">06</span>
           <span className="name">Cover</span>
-          <span className="hint">Optional · PNG or JPEG · max {MAX_ART_MB} MB</span>
+          <span className="hint">Optional · square (1:1) · 1024×1024 recommended · PNG or JPEG · max {MAX_ART_MB} MB</span>
         </div>
         <label
           className={`submit-dropzone ${artwork ? "has-file" : ""} ${artworkDrag ? "is-active" : ""}`}
@@ -460,7 +460,7 @@ export function SubmitForm() {
               <span className="sub">
                 {artworkDrag
                   ? "Release to attach"
-                  : "We'll use embedded art or generate one"}
+                  : "Square (1:1) · wide images get cropped · we'll generate one if you skip"}
               </span>
             </div>
           )}
