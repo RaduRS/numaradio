@@ -17,6 +17,8 @@ export type UpcomingTrack = {
   durationSeconds: number | null;
   artworkUrl: string | null;
   ageDays: number | null;
+  genre: string | null;
+  show: string | null;
 };
 
 async function fileExists(p: string): Promise<boolean> {
@@ -53,6 +55,8 @@ export async function GET(req: Request): Promise<NextResponse> {
     duration_seconds: number | null;
     artwork_url: string | null;
     created_at: Date;
+    genre: string | null;
+    show: string | null;
   }>(
     `SELECT
        t.id,
@@ -60,6 +64,8 @@ export async function GET(req: Request): Promise<NextResponse> {
        t."artistDisplay" AS artist_display,
        t."durationSeconds" AS duration_seconds,
        t."createdAt" AS created_at,
+       t.genre,
+       t.show,
        art."publicUrl" AS artwork_url
      FROM "Track" t
      LEFT JOIN LATERAL (
@@ -85,6 +91,8 @@ export async function GET(req: Request): Promise<NextResponse> {
       durationSeconds: r?.duration_seconds ?? null,
       artworkUrl: r?.artwork_url ?? null,
       ageDays: r?.created_at ? Math.floor((now - r.created_at.getTime()) / 86400000) : null,
+      genre: r?.genre ?? null,
+      show: r?.show ?? null,
     };
   });
 

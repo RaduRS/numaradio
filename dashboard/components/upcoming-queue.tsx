@@ -31,7 +31,14 @@ type UpcomingTrack = {
   durationSeconds: number | null;
   artworkUrl: string | null;
   ageDays: number | null;
+  genre: string | null;
+  show: string | null;
 };
+
+function showLabelFor(show: string | null): string {
+  if (!show) return "—";
+  return show.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
 
 type UpcomingResponse = {
   ok: boolean;
@@ -99,6 +106,18 @@ function SortableRow({ track, position }: { track: UpcomingTrack; position: numb
           <span className="text-xs text-fg-dim truncate">{track.artist}</span>
         ) : null}
       </div>
+      <span
+        className="font-mono text-[10px] text-fg-mute shrink-0 w-24 truncate hidden sm:inline"
+        title={track.genre ?? "No genre"}
+      >
+        {track.genre ?? "—"}
+      </span>
+      <span
+        className="font-mono text-[10px] uppercase tracking-[0.1em] text-fg-mute shrink-0 w-20 truncate hidden md:inline"
+        title={track.show ? `Show: ${showLabelFor(track.show)}` : "No show"}
+      >
+        {showLabelFor(track.show)}
+      </span>
       <span
         className={`font-mono text-[10px] uppercase tabular-nums shrink-0 w-12 text-right ${age.cls}`}
         title={track.ageDays === null ? "Unknown age" : `Added ${track.ageDays} day${track.ageDays === 1 ? "" : "s"} ago`}
@@ -254,6 +273,8 @@ export function UpcomingQueue() {
                 <span className="w-6 shrink-0 text-right">#</span>
                 <span className="w-8 shrink-0" aria-hidden /> {/* art */}
                 <span className="flex-1 min-w-0">Track</span>
+                <span className="w-24 shrink-0 hidden sm:inline">Genre</span>
+                <span className="w-20 shrink-0 hidden md:inline">Show</span>
                 <span className="w-12 shrink-0 text-right" title="Days since added to library">Days</span>
                 <span className="w-10 shrink-0 text-right">Dur</span>
               </div>
