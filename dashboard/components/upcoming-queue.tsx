@@ -49,12 +49,10 @@ function fmtDur(s: number | null): string {
 
 function fmtAge(days: number | null): { label: string; cls: string } {
   if (days === null || days === undefined) return { label: "—", cls: "text-fg-dim" };
-  if (days === 0) return { label: "today", cls: "text-accent" };
-  if (days === 1) return { label: "1d", cls: "text-accent" };
-  if (days < 7) return { label: `${days}d`, cls: "text-accent" };
-  if (days < 30) return { label: `${days}d`, cls: "text-fg" };
-  if (days < 365) return { label: `${Math.floor(days / 30)}mo`, cls: "text-fg-mute" };
-  return { label: `${Math.floor(days / 365)}y`, cls: "text-fg-dim" };
+  if (days < 7) return { label: String(days), cls: "text-accent" };
+  if (days < 30) return { label: String(days), cls: "text-fg" };
+  if (days < 365) return { label: String(days), cls: "text-fg-mute" };
+  return { label: String(days), cls: "text-fg-dim" };
 }
 
 function SortableRow({ track, position }: { track: UpcomingTrack; position: number }) {
@@ -248,6 +246,15 @@ export function UpcomingQueue() {
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+              {/* Column headers — match the SortableRow column widths exactly */}
+              <div className="flex items-center gap-3 px-3 py-1.5 border-b border-line bg-[var(--bg-2)] font-mono text-[10px] uppercase tracking-[0.18em] text-fg-mute">
+                <span className="w-6 shrink-0" aria-hidden /> {/* grip */}
+                <span className="w-6 shrink-0 text-right">#</span>
+                <span className="w-8 shrink-0" aria-hidden /> {/* art */}
+                <span className="flex-1 min-w-0">Track</span>
+                <span className="w-12 shrink-0 text-right" title="Days since added to library">Days</span>
+                <span className="w-10 shrink-0 text-right">Dur</span>
+              </div>
               <ul className="divide-y divide-line/60">
                 {order.map((track, i) => (
                   <SortableRow key={track.id} track={track} position={i + 1} />
