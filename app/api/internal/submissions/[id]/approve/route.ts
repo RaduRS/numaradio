@@ -21,6 +21,7 @@ import { prisma } from "@/lib/db";
 import { ingestTrack } from "@/lib/ingest";
 import { getObject, deleteObject } from "@/lib/storage";
 import { extractId3Artwork } from "@/lib/extract-id3-artwork";
+import { loadFallbackArtwork } from "@/lib/fallback-artwork";
 import { internalAuthOk } from "@/lib/internal-auth";
 
 export const dynamic = "force-dynamic";
@@ -83,9 +84,20 @@ export async function POST(
     );
   }
 
-  // Artwork cascade — tier 1 (uploaded) and tier 2 (ID3) only
+  // Artwork cascade
+  //   Tier 1 — uploaded by submitter (their own cover)
+  //   Tier 2 — extracted from MP3 ID3 tag (often present in distributor files)
+  //   Tier 3 — show-specific fallback PNG (the per-show 1024×1024 covers
+  //            in public/fallback-artwork/{show}.png)
+  // Tier 3 used to be a deferred TODO — operators were supposed to click
+  // "Regenerate artwork" later. In practice that step got forgotten
+  // (e.g. "Fractal Drift Choir" landed in the library with no cover at
+  // all), so we now ALWAYS attach the show fallback when nothing else
+  // exists. The operator can still hit Regenerate to swap in a unique
+  // FLUX-generated cover whenever they want — this just guarantees the
+  // library never shows an empty thumbnail.
   let artwork: { buffer: Buffer; mimeType: string } | undefined;
-  let artworkSource: "upload" | "id3" | null = null;
+  let artworkSource: "upload" | "id3" | "fallback" | null = null;
   if (submission.artworkStorageKey) {
     try {
       const buf = await getObject(submission.artworkStorageKey);
@@ -93,7 +105,7 @@ export async function POST(
       artwork = { buffer: buf, mimeType: mt };
       artworkSource = "upload";
     } catch {
-      // Artwork fetch failed — fall through to ID3 or generation
+      // Artwork fetch failed — fall through to ID3 or fallback
     }
   }
   if (!artwork) {
@@ -103,8 +115,18 @@ export async function POST(
       artworkSource = "id3";
     }
   }
-  // Tier 3 (generation) intentionally deferred — operator can attach
-  // artwork later from the existing dashboard library page.
+  if (!artwork) {
+    try {
+      const buf = await loadFallbackArtwork(show);
+      artwork = { buffer: buf, mimeType: "image/png" };
+      artworkSource = "fallback";
+    } catch (err) {
+      // Fallback PNG missing — log and proceed without artwork. Operator
+      // sees the empty thumbnail in /library; the existing Regenerate
+      // button still works.
+      console.warn(`[approve] fallback artwork load failed for show=${show}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   // permanent → 'library' (joins rotation immediately)
   // one_off    → 'request_only' (visible in library, operator pushes via
