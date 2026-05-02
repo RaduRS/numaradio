@@ -9,37 +9,51 @@ export type RotationTrack = { id: string; url: string; title: string };
 
 export type RefreshResult = {
   librarySize: number;
-  excluded: number;
+  cyclePlayed: number;
   poolSize: number;
+  cycleWrapped: boolean;
 };
 
 const PLAYLIST_PATH = process.env.NUMA_PLAYLIST_PATH ?? "/etc/numa/playlist.m3u";
-const MAX_RECENT_WINDOW = 20;
-const MIN_POOL = 6;
 
-// Size the "avoid recent" window so that the non-recent pool is at least
-// MIN_POOL tracks. Liquidsoap's default `playlist()` mode is "randomize":
-// when it exhausts the file it reshuffles and plays through again. With a
-// tiny pool (2-3) that reshuffle has a ~1-in-pool chance of landing the
-// just-played track first, so a 2-track pool gave back-to-back repeats
-// in live operation. MIN_POOL=6 keeps the repeat probability ≤ 1/6 and
-// gives listeners actual variety between refreshes. Capped at 20 to
-// match the PlayHistory read limit; clamped to 1 for degenerate libraries.
-export function recentWindowFor(librarySize: number): number {
-  return Math.max(1, Math.min(MAX_RECENT_WINDOW, librarySize - MIN_POOL));
+/**
+ * Walk PlayHistory (most recent first) collecting distinct track ids until
+ * we see a duplicate (= entered previous cycle) or until we've seen the
+ * whole library (= cycle just completed). The returned set is "what has
+ * already aired in the current generational cycle".
+ */
+export function cyclePlayedFrom(recentIds: string[], librarySize: number): Set<string> {
+  const seen = new Set<string>();
+  for (const id of recentIds) {
+    if (seen.has(id)) break;
+    seen.add(id);
+    if (seen.size >= librarySize) break;
+  }
+  return seen;
 }
 
+/**
+ * Generational rotation: shuffle the not-yet-aired tracks from the current
+ * cycle. When the cycle is exhausted, wrap and shuffle the whole library
+ * minus the bridge (currently-playing track) so the first track of the new
+ * cycle can never be the last track of the old one.
+ */
 export function buildPlaylist(
   library: RotationTrack[],
-  recentIds: Set<string>,
+  cycleExclude: Set<string>,
+  bridgeExclude: Set<string>,
   rng: () => number = Math.random,
 ): string {
   if (library.length === 0) return "";
-  const excluded = library.filter((t) => !recentIds.has(t.id));
-  // Only fall back to the full library when the exclusion is empty; a pool of
-  // 1 is still preferable to letting a just-played track air again. See the
-  // 2026-04-20 repeat/starvation bug in the test file for why.
-  const pool = excluded.length === 0 ? library : excluded;
+  let pool = library.filter((t) => !cycleExclude.has(t.id));
+  if (pool.length === 0) {
+    // Cycle wrap. Bridge: keep the just-played track out so the seam
+    // between cycle N and N+1 can't repeat the same track back-to-back.
+    pool = library.filter((t) => !bridgeExclude.has(t.id));
+    // Degenerate library of size 1: bridge would empty the pool — accept
+    // the immediate repeat rather than write nothing.
+    if (pool.length === 0) pool = library;
+  }
   // Fisher–Yates
   const a = pool.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -50,10 +64,10 @@ export function buildPlaylist(
 }
 
 /**
- * Reads the library, computes the exclusion set, shuffles, and atomically
- * rewrites the playlist file. Exported so the queue-daemon can fire this
- * on every track-started callback (push-based) in addition to the 2-min
- * systemd timer (safety-net pull). Caller owns the prisma lifecycle.
+ * Reads the library, derives the current cycle from PlayHistory, shuffles
+ * the remaining tracks, and atomically rewrites the playlist file. Exported
+ * so the queue-daemon can fire this on every track-started callback in
+ * addition to the safety-net systemd timer. Caller owns the prisma lifecycle.
  */
 export async function runRefresh(
   prisma: Pick<PrismaClient, "station" | "track" | "playHistory" | "nowPlaying">,
@@ -85,13 +99,15 @@ export async function runRefresh(
     return asset?.publicUrl ? [{ id: t.id, url: asset.publicUrl, title: t.title }] : [];
   });
 
-  const window = recentWindowFor(library.length);
-  const readExclusion = async (): Promise<Set<string>> => {
+  // Read enough history to detect a cycle wrap (one full library + slack).
+  const historyTake = Math.max(library.length * 2, 8);
+
+  const readState = async (): Promise<{ cyclePlayed: Set<string>; nowPlayingId: string | null }> => {
     const [recent, nowPlaying] = await Promise.all([
       prisma.playHistory.findMany({
         where: { stationId: station.id, trackId: { not: null } },
         orderBy: { startedAt: "desc" },
-        take: window,
+        take: historyTake,
         select: { trackId: true },
       }),
       prisma.nowPlaying.findUnique({
@@ -99,36 +115,36 @@ export async function runRefresh(
         select: { currentTrackId: true },
       }),
     ]);
-    const s = new Set(recent.map((r) => r.trackId!).filter(Boolean));
-    if (nowPlaying?.currentTrackId) s.add(nowPlaying.currentTrackId);
-    return s;
+    return {
+      cyclePlayed: cyclePlayedFrom(
+        recent.map((r) => r.trackId!).filter(Boolean),
+        library.length,
+      ),
+      nowPlayingId: nowPlaying?.currentTrackId ?? null,
+    };
   };
 
   // Race-guard: a `track-started` transaction (Liquidsoap → Vercel →
-  // Neon: NowPlaying upsert + PlayHistory insert in one tx) takes
-  // ~100-500 ms to commit. If the refresher reads in that window,
-  // both NowPlaying *and* recent PlayHistory still show the previous
-  // track — so the just-started track isn't excluded and Fisher-Yates
-  // can land it at position 0, producing back-to-back airings when
-  // Liquidsoap loops the playlist. Reading twice with a 300 ms gap
-  // closes that window: any commit landing between the two reads
-  // shows up in the second one, and we union the results.
-  const before = await readExclusion();
+  // Neon: NowPlaying upsert + PlayHistory insert) takes ~100-500 ms to
+  // commit. If we read in that window the just-started track is invisible
+  // to both reads. Reading twice with a 300 ms gap and unioning closes
+  // the window — same pattern that protected the old sliding-window
+  // implementation against back-to-back airings.
+  const before = await readState();
   await new Promise((r) => setTimeout(r, 300));
-  const after = await readExclusion();
-  const recentIds = new Set([...before, ...after]);
-  const newlyVisible = [...after].filter((id) => !before.has(id));
-  if (newlyVisible.length > 0) {
-    console.log(
-      `[refresh-rotation] race-guard caught fresh track(s): ${newlyVisible.join(",")}`,
-    );
+  const after = await readState();
+
+  const cycleExclude = new Set<string>([...before.cyclePlayed, ...after.cyclePlayed]);
+  const bridgeExclude = new Set<string>();
+  const nowPlayingId = after.nowPlayingId ?? before.nowPlayingId;
+  if (nowPlayingId) {
+    cycleExclude.add(nowPlayingId);
+    bridgeExclude.add(nowPlayingId);
   }
 
-  const content = buildPlaylist(library, recentIds);
+  const cycleWrapped = library.length > 0 && library.every((t) => cycleExclude.has(t.id));
+  const content = buildPlaylist(library, cycleExclude, bridgeExclude);
 
-  // PID + Date.now() can collide if the timer double-fires inside
-  // the same millisecond (rare but possible under load). Adding 8
-  // bytes of randomness makes a collision essentially impossible.
   const suffix = randomBytes(4).toString("hex");
   const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
   await writeFile(tmpPath, content, "utf8");
@@ -136,8 +152,11 @@ export async function runRefresh(
 
   return {
     librarySize: library.length,
-    excluded: recentIds.size,
-    poolSize: Math.max(library.length - recentIds.size, 0),
+    cyclePlayed: cycleExclude.size,
+    poolSize: cycleWrapped
+      ? Math.max(library.length - bridgeExclude.size, 0)
+      : Math.max(library.length - cycleExclude.size, 0),
+    cycleWrapped,
   };
 }
 
@@ -161,14 +180,13 @@ async function main() {
     });
     const sample = tracks.map((t) => t.title).join(", ");
     console.log(
-      `[refresh-rotation] library=${result.librarySize} excluded=${result.excluded} wrote=${PLAYLIST_PATH} sample=[${sample}]`,
+      `[refresh-rotation] library=${result.librarySize} cyclePlayed=${result.cyclePlayed} poolSize=${result.poolSize} wrapped=${result.cycleWrapped} wrote=${PLAYLIST_PATH} sample=[${sample}]`,
     );
   } finally {
     await prisma.$disconnect();
   }
 }
 
-// Only run main() when invoked directly (so tests can import without side effects).
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
     console.error("[refresh-rotation] failed", err);

@@ -1,42 +1,67 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlaylist, recentWindowFor } from "./refresh-rotation.ts";
+import { buildPlaylist, cyclePlayedFrom } from "./refresh-rotation.ts";
 
 type T = { id: string; url: string; title: string };
 const t = (id: string, url: string): T => ({ id, url, title: id });
 
-test("buildPlaylist excludes recent track ids and returns one url per line", () => {
-  const library: T[] = [t("a", "https://b2/a.mp3"), t("b", "https://b2/b.mp3"), t("c", "https://b2/c.mp3")];
-  const recent = new Set(["b"]);
-  const out = buildPlaylist(library, recent, () => 0);
+test("cyclePlayedFrom collects distinct ids until the first duplicate", () => {
+  // Most-recent-first order; "a" recurs → cycle is the 3 plays before that.
+  const ids = ["d", "c", "b", "a", "c", "x", "y"];
+  const seen = cyclePlayedFrom(ids, 100);
+  assert.deepEqual([...seen].sort(), ["a", "b", "c", "d"]);
+});
+
+test("cyclePlayedFrom caps at librarySize (full cycle just completed)", () => {
+  const ids = ["e", "d", "c", "b", "a"];
+  const seen = cyclePlayedFrom(ids, 3);
+  assert.equal(seen.size, 3);
+  assert.deepEqual([...seen], ["e", "d", "c"]);
+});
+
+test("cyclePlayedFrom returns empty for empty history", () => {
+  assert.equal(cyclePlayedFrom([], 10).size, 0);
+});
+
+test("buildPlaylist excludes cycle-played tracks", () => {
+  const library: T[] = [t("a", "u-a"), t("b", "u-b"), t("c", "u-c"), t("d", "u-d")];
+  const cycle = new Set(["a", "b"]);
+  const out = buildPlaylist(library, cycle, new Set(), () => 0);
   const lines = out.trim().split("\n");
   assert.equal(lines.length, 2);
-  assert.ok(lines.every((l) => l.startsWith("https://b2/")));
-  assert.ok(!lines.includes("https://b2/b.mp3"));
+  assert.ok(!lines.includes("u-a"));
+  assert.ok(!lines.includes("u-b"));
 });
 
-test("buildPlaylist falls back to full library only when every track is recent", () => {
-  const library: T[] = [t("a", "a"), t("b", "b"), t("c", "c")];
-  const recent = new Set(["a", "b", "c"]);
-  const out = buildPlaylist(library, recent, () => 0);
+test("buildPlaylist wraps to library minus the bridge when cycle exhausts the pool", () => {
+  // Whole library has aired in the current cycle (incl. nowPlaying "d").
+  // Wrap should reshuffle library minus the bridge so position 0 ≠ "d".
+  const library: T[] = [t("a", "u-a"), t("b", "u-b"), t("c", "u-c"), t("d", "u-d")];
+  const cycle = new Set(["a", "b", "c", "d"]);
+  const bridge = new Set(["d"]);
+  const out = buildPlaylist(library, cycle, bridge, () => 0);
   const lines = out.trim().split("\n");
-  assert.equal(lines.length, 3, "empty exclusion → full library");
+  assert.equal(lines.length, 3, "wrap pool drops the bridge track");
+  assert.ok(!lines.includes("u-d"), "bridge track must not air right after itself");
 });
 
-test("buildPlaylist keeps a single-track exclusion instead of falling back to full library", () => {
-  // Repro of the 2026-04-20 repeat/starvation bug: with 8 library tracks and
-  // RECENT_WINDOW=20, the exclusion regularly shrinks to 1 non-recent track.
-  // The old MIN_POOL=5 fallback discarded that and handed back the full
-  // library, so the just-played tracks were candidates again AND the
-  // one non-recent track (e.g. Hold The Morning) lost its privileged slot.
-  const library: T[] = [
-    t("a", "u-a"), t("b", "u-b"), t("c", "u-c"), t("d", "u-d"),
-    t("e", "u-e"), t("f", "u-f"), t("g", "u-g"), t("h", "u-h"),
-  ];
-  const recent = new Set(["a", "b", "c", "d", "e", "f", "g"]);
-  const out = buildPlaylist(library, recent, () => 0);
+test("buildPlaylist degenerate single-track library still emits the track on wrap", () => {
+  const library: T[] = [t("a", "u-a")];
+  const cycle = new Set(["a"]);
+  const bridge = new Set(["a"]);
+  const out = buildPlaylist(library, cycle, bridge, () => 0);
+  assert.equal(out.trim(), "u-a", "bridge can't drop the only track");
+});
+
+test("buildPlaylist newly approved track surfaces in the current cycle without waiting", () => {
+  // Mid-cycle: "a" and "b" already aired. "z" is brand new (just approved)
+  // — not in cycle, so it lands in the upcoming pool alongside "c", "d".
+  const library: T[] = [t("a", "u-a"), t("b", "u-b"), t("c", "u-c"), t("d", "u-d"), t("z", "u-z")];
+  const cycle = new Set(["a", "b"]);
+  const out = buildPlaylist(library, cycle, new Set(), () => 0);
   const lines = out.trim().split("\n");
-  assert.deepEqual(lines, ["u-h"], "only the non-recent track should air next");
+  assert.equal(lines.length, 3);
+  assert.ok(lines.includes("u-z"), "new track must appear in remaining cycle");
 });
 
 test("buildPlaylist is deterministic given a seeded rng", () => {
@@ -46,31 +71,76 @@ test("buildPlaylist is deterministic given a seeded rng", () => {
     seed = (seed * 9301 + 49297) % 233280;
     return seed / 233280;
   };
-  const a = buildPlaylist(library, new Set(), rng);
+  const a = buildPlaylist(library, new Set(), new Set(), rng);
   seed = 0;
-  const b = buildPlaylist(library, new Set(), rng);
+  const b = buildPlaylist(library, new Set(), new Set(), rng);
   assert.equal(a, b);
 });
 
 test("buildPlaylist returns empty string when library is empty", () => {
-  assert.equal(buildPlaylist([], new Set(), () => 0), "");
+  assert.equal(buildPlaylist([], new Set(), new Set(), () => 0), "");
 });
 
-test("recentWindowFor scales with library size to leave a pool of at least 6", () => {
-  // Big libraries cap at the 20-slot window (pool = librarySize - 20).
-  assert.equal(recentWindowFor(30), 20);
-  assert.equal(recentWindowFor(26), 20);
-  // Mid libraries: pool = MIN_POOL = 6, window = librarySize - 6.
-  assert.equal(recentWindowFor(20), 14);
-  assert.equal(recentWindowFor(13), 7);
-  assert.equal(recentWindowFor(8), 2);
-  // Small libraries: librarySize - 6 < 1 so window clamps to 1; pool is
-  // just the rest. We can't achieve MIN_POOL=6 with <7 tracks — accept
-  // a smaller pool rather than returning window=0 (which would defeat
-  // the exclusion entirely).
-  assert.equal(recentWindowFor(7), 1);
-  assert.equal(recentWindowFor(4), 1);
-  assert.equal(recentWindowFor(3), 1);
-  assert.equal(recentWindowFor(2), 1);
-  assert.equal(recentWindowFor(1), 1);
+test("simulated full cycle: every track airs exactly once before any repeat", () => {
+  // End-to-end generational guarantee. Walk N picks; on each pick:
+  //   - derive cycle from history
+  //   - shuffle the remaining pool
+  //   - "play" position 0 → push to history
+  // After library.length picks, every track must have aired exactly once.
+  const library: T[] = Array.from({ length: 12 }, (_, i) => t(`k${i}`, `u${i}`));
+  const history: string[] = []; // most recent first
+  let nowPlaying: string | null = null;
+  let seed = 1;
+  const rng = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+
+  for (let i = 0; i < library.length; i++) {
+    const cycle = cyclePlayedFrom(history, library.length);
+    const bridge = new Set<string>();
+    if (nowPlaying) {
+      cycle.add(nowPlaying);
+      bridge.add(nowPlaying);
+    }
+    const lines = buildPlaylist(library, cycle, bridge, rng).trim().split("\n").filter(Boolean);
+    assert.ok(lines.length > 0, `pick ${i}: pool not empty`);
+    const nextUrl = lines[0];
+    const nextTrack = library.find((t) => t.url === nextUrl)!;
+    history.unshift(nextTrack.id);
+    nowPlaying = nextTrack.id;
+  }
+
+  assert.equal(new Set(history).size, library.length, "every track aired exactly once");
+});
+
+test("simulated cycle wrap: first pick of cycle N+1 is not the last of cycle N", () => {
+  // Play through one full cycle, then take one more pick. The seam track
+  // should never repeat: the bridge guarantees position 0 ≠ just-played.
+  const library: T[] = Array.from({ length: 8 }, (_, i) => t(`k${i}`, `u${i}`));
+  const history: string[] = [];
+  let nowPlaying: string | null = null;
+  let seed = 42;
+  const rng = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const pick = (): string => {
+    const cycle = cyclePlayedFrom(history, library.length);
+    const bridge = new Set<string>();
+    if (nowPlaying) {
+      cycle.add(nowPlaying);
+      bridge.add(nowPlaying);
+    }
+    const url = buildPlaylist(library, cycle, bridge, rng).trim().split("\n")[0];
+    const track = library.find((t) => t.url === url)!;
+    history.unshift(track.id);
+    nowPlaying = track.id;
+    return track.id;
+  };
+
+  for (let i = 0; i < library.length; i++) pick();
+  const lastOfCycleN = nowPlaying!;
+  const firstOfCycleN1 = pick();
+  assert.notEqual(firstOfCycleN1, lastOfCycleN, "seam must not repeat the just-played track");
 });
