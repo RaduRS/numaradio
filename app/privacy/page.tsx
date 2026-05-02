@@ -325,13 +325,22 @@ export default function PrivacyPage() {
                 </li>
                 <li>
                   You authorise Numa Radio to air the track on its 24/7
-                  stream.
+                  audio stream{" "}
+                  <strong style={{ color: "var(--fg)" }}>
+                    and on its public YouTube simulcast
+                  </strong>{" "}
+                  (the same broadcast, mirrored to YouTube Live so listeners
+                  can watch on the YouTube channel as well as listen via the
+                  audio stream). If your rights deal with a label or
+                  distributor restricts YouTube distribution, please don&apos;t
+                  submit.
                 </li>
                 <li>
                   You&apos;re solely responsible for the rights status of
                   what you submit. Numa Radio is not liable for disputes
                   arising from material you upload that turns out not to
-                  be yours to share.
+                  be yours to share — including any YouTube Content ID
+                  claims.
                 </li>
               </ul>
 

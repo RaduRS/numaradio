@@ -267,7 +267,12 @@ export default function SubmitPage() {
                 specific generation.
               </p>
               <p>No tracks with uncleared samples.</p>
-              <p>No content that can&apos;t be broadcast 24/7 on an open stream.</p>
+              <p>
+                No content that can&apos;t be broadcast 24/7 on an open
+                stream <strong>or simulcast on YouTube Live</strong>.
+                If a label, distributor, or rights deal restricts YouTube
+                distribution for the track, this isn&apos;t the right home.
+              </p>
               <p style={{ color: "var(--fg-mute)", fontSize: 13 }}>
                 If any of that rules you out, we&apos;re not the right home.
                 No hard feelings.
