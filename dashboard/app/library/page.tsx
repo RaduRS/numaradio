@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PlayIcon, PauseIcon, ImageIcon, Loader2Icon } from "lucide-react";
+import { PlayIcon, PauseIcon, ImageIcon, Loader2Icon, Trash2Icon } from "lucide-react";
 import { ArtworkPreview } from "@/components/ui/artwork-preview";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
@@ -168,13 +168,15 @@ function ActionIcon({
   onClick: () => void;
   disabled?: boolean;
   title: string;
-  tone: "accent" | "muted";
+  tone: "accent" | "muted" | "bad";
   children: React.ReactNode;
 }) {
   const toneCls =
     tone === "accent"
       ? "text-fg-mute hover:text-accent hover:border-accent/60 hover:bg-[var(--accent-soft)]"
-      : "text-fg-mute hover:text-fg hover:border-fg-mute hover:bg-bg/60";
+      : tone === "bad"
+        ? "text-fg-mute hover:text-[var(--bad)] hover:border-[var(--bad)]/60 hover:bg-[var(--bad)]/10"
+        : "text-fg-mute hover:text-fg hover:border-fg-mute hover:bg-bg/60";
   return (
     <button
       type="button"
@@ -236,6 +238,33 @@ export default function LibraryPage() {
   }
   const [regenTarget, setRegenTarget] = useState<LibraryTrack | null>(null);
   const [regenHint, setRegenHint] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<LibraryTrack | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteTrack(t: LibraryTrack) {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/library/track/${t.id}/delete`, { method: "DELETE" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.ok === false) {
+        toast.error(`Delete failed: ${j.error ?? res.status}`);
+        return;
+      }
+      toast.success(`Deleted "${t.title}" — ${j.assetsDeletedFromB2 ?? 0} B2 file(s) removed${j.b2Failures ? ` (${j.b2Failures} failed)` : ""}`);
+      setDeleteTarget(null);
+      // Stop preview if it was the deleted track
+      if (previewId === t.id) {
+        const audio = audioRef.current;
+        if (audio) { audio.pause(); audio.currentTime = 0; }
+        setPreviewId(null);
+      }
+      tracksPoll.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "network error");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const tracks = tracksPoll.data?.tracks ?? [];
   const previewTrack = useMemo(
@@ -644,6 +673,14 @@ export default function LibraryPage() {
                                   ? <Loader2Icon size={15} className="animate-spin" />
                                   : <ImageIcon size={15} strokeWidth={2} />}
                               </ActionIcon>
+                              <ActionIcon
+                                onClick={() => setDeleteTarget(t)}
+                                disabled={isRegen || isPending || deleting}
+                                title="Delete track (DB + B2)"
+                                tone="bad"
+                              >
+                                <Trash2Icon size={15} strokeWidth={2} />
+                              </ActionIcon>
                             </div>
                           </td>
                         </tr>
@@ -818,6 +855,37 @@ export default function LibraryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Delete-track confirmation dialog. Calls /api/library/track/:id/delete
+          which proxies to the public site's internal delete (Prisma + B2 cleanup).
+          Drops the Track row, all TrackAssets + B2 files, QueueItems, TrackVotes,
+          BroadcastSegments. Nulls trackId on PlayHistory + SongRequest +
+          MusicSubmission to preserve audit. */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-[var(--bad)]">Delete this track forever?</DialogTitle>
+            <DialogDescription>
+              <span className="text-fg font-medium">"{deleteTarget?.title}"</span>{deleteTarget?.artist ? <> by <span className="text-fg">{deleteTarget.artist}</span></> : null}{" "}
+              will be removed from rotation immediately. The audio file and artwork are deleted from B2,
+              the Track row is removed from the database, and all queue items + votes are cleared.
+              Play-history rows are kept (with the track link nulled) so historical counts survive.
+              <br /><br />
+              <span className="text-[var(--warn)]">This can't be undone.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>No, keep it</Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => { if (deleteTarget) void deleteTrack(deleteTarget); }}
+            >
+              {deleting ? "Deleting…" : "Yes, delete forever"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Shared preview audio. Hidden — togglePreview controls it via ref.
           onEnded clears the row's playing state so the icon flips back to
           Play when the track finishes naturally. */}
