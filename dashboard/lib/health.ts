@@ -37,24 +37,45 @@ function getS3(): S3Client {
   return s3;
 }
 
+// In-memory TTL cache for the B2 health probe. /api/status is polled
+// every 5s by the dashboard, which would otherwise translate to ~17,280
+// HeadObject ops/day against B2 — well above the free Class C cap and
+// pure waste because B2 outages don't change minute-to-minute. Cache
+// the result for 60s; if B2 went down inside that window we'll find
+// out within a minute.
+const B2_HEALTH_TTL_MS = 60_000;
+let b2HealthCache: { at: number; result: HealthPing } | null = null;
+
 export async function checkB2(timeoutMs = 2_000): Promise<HealthPing> {
-  const start = Date.now();
+  const now = Date.now();
+  if (b2HealthCache && now - b2HealthCache.at < B2_HEALTH_TTL_MS) {
+    return b2HealthCache.result;
+  }
+  const start = now;
   const bucket = process.env.B2_BUCKET_NAME;
-  if (!bucket) return { ok: false, error: "B2_BUCKET_NAME not set" };
+  if (!bucket) {
+    const r: HealthPing = { ok: false, error: "B2_BUCKET_NAME not set" };
+    b2HealthCache = { at: now, result: r };
+    return r;
+  }
+  let result: HealthPing;
   try {
     const cmd = new HeadObjectCommand({ Bucket: bucket, Key: "healthcheck.txt" });
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
       await getS3().send(cmd, { abortSignal: ctl.signal });
-      return { ok: true, latencyMs: Date.now() - start };
+      result = { ok: true, latencyMs: Date.now() - start };
     } finally {
       clearTimeout(timer);
     }
   } catch (e) {
     const err = e as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
     const status = err.$metadata?.httpStatusCode;
-    if (status === 404) return { ok: true, latencyMs: Date.now() - start };
-    return { ok: false, error: err.name ?? err.Code ?? "unknown" };
+    result = status === 404
+      ? { ok: true, latencyMs: Date.now() - start }
+      : { ok: false, error: err.name ?? err.Code ?? "unknown" };
   }
+  b2HealthCache = { at: now, result };
+  return result;
 }
