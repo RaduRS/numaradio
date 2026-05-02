@@ -104,11 +104,12 @@ export default function SubmitPage() {
               maxWidth: 620,
             }}
           >
-            Or email{" "}
+            Hitting a problem with the form?{" "}
             <a href={`mailto:${SUBMIT_EMAIL}`} style={{ color: "var(--accent)" }}>
-              {SUBMIT_EMAIL}
+              Email {SUBMIT_EMAIL}
             </a>{" "}
-            if you&apos;d rather not use the form.
+            and we&apos;ll help — but the track itself needs to come through the
+            form so we can capture the rights confirmation.
           </p>
         </div>
       </section>
