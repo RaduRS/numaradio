@@ -40,6 +40,20 @@ function showLabelFor(show: string | null): string {
   return show.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
 }
 
+// Per-show static colour palette — same hues the broadcast stage rides
+// through the day (night = cool blue, morning = warm gold, daylight =
+// sage green, prime = dusty rose) but locked per-show, no animation.
+// Lets the operator spot which show a track belongs to at a glance.
+const SHOW_TONE: Record<string, string> = {
+  night_shift: "text-[#9aa6c2] border-[#7b8aaa]/50 bg-[#7b8aaa]/12",
+  morning_room: "text-[#d2b481] border-[#b89a6a]/50 bg-[#b89a6a]/12",
+  daylight_channel: "text-[#9bc6a6] border-[#7aaa8a]/50 bg-[#7aaa8a]/12",
+  prime_hours: "text-[#c69a9a] border-[#aa7a7a]/50 bg-[#aa7a7a]/12",
+};
+function showToneFor(show: string | null): string {
+  return (show && SHOW_TONE[show]) || "text-fg-mute border-line bg-bg";
+}
+
 type UpcomingResponse = {
   ok: boolean;
   manualMode: boolean;
@@ -112,12 +126,16 @@ function SortableRow({ track, position }: { track: UpcomingTrack; position: numb
       >
         {track.genre ?? "—"}
       </span>
-      <span
-        className="font-mono text-[10px] uppercase tracking-[0.1em] text-fg-mute shrink-0 w-20 truncate hidden md:inline"
-        title={track.show ? `Show: ${showLabelFor(track.show)}` : "No show"}
-      >
-        {showLabelFor(track.show)}
-      </span>
+      {track.show ? (
+        <span
+          className={`font-mono text-[10px] uppercase tracking-[0.1em] shrink-0 w-32 hidden md:inline-flex items-center justify-center px-1.5 py-0.5 rounded border ${showToneFor(track.show)}`}
+          title={`Show: ${showLabelFor(track.show)}`}
+        >
+          <span className="truncate">{showLabelFor(track.show)}</span>
+        </span>
+      ) : (
+        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-fg-dim shrink-0 w-32 hidden md:inline text-center">—</span>
+      )}
       <span
         className={`font-mono text-[10px] uppercase tabular-nums shrink-0 w-12 text-right ${age.cls}`}
         title={track.ageDays === null ? "Unknown age" : `Added ${track.ageDays} day${track.ageDays === 1 ? "" : "s"} ago`}
@@ -274,7 +292,7 @@ export function UpcomingQueue() {
                 <span className="w-8 shrink-0" aria-hidden /> {/* art */}
                 <span className="flex-1 min-w-0">Track</span>
                 <span className="w-24 shrink-0 hidden sm:inline">Genre</span>
-                <span className="w-20 shrink-0 hidden md:inline">Show</span>
+                <span className="w-32 shrink-0 hidden md:inline text-center">Show</span>
                 <span className="w-12 shrink-0 text-right" title="Days since added to library">Days</span>
                 <span className="w-10 shrink-0 text-right">Dur</span>
               </div>
