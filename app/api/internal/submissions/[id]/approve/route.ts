@@ -106,8 +106,16 @@ export async function POST(
   // Tier 3 (generation) intentionally deferred — operator can attach
   // artwork later from the existing dashboard library page.
 
+  // permanent → 'library' (joins rotation immediately)
+  // one_off    → 'request_only' (visible in library, operator pushes via
+  //              "Play Next" when ready; after airing it stays request_only).
+  // The previous mapping was one_off → 'priority_request', which (a) hid
+  // the track from /library entirely (the rotation refresher's filter
+  // excludes priority_request) AND (b) didn't push it to the queue, so a
+  // one_off-approved submission was both invisible and silent until the
+  // operator hunted it down. request_only fixes both.
   const airingPolicy =
-    submission.airingPreference === "permanent" ? "library" : "priority_request";
+    submission.airingPreference === "permanent" ? "library" : "request_only";
 
   const result = await ingestTrack({
     stationId: station.id,
