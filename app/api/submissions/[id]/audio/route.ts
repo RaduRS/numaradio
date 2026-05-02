@@ -46,7 +46,10 @@ export async function GET(
             "Content-Length": String(slice.length),
             "Content-Range": `bytes ${start}-${end}/${total}`,
             "Accept-Ranges": "bytes",
-            "Cache-Control": "private, no-store",
+            // 30 min private browser cache — the operator typically
+            // approves or rejects within that window. Avoids a fresh B2
+            // download on every replay, scrub, or Range follow-up.
+            "Cache-Control": "private, max-age=1800",
           },
         });
       }
