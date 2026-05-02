@@ -550,10 +550,14 @@ export default function LibraryPage() {
                   artwork) — fewer clicks than a dropdown for the actions
                   the operator uses every time. */}
               <div className="hidden md:block">
-                <table className="w-full text-sm">
+                {/* table-fixed enforces the column widths declared on the
+                    <th> cells; without it, an extremely long track title
+                    blows the Track column wide, pushing the artwork
+                    column out of place. */}
+                <table className="w-full text-sm table-fixed">
                   <thead className="sticky top-0 bg-bg-1 z-[1] border-b border-line">
                     <tr className="text-fg-mute font-mono text-[10px] uppercase tracking-[0.2em]">
-                      <th className="text-left px-4 py-2.5 w-[72px]"></th>
+                      <th className="text-left px-4 py-2.5 w-[88px]"></th>
                       <th className="text-left px-2 py-2.5">Track</th>
                       <th className="text-center px-2 py-2.5 w-[44px]">Preview</th>
                       <th className="text-right px-3 py-2.5 w-[64px]">Time</th>
