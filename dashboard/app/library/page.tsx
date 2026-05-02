@@ -198,13 +198,19 @@ const PAGE_SIZE = 10;
 // Shoutouts live in the Track table too (sourceType='external_import')
 // but operators shouldn't see them in the music library by default.
 function isShoutout(t: LibraryTrack): boolean {
-  // A shoutout is the narrow combination of external_import (Lena's voice
-  // overlays come in via the same ingest path) AND request_only (they
-  // air once via priority queue and aren't part of the rotation library).
-  // Music submissions ALSO use external_import but land with
-  // airingPolicy='library' — those are real catalogue tracks and must
-  // remain visible. Matches the guard in lib/delete-aired-shoutout.ts.
-  return t.sourceType === "external_import" && t.airingPolicy === "request_only";
+  // Shoutouts are minted by dashboard/lib/shoutout.ts which ALWAYS
+  // prefixes the title with "Shoutout" (see line ~213 — either
+  // "Shoutout: <snippet>…" or bare "Shoutout"). Music submissions
+  // never have that prefix — they use the artist-supplied trackTitle.
+  // Combining the prefix check with the external_import + request_only
+  // tuple keeps a real shoutout hidden while letting one-off music
+  // submissions (also external_import + request_only since the recent
+  // approve-mapping fix) show up in the library.
+  return (
+    t.sourceType === "external_import" &&
+    t.airingPolicy === "request_only" &&
+    t.title.startsWith("Shoutout")
+  );
 }
 
 export default function LibraryPage() {
