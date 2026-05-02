@@ -85,7 +85,7 @@ export class AutoHostStateMachine {
 }
 
 import { slotTypeFor, promptFor, type ChatterType, type PromptContext } from "./chatter-prompts.ts";
-import { showForHour, timeOfDayFor, formatLocalTime } from "../../lib/schedule.ts";
+import { showForHour, timeOfDayFor, formatLocalTime, dayOfWeekFor, weekPartFor } from "../../lib/schedule.ts";
 import type { StationConfig } from "./station-config.ts";
 import { RingBuffer } from "./status-buffers.ts";
 import type { WorldAsideResult } from "./world-aside-client.ts";
@@ -478,6 +478,8 @@ export class AutoHostOrchestrator {
       // how a shoutout_cta fired at 08:40 ended up saying "tonight" on air.
       localTime: formatLocalTime(nowDate),
       timeOfDay: timeOfDayFor(nowDate.getHours()),
+      dayOfWeek: dayOfWeekFor(nowDate),
+      weekPart: weekPartFor(nowDate),
     };
 
     let script: string;

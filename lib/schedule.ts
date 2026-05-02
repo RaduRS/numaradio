@@ -84,3 +84,28 @@ export function formatLocalTime(d: Date): string {
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
+
+export type DayOfWeek = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+
+const DAY_NAMES: readonly DayOfWeek[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** 3-letter weekday name for the local timezone. */
+export function dayOfWeekFor(d: Date): DayOfWeek {
+  return DAY_NAMES[d.getDay()];
+}
+
+export type WeekPart = "start of week" | "midweek" | "end of week" | "weekend";
+
+/**
+ * DJ-plain bucket for "where in the week we are". Mon = start, Tue–Thu =
+ * midweek, Fri = end of week (TGIF energy), Sat–Sun = weekend. Lets the
+ * prompt rule out "hope your week's started right" on a Saturday without
+ * giving Lena a calendar lecture.
+ */
+export function weekPartFor(d: Date): WeekPart {
+  const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  if (day === 0 || day === 6) return "weekend";
+  if (day === 1) return "start of week";
+  if (day === 5) return "end of week";
+  return "midweek";
+}

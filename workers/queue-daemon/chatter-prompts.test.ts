@@ -241,6 +241,32 @@ test("BASE_SYSTEM permits context-provided time but forbids invented time", () =
   assert.match(p.system, /don't invent one if it isn't provided/i);
 });
 
+test("promptFor Context block renders dayOfWeek + weekPart when provided", () => {
+  const p = promptFor("back_announce", {
+    title: "Chasing Shadows",
+    artist: "Russell Ross",
+    dayOfWeek: "Sat",
+    weekPart: "weekend",
+  });
+  assert.match(p.user, /Day: Sat \(weekend\)/);
+});
+
+test("promptFor Context block renders weekPart alone when only bucket is given", () => {
+  const p = promptFor("filler", { weekPart: "midweek" });
+  assert.match(p.user, /Week part: midweek/);
+  assert.doesNotMatch(p.user, /Day: /);
+});
+
+test("BASE_SYSTEM bans week-of-day phrasing without matching context", () => {
+  const p = promptFor("filler", {});
+  // Repro of the 2026-05-02 Saturday-morning bug: Lena said "hope your
+  // week's started right" because the prompt had no day-of-week signal
+  // and the LLM picked a plausible-sounding skeleton from training data.
+  assert.match(p.system, /week's started/i, "rule must literally name the leaked phrase");
+  assert.match(p.system, /weekend/i, "rule must call out weekend handling");
+  assert.match(p.system, /midweek|start of week|end of week/i, "rule must reference the week-part buckets");
+});
+
 test("shoutout_cta examples are no longer all time-locked to 'tonight'", () => {
   const p = promptFor("shoutout_cta", {});
   // The old prompts had "tonight" twice in six examples with no morning/afternoon

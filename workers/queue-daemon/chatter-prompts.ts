@@ -1,4 +1,4 @@
-import { SHOW_SCHEDULE, type ShowBlock, type TimeOfDay } from "../../lib/schedule.ts";
+import { SHOW_SCHEDULE, type ShowBlock, type TimeOfDay, type DayOfWeek, type WeekPart } from "../../lib/schedule.ts";
 
 export type ChatterType =
   | "back_announce"
@@ -54,6 +54,10 @@ export interface PromptContext {
   localTime?: string;
   /** DJ-plain time-of-day bucket — "morning" / "afternoon" / "evening" / "night" / "late night". */
   timeOfDay?: TimeOfDay;
+  /** 3-letter weekday — "Mon".."Sun". Pinned so MiniMax can't say "happy Tuesday" on a Saturday. */
+  dayOfWeek?: DayOfWeek;
+  /** "start of week" / "midweek" / "end of week" / "weekend". Gates Mon-flavored riffs ("hope your week's started right") off the weekend. */
+  weekPart?: WeekPart;
 }
 
 export interface AnnouncementContext {
@@ -82,6 +86,7 @@ DO NOT:
 - Use atmospheric/mood language applied to the song ("dreamy", "late-night", "intimate", "cozy", "settling in").
 - Mention AI, tech, generation, MiniMax, Deepgram, or how songs are made.
 - Invent listener names, specific places, weather, or emotions the system didn't tell you about. (If a Context block below names a show, artist, or local time, you MAY weave it in — match the time-of-day word to the Local time given, and don't invent one if it isn't provided.)
+- Reference the day of the week or where we are in it ("happy Monday", "hope your week's started right", "Friday energy", "weekend wrap") UNLESS the Context block lists a Day. If a Day is given, any week phrasing MUST match it: "start of week" → Monday riffs only; "end of week" → Friday riffs only; "weekend" → weekend riffs (NEVER "your week's started"); "midweek" → keep it neutral or say "midweek". When in doubt, stay time-neutral.
 - Write ALL CAPS, stage directions, emojis, markdown, or quotes around the output.
 
 If you catch yourself reaching for poetic description, stop and cut it. If you catch yourself writing the same skeleton as the examples, break the skeleton. Real DJ, real variety.`;
@@ -93,6 +98,12 @@ function renderContextBlock(ctx: PromptContext): string {
     lines.push(`- Local time: ${ctx.localTime}${bucket}`);
   } else if (ctx.timeOfDay) {
     lines.push(`- Time of day: ${ctx.timeOfDay}`);
+  }
+  if (ctx.dayOfWeek) {
+    const part = ctx.weekPart ? ` (${ctx.weekPart})` : "";
+    lines.push(`- Day: ${ctx.dayOfWeek}${part}`);
+  } else if (ctx.weekPart) {
+    lines.push(`- Week part: ${ctx.weekPart}`);
   }
   if (ctx.currentShow) {
     const slot = SHOW_SCHEDULE.find((s) => s.name === ctx.currentShow);
@@ -111,7 +122,7 @@ function renderContextBlock(ctx: PromptContext): string {
   if (lines.length === 0) return "";
   return `
 
-Context (optional, weave in only if natural — skip if it doesn't fit. You do NOT have to use any of these. If Local time is given, any time-of-day phrasing MUST match it; otherwise don't reach for one):
+Context (optional, weave in only if natural — skip if it doesn't fit. You do NOT have to use any of these. If Local time is given, any time-of-day phrasing MUST match it; otherwise don't reach for one. If Day is given, any week-of-day phrasing MUST match its week-part — never say "your week's started" on a weekend):
 ${lines.join("\n")}`;
 }
 
