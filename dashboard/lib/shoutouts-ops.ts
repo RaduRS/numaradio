@@ -12,6 +12,11 @@ export interface GenerateShoutoutResult {
   sourceUrl: string;
   queueItemId: string;
   durationHintSeconds?: number;
+  /** Final text Lena actually spoke — post-humanize + post-radioHost
+   *  transform. The approve path persists this as broadcastText so
+   *  the operator audit reflects what listeners heard, not the raw
+   *  listener input. Optional for back-compat with older callers. */
+  spokenText?: string;
 }
 
 export interface GenerateShoutoutInput {
@@ -126,7 +131,11 @@ export async function approveShoutout(input: ApproveInput): Promise<ApproveResul
                 "broadcastText"     = $3,
                 "updatedAt"         = NOW()
           WHERE id = $1`,
-        [id, gen.queueItemId, text.slice(0, 500)],
+        // Use the spoken text Lena actually aired (post-humanize +
+        // post-radio-host transform), not the listener's raw input.
+        // Falls back to input only if generateShoutout didn't return
+        // spokenText (defensive — current implementation always does).
+        [id, gen.queueItemId, (gen.spokenText ?? text).slice(0, 500)],
       );
     } catch (e) {
       console.warn(
@@ -142,7 +151,11 @@ export async function approveShoutout(input: ApproveInput): Promise<ApproveResul
                 "broadcastText"     = $3,
                 "updatedAt"         = NOW()
           WHERE id = $1`,
-        [id, gen.queueItemId, text.slice(0, 500)],
+        // Use the spoken text Lena actually aired (post-humanize +
+        // post-radio-host transform), not the listener's raw input.
+        // Falls back to input only if generateShoutout didn't return
+        // spokenText (defensive — current implementation always does).
+        [id, gen.queueItemId, (gen.spokenText ?? text).slice(0, 500)],
       );
     }
     return { ok: true, trackId: gen.trackId, queueItemId: gen.queueItemId };

@@ -16,6 +16,19 @@ const HUMANIZE_MODEL = process.env.MINIMAX_HUMANIZE_MODEL ?? "MiniMax-M2.7";
 // words on top of the listener's text — allow up to ~2x expansion.
 const MAX_EXPANSION_RATIO = 2.0;
 const MIN_CONTRACTION_RATIO = 0.5;
+/** Absolute char ceiling for any rewrite. ~32s of speech at 150wpm =
+ *  the upper edge of "still a shoutout, not an essay". Replaces the
+ *  ratio-only check for short inputs, which falsely flagged perfectly
+ *  good humanizations like "Going out to inRhino, who asked for a
+ *  shoutout on YouTube. There it is, straight from the source. We'll
+ *  let it ride." (124 chars from 44 = 2.8× ratio, but legit). */
+const MAX_REWRITE_CHARS = 320;
+/** Below this input length the 2× expansion guard is too tight — the
+ *  humanizer naturally needs to add sender context + perspective shift,
+ *  which routinely doubles or triples a 30-50 char listener message.
+ *  Above this length the 2× cap kicks back in to catch genuine
+ *  hallucinations on already-meaty inputs. */
+const EXPANSION_RATIO_MIN_LEN = 100;
 
 // Mirrors lib/moderate.ts::profanityPrefilter from the main numaradio
 // repo. Duplicated here because the dashboard is a separate Next app
@@ -135,13 +148,22 @@ function cleanModelOutput(raw: string): string {
   return cleaned.replace(/^["'`](.+)["'`]$/s, "$1").trim();
 }
 
-function isSuspiciousRewrite(original: string, rewritten: string): boolean {
+export function isSuspiciousRewrite(original: string, rewritten: string): boolean {
   if (!rewritten) return true;
   const origLen = original.trim().length;
   const rewLen = rewritten.trim().length;
+  // Hard ceiling — never let a "shoutout" become an essay regardless
+  // of how short the input was.
+  if (rewLen > MAX_REWRITE_CHARS) return true;
   if (origLen >= 20) {
-    if (rewLen > origLen * MAX_EXPANSION_RATIO) return true;
+    // Strong contraction is still a red flag (lost meaning).
     if (rewLen < origLen * MIN_CONTRACTION_RATIO) return true;
+    // Expansion guard only for already-meaty inputs — short messages
+    // legitimately blow past 2× when the humanizer adds sender context
+    // and flips perspective.
+    if (origLen >= EXPANSION_RATIO_MIN_LEN && rewLen > origLen * MAX_EXPANSION_RATIO) {
+      return true;
+    }
   }
   if (/\b(as an? (ai|assistant|language model)|i (can't|cannot|won't))\b/i.test(rewritten)) {
     return true;
