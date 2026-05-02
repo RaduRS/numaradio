@@ -95,6 +95,21 @@ export async function _ingestTrackImpl(deps: IngestDeps): Promise<IngestResult> 
     uploadedKeys.push(artworkKey);
   }
 
+  // Genre fallback chain — guarantees the dashboard /library Genre
+  // column is never empty. Caller's explicit value wins; otherwise we
+  // try the first style tag, then mood, then a sourceType-aware default.
+  // Mirrors the chain that scripts/backfill-genre-from-style-tags.ts
+  // walks for legacy rows.
+  const resolvedGenre =
+    input.genre?.trim() ||
+    input.styleTags?.find((t) => typeof t === "string" && t.trim().length > 0)?.trim() ||
+    input.mood?.trim() ||
+    (input.sourceType === "external_import" && input.airingPolicy === "request_only"
+      ? "Voice"
+      : input.sourceType === "minimax_request"
+        ? "Listener Pick"
+        : "Untagged");
+
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const track = await tx.track.create({
@@ -107,7 +122,7 @@ export async function _ingestTrackImpl(deps: IngestDeps): Promise<IngestResult> 
           artistDisplay: input.artistDisplay,
           show: input.show,
           mood: input.mood,
-          genre: input.genre,
+          genre: resolvedGenre,
           bpm: input.bpm,
           durationSeconds: input.durationSeconds,
           lyricsSummary: input.lyrics?.slice(0, 240),

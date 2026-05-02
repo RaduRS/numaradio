@@ -3,6 +3,7 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
 import { probeDurationSeconds } from "../../lib/probe-duration.ts";
 import { profanityPrefilter } from "../../lib/moderate.ts";
+import { deriveGenreFromText } from "../../lib/derive-genre.ts";
 import { showSlugFor, type ShowSlug } from "../../lib/show-slug.ts";
 import { loadFallbackArtwork } from "../../lib/fallback-artwork.ts";
 import {
@@ -222,6 +223,11 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
   }
   const artworkUrl = await uploadToB2(artworkKey, artworkBuf, "image/png");
 
+  // Mine a genre from the listener's prompt so the dashboard /library
+  // Genre column has something meaningful instead of a dash. Falls back
+  // to "Listener Pick" when no recognised genre word appears.
+  const derivedGenre = deriveGenreFromText(job.prompt) ?? "Listener Pick";
+
   // Step 5: create Track + TrackAssets.
   const track = await prisma.track.create({
     data: {
@@ -237,6 +243,7 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
       airingPolicy: "priority_request",
       safetyStatus: "approved",
       show,
+      genre: derivedGenre,
       trackStatus: "ready",
       durationSeconds,
       assets: {
