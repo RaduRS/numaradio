@@ -91,6 +91,11 @@ function scheduleTransitionRefetch(data: NowPlaying) {
 
 async function poll() {
   if (!abortCtrl) return;
+  // Pause polling while the tab is hidden — saves Vercel function fires
+  // for every backgrounded tab the user has open. The visibilitychange
+  // listener below re-fires poll() the moment the tab becomes visible,
+  // so the first thing the user sees on tab focus is fresh data.
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
   try {
     const r = await fetch("/api/station/now-playing", {
       signal: abortCtrl.signal,
@@ -106,11 +111,19 @@ async function poll() {
   }
 }
 
+function onVisibilityChange() {
+  if (typeof document === "undefined") return;
+  if (document.visibilityState === "visible") poll();
+}
+
 function startPolling() {
   if (intervalId !== null) return;
   abortCtrl = new AbortController();
   poll();
   intervalId = setInterval(poll, POLL_MS);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  }
 }
 
 function stopPolling() {
@@ -123,6 +136,9 @@ function stopPolling() {
     abortCtrl = null;
   }
   clearTransitionRefetch();
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+  }
 }
 
 export function useNowPlaying(): NowPlayingDerived {

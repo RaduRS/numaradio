@@ -103,6 +103,11 @@ function useBroadcastFeed() {
     const ctrl = new AbortController();
 
     async function poll() {
+      // Skip while tab is hidden — visibility listener below re-fires
+      // poll() the moment the tab comes back. The boundary scheduler
+      // also reschedules from the latest data, so the dynamic cadence
+      // self-heals on resume.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
         const r = await fetch("/api/station/broadcast", {
           signal: ctrl.signal,
@@ -179,11 +184,17 @@ function useBroadcastFeed() {
       if (mounted.current) setNow(Date.now());
     }, TICK_MS);
 
+    const onVis = () => {
+      if (document.visibilityState === "visible" && mounted.current) poll();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     return () => {
       mounted.current = false;
       clearTimeout(timeoutId);
       if (followUpIdRef.current !== null) clearTimeout(followUpIdRef.current);
       clearInterval(tickId);
+      document.removeEventListener("visibilitychange", onVis);
       ctrl.abort();
     };
   }, []);

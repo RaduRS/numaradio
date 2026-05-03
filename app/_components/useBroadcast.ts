@@ -69,6 +69,9 @@ let lastShoutoutActive = false;
 
 async function poll() {
   if (!abortCtrl) return;
+  // Skip polling while the tab is hidden; the visibilitychange listener
+  // below re-fires poll() the moment the tab becomes visible.
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
   try {
     const r = await fetch("/api/station/broadcast", {
       signal: abortCtrl.signal,
@@ -89,11 +92,19 @@ async function poll() {
   }
 }
 
+function onVisibilityChange() {
+  if (typeof document === "undefined") return;
+  if (document.visibilityState === "visible") poll();
+}
+
 function startPolling() {
   if (intervalId !== null) return;
   abortCtrl = new AbortController();
   poll();
   intervalId = setInterval(poll, POLL_MS);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  }
 }
 
 function stopPolling() {
@@ -104,6 +115,9 @@ function stopPolling() {
   if (abortCtrl) {
     abortCtrl.abort();
     abortCtrl = null;
+  }
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
   }
 }
 

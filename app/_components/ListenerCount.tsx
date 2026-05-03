@@ -38,14 +38,21 @@ export function ListenerCount({
     const ctrl = new AbortController();
 
     async function poll() {
+      // Skip while tab is hidden — listener below re-fires on focus.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       const data = await fetchListeners(ctrl.signal);
       if (data) setN(data.withFloor);
     }
 
     poll();
     const id = setInterval(poll, POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === "visible") poll();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
       ctrl.abort();
     };
   }, []);

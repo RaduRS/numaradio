@@ -18,6 +18,9 @@ export function HeroStats() {
     const ctrl = new AbortController();
 
     async function poll() {
+      // Skip polling while the tab is hidden — listener below re-fires
+      // poll() the moment the tab becomes visible.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
         const r = await fetch("/api/station/stats", {
           signal: ctrl.signal,
@@ -33,8 +36,13 @@ export function HeroStats() {
 
     poll();
     const id = setInterval(poll, POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === "visible") poll();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
       ctrl.abort();
     };
   }, []);

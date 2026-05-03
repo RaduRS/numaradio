@@ -77,6 +77,13 @@ export function OnAirFeed() {
   useEffect(() => {
     const ctrl = new AbortController();
     async function fetchShouts(fresh = false) {
+      // Skip while tab is hidden — listener below re-fires on focus.
+      // Always run when triggered by a shoutout-ended event though.
+      if (
+        !fresh &&
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      ) return;
       try {
         const url = fresh
           ? `/api/station/shoutouts/recent?t=${Date.now()}`
@@ -94,9 +101,14 @@ export function OnAirFeed() {
     const id = setInterval(() => fetchShouts(false), POLL_MS);
     const onEnded = () => window.setTimeout(() => fetchShouts(true), 1_000);
     window.addEventListener("numa:shoutout-ended", onEnded);
+    const onVis = () => {
+      if (document.visibilityState === "visible") fetchShouts(false);
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       clearInterval(id);
       window.removeEventListener("numa:shoutout-ended", onEnded);
+      document.removeEventListener("visibilitychange", onVis);
       ctrl.abort();
     };
   }, []);

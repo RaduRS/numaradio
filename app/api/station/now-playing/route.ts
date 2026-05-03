@@ -9,10 +9,11 @@ import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
 export const dynamic = "force-dynamic";
 
 const HEADERS = {
-  // Bumped from s-maxage=2 (2026-05-03 free-tier audit). Client-side
-  // useNowPlaying polls every 15s and computes elapsed locally from
-  // startedAt + durationSeconds — 5s of edge cushion is invisible.
-  "Cache-Control": "public, s-maxage=5, stale-while-revalidate=15",
+  // Match the client poll interval (15s) so each poll hits the edge
+  // cache and one function fire serves every visitor — including the
+  // always-on encoder Chromium tab on Orion which polls 24/7. Bumped
+  // 2→5 then 5→15 across the 2026-05-03 free-tier audit.
+  "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
   "Content-Type": "application/json",
 };
 

@@ -105,6 +105,8 @@ export function SongTab() {
   useEffect(() => {
     if (pending) return;
     const tick = async (): Promise<void> => {
+      // Skip while tab is hidden — visibility listener re-fires on focus.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
         const res = await fetch("/api/booth/song/queue-stats");
         if (!res.ok) return;
@@ -116,7 +118,14 @@ export function SongTab() {
     };
     tick();
     const id = setInterval(tick, 10_000);
-    return () => clearInterval(id);
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [pending]);
 
   // Rotate the pending message every ~4.5s while Lena's working.
@@ -142,6 +151,10 @@ export function SongTab() {
     if (!pending) return;
     let cancelled = false;
     const tick = async (): Promise<void> => {
+      // Skip while tab is hidden — visibility listener re-fires on focus.
+      // The status row is append-only on the server, so resuming with a
+      // single immediate poll catches up cleanly.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
         const res = await fetch(`/api/booth/song/${pending.requestId}/status`);
         if (res.status === 404) {
@@ -162,9 +175,14 @@ export function SongTab() {
     };
     tick();
     const id = setInterval(tick, 5_000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelled = true;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [pending]);
 

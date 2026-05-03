@@ -138,6 +138,14 @@ export function ShoutoutWall() {
     // refetches append a timestamp so they bypass the cache and see the
     // freshly-written "aired" row.
     async function poll(fresh = false) {
+      // Skip routine polls while tab is hidden; event-triggered refetches
+      // (fresh=true from numa:shoutout-ended) and visibility-resume
+      // refetches always run.
+      if (
+        !fresh &&
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      ) return;
       try {
         const url = fresh
           ? `/api/station/shoutouts/recent?t=${Date.now()}`
@@ -168,10 +176,16 @@ export function ShoutoutWall() {
     };
     window.addEventListener("numa:shoutout-ended", onShoutoutEnded);
 
+    const onVis = () => {
+      if (document.visibilityState === "visible") poll(false);
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     return () => {
       clearInterval(pollId);
       clearInterval(tickId);
       window.removeEventListener("numa:shoutout-ended", onShoutoutEnded);
+      document.removeEventListener("visibilitychange", onVis);
       ctrl.abort();
     };
   }, []);
