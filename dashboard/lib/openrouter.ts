@@ -60,12 +60,13 @@ export function extractPngBase64(resp: OpenRouterImageResponse): string | null {
  */
 export async function generateArtwork(prompt: string): Promise<Buffer> {
   const wrapped = [
-    "Wordless painterly square 1:1 illustration.",
+    "Wordless painterly square 1:1 illustration, full bleed, edge to edge.",
     "ABSOLUTELY NO TEXT — no letters, no words, no numbers, no captions, no titles, no band names, no song names, no signage, no logos, no watermarks, no typography, no calligraphy, no writing of any kind anywhere in the image.",
+    "NO BORDERS — no white frame, no black frame, no coloured matte, no margins, no album-cover-style packaging. The artwork fills the entire square canvas to all four edges.",
     "Avoid surfaces that typically carry text: no readable book covers, no license plates, no shop signs, no posters, no phone screens, no t-shirts with print, no graffiti, no street signs.",
     `Scene: ${prompt}`,
     "Cinematic, atmospheric, rich painterly brushwork.",
-    "FINAL CHECK: the rendered image must contain ZERO written language or symbols. If you start to draw any letter shape, stop and replace it with abstract texture.",
+    "FINAL CHECK: the rendered image must contain ZERO written language or symbols, and ZERO border/frame/matte. If you start to draw any letter shape, stop and replace it with abstract texture. If you start to draw a frame, extend the scene to the canvas edge instead.",
   ].join(" ");
 
   console.log(`[artwork-flux] prompt (${wrapped.length} chars): ${wrapped.slice(0, 600)}${wrapped.length > 600 ? "…" : ""}`);

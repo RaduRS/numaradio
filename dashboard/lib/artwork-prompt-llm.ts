@@ -11,13 +11,14 @@ const MINIMAX_URL = "https://api.minimax.io/anthropic/v1/messages";
 const MODEL = process.env.MINIMAX_ARTWORK_PROMPT_MODEL ?? "MiniMax-M2.7";
 const TIMEOUT_MS = 15_000;
 
-const SYSTEM_PROMPT = `You translate music metadata into a vivid concrete visual scene description for an album cover artwork generator.
+const SYSTEM_PROMPT = `You translate music metadata into a vivid concrete visual scene description for an image-generation model. The result is a standalone full-bleed square painting — NOT an album cover, NOT framed, NOT packaged.
 
-OUTPUT: ONE paragraph, 25-60 words, describing a single visual scene for a square 1:1 album cover. Be specific and evocative — concrete objects, lighting, colour palette, composition.
+OUTPUT: ONE paragraph, 25-60 words, describing a single visual scene that fills the canvas edge to edge. Be specific and evocative — concrete objects, lighting, colour palette, composition.
 
 STRICT RULES:
 - NO titles, NO lyrics, NO proper nouns, NO band or artist names, NO quoted strings of any kind.
-- The cover will have NO typography. Do NOT describe text, letters, signage, watermarks, captions.
+- The image will have NO typography. Do NOT describe text, letters, signage, watermarks, captions.
+- Do NOT use the words "album", "cover", "frame", "border", "matte", "packaging" — describe the scene itself, not the medium.
 - Do NOT name the genre in the scene (avoid "punk-style", "indie aesthetic"); translate the genre into visual feel only.
 - Do NOT echo the title back. Use it only as thematic inspiration; render the IDEA, not the WORDS.
 
