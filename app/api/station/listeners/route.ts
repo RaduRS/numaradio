@@ -21,6 +21,7 @@
 // doesn't read as a dead station.
 
 import { ambientFloor } from "@/lib/ambient-floor";
+import { fetchPublicYoutubeState } from "@/lib/youtube-public";
 
 const STATUS_URL = "https://api.numaradio.com/status-json.xsl";
 // Bumped from 5s (2026-05-03 free-tier audit). Listener count is
@@ -59,7 +60,17 @@ export async function GET() {
 
     const stream =
       list.find((s) => s.listenurl?.endsWith("/stream")) ?? list[0];
-    const listeners = Math.max(0, stream?.listeners ?? 0);
+    // While broadcasting to YouTube, the encoder pulls icecast as a
+    // media source — it counts as 1 raw listener. Subtract it so the
+    // public count reflects real audio listeners only.
+    // fetchPublicYoutubeState is in-process cached 60s — no extra
+    // YouTube API quota burn for this call.
+    const yt = await fetchPublicYoutubeState();
+    const rawListeners = Math.max(0, stream?.listeners ?? 0);
+    const listeners = Math.max(
+      0,
+      rawListeners - (yt.state === "live" ? 1 : 0),
+    );
     const floor = ambientFloor(Date.now());
 
     return Response.json(
