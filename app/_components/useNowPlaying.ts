@@ -143,7 +143,10 @@ function stopPolling() {
 
 export function useNowPlaying(): NowPlayingDerived {
   const [data, setData] = useState<NowPlaying>(cachedData);
-  const [now, setNow] = useState<number>(() => Date.now());
+  // null until mounted so SSR and first client render produce identical text.
+  // Initialising from Date.now() would make the server's wall clock
+  // disagree with the client's by ~ms-to-seconds → React error #418.
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
     subscribers.add(setData);
@@ -151,6 +154,7 @@ export function useNowPlaying(): NowPlayingDerived {
     // Sync late mounts to whatever the shared poll already has.
     setData(cachedData);
 
+    setNow(Date.now());
     const tickId = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => {
       subscribers.delete(setData);
@@ -161,7 +165,7 @@ export function useNowPlaying(): NowPlayingDerived {
 
   let elapsedSeconds = 0;
   let progress = 0;
-  if (data.startedAt && data.durationSeconds) {
+  if (now !== null && data.startedAt && data.durationSeconds) {
     const startMs = new Date(data.startedAt).getTime();
     elapsedSeconds = Math.max(0, (now - startMs) / 1000);
     if (data.durationSeconds > 0) {
