@@ -24,6 +24,129 @@ Pick up only if Vercel CPU runs hot again or these start hurting.
 
 ---
 
+## 2026-05-03 (evening) — listener-count cleanup, Resend email,
+## broadcast freshness, artwork text/border suppression
+
+Long evening session. Touched gate logic, email infra, broadcast
+encoder freshness, dashboard library, Flux prompt pipeline. ~25
+commits between `f8c5e17` and `0dabe7b`.
+
+**Listener-count cleanup — LIVE.** Spec/plan
+`docs/superpowers/{specs,plans}/2026-05-03-listener-count-cleanup*.md`.
+- Icecast: `queue-size` 524288→204800, `burst-size` 65535→32768.
+  Zombies now kicked at TCP layer in seconds, not hours.
+- 3 Vercel routes (`/api/station/listeners`, dashboard
+  `/api/station/listeners`, dashboard `/api/status`) subtract the
+  OBS encoder pull when broadcasting. Uses already-cached YT
+  snapshot — zero new API calls.
+- Daemon gate folds in YT viewers via loopback fetch to dashboard's
+  `/api/youtube/health`: `effective = icecast + (live ? viewers - 1
+  : 0)`. New `workers/queue-daemon/youtube-audience.ts` (9 tests).
+- Threshold later bumped 3 → 4 per operator preference. UI labels +
+  5 tests realigned.
+- Dashboard `/shoutouts` listener pill mirrors the gate's effective
+  math (was showing audio-only and contradicting Lena when YT
+  viewers tipped the gate over).
+
+**Broadcast encoder freshness — LIVE on Vercel; OBS Browser Source
+needs Refresh on Windows to pick up new JS.** Headless tab pollers
+(`useNowPlaying`, `useBroadcast`, `useLenaLine`) bypass the
+visibility gate AND append `?t=Date.now()` to bypass edge cache when
+`?broadcast=1`. Fixes "stuck artwork + waveform for 30s after track
+change" — visibility gate killed scheduled refetches and edge SWR
+served stale during the gap. Three breadcrumbs added near the code
+(`deploy/numa-youtube-encoder.sh` header, systemd unit Description,
+`app/live/page.tsx` comment) so future agents stop reaching for
+`systemctl restart numa-youtube-encoder` (cold fallback only since
+2026-05-01).
+
+**Resend email — LIVE.** `lib/email/{client,submission-approved,
+submission-rejected}.ts`. Wired into the public-site internal
+approve/reject routes via `after()` so the dashboard click stays
+instant. Approve template gets `🎉 + GOOD NEWS` eyebrow (single
+emoji, no exclamation marks). Reject template repurposes the
+markdown that the dashboard used to download. From/Reply-To both
+`hello@numaradio.com`. Dashboard `SubmissionsPanel` lost the
+markdown-download path; toast wording updated.
+- Backfilled approval emails for **19 prior approvals** (skipped
+  SarabiXp who'd just got a one-off "what's the title?" email).
+- Required `RESEND_API_KEY` in Vercel env (Production + Preview).
+- One-off email sent to SarabiXp (`gersongsia92@gmail.com`) asking
+  for the missing title; SimbaXp track renamed to "My Beautiful
+  Disaster" + genre "Pop Punk, Indie Rock" per their reply.
+
+**CSP — song-submit no longer violates.** Added
+`https://numaradio.s3.eu-central-003.backblazeb2.com` to the public
+`connect-src`. Browser uploads .mp3 + artwork via presigned PUT;
+without this, flipping CSP from report-only to enforce would silently
+break submissions. Dashboard CSP intentionally untouched (operators
+don't upload songs).
+
+**Submit page copy.** Post-submission card now reads "We'll listen"
+not "Lena will listen". The on-air-flavoured Lena references stay
+(she does announce + slot tracks).
+
+**Nav + hero artist surfacing.** First attempt was a teal `+ SUBMIT`
+pill in the navbar — operator rejected as too loud. Reverted.
+Replaced with two quiet touches: 5th nav-link `Submit` (same style
+as Requests/Shows) for cross-page reach, and a small mono uppercase
+"GOT A FINISHED TRACK? SUBMIT IT HERE →" line under the hero CTAs
+on `/`, mirroring the existing `/#requests` treatment.
+
+**Dashboard library.**
+- Auto-chatter threshold 3 → 4 (gate + UI + 5 tests, all green).
+- Regenerate-artwork button DISABLED for tracks where the artist
+  supplied their own art (`MusicSubmission.artworkSource` =
+  `upload` or `id3`). Surfaced via LEFT JOIN in
+  `dashboard/lib/library.ts`. Tooltip swaps to "Artist-supplied
+  artwork — regenerate disabled".
+- Hover artwork preview switched from `position: absolute` (was
+  clipped by parent `overflow: hidden`) to `position: fixed` with
+  viewport-relative coords from `getBoundingClientRect`. Auto-flips
+  to left if it would overflow right; closes on scroll/resize;
+  `z-[9999]`.
+
+**Artwork prompt pipeline rewritten.**
+- Two-stage: Minimax pre-step (`dashboard/lib/artwork-prompt-llm.ts`)
+  translates `{title, mood, genre, show, hint}` into a 25-60-word
+  visual scene with strict rules (no proper nouns, no quoted strings,
+  no genre-name mentions). Then Flux gets the scene through a much
+  more aggressive wrapper (`dashboard/lib/openrouter.ts`).
+- Flux wrapper rewritten: avoids "album cover" framing entirely
+  (was a typography trigger), front-loads + tail-loads "no text" +
+  "no borders" constraints, enumerates text-prone surfaces (signage,
+  license plates, posters, screens, t-shirts, graffiti). Verified
+  in production logs (`[artwork-regen] llm=ok`,
+  `[artwork-flux] prompt …`).
+- Minimax timeout 15s → 25s after one transient fallback. Diagnostic
+  logging added so future fallbacks reveal the failing branch.
+- Fail-soft: missing key / network error / unusable output falls
+  back to the bare mood + genre + show prompt — same as today's
+  baseline.
+
+**DB cleanups (one-off).**
+- Purged 2 test submissions (rsrusu90@gmail.com — `test`, `testtt`)
+  via the existing full-delete cascade (B2 + Track + TrackAssets +
+  QueueItem + BroadcastSegment + nulled PlayHistory.trackId).
+- SimbaXp Track + submission backfilled with title + genre.
+
+**Operator follow-ups (still need sudo on Orion):**
+1. `cd dashboard && npm run deploy` — picks up artwork pipeline,
+   threshold UI, hover preview, library regen lock, Submit nav link
+   + hero CTA (also covers earlier dashboard work today).
+2. `sudo systemctl restart numa-queue-daemon` — picks up gate
+   threshold change + YT audience fold-in.
+3. `RESEND_API_KEY` confirmed in Vercel env — verified end-to-end
+   send by operator.
+4. OBS on Windows: refresh Browser Source for the broadcast-tab
+   poller fixes to land on YouTube viewers (no encoder restart
+   needed; OBS is primary, WSL is cold fallback).
+5. Optional: when comfortable, flip both `next.config.ts` headers
+   from `Content-Security-Policy-Report-Only` → enforce. Console
+   should be clean now that B2 is allowed in `connect-src`.
+
+---
+
 ## 2026-05-03 — Vercel free-tier audit + Lena prompt sweep
 
 Hobby Fluid Active CPU hit 75% in 2.5 days. Two parallel audits →
