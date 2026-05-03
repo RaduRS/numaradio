@@ -33,9 +33,11 @@ export async function sendSubmissionApprovedEmail(
     ? `${title} (${dur}, ${args.airingPreference === "permanent" ? "permanent rotation" : "one-off play"})`
     : `${title} (${args.airingPreference === "permanent" ? "permanent rotation" : "one-off play"})`;
 
-  const subject = `Your track is on Numa Radio — ${args.artistName}`;
+  const subject = `🎉 Your track is on Numa Radio — ${args.artistName}`;
 
-  const text = `Hi ${args.artistName},
+  const text = `GOOD NEWS 🎉
+
+Hi ${args.artistName},
 
 We listened to ${trackLine} and we're adding it to the station. It'll start playing on rotation soon — could be tonight, could be later this week, depending on what's already in the queue.
 
@@ -52,6 +54,7 @@ https://numaradio.com
 
   const html = `<!doctype html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.55; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 24px;">
+  <p style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #0f7d7a; margin: 0 0 14px;">🎉 Good news</p>
   <p>Hi ${safeArtist},</p>
   <p>We listened to <strong>${safeTrack}</strong> and we're adding it to the station. It'll start playing on rotation soon — could be tonight, could be later this week, depending on what's already in the queue.</p>
   <p>Tune in at <a href="https://numaradio.com" style="color:#0f7d7a;">numaradio.com</a> — when your track airs, your name shows up on the live feed for everyone tuned in.</p>
