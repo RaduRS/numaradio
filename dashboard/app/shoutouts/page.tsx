@@ -480,9 +480,9 @@ export default function ShoutoutsPage() {
               ) : autoHost.mode === "auto" ? (
                 listenerCount === null
                   ? "Auto — currently On (listener count unavailable)"
-                  : listenerCount >= 3
+                  : listenerCount >= 4
                     ? `Auto — currently On (${listenerCount} listeners)`
-                    : `Auto — currently Off (${listenerCount} listeners, need 3+)`
+                    : `Auto — currently Off (${listenerCount} listeners, need 4+)`
               ) : autoHost.mode === "forced_on" ? (
                 `Forced On · ${formatRevertCountdown(autoHost.forcedUntil, nowTick)}`
               ) : (
@@ -551,8 +551,8 @@ export default function ShoutoutsPage() {
                 `Disabled · ${formatRevertCountdown(worldAside.forcedUntil, nowTick)} · slots fall back to filler`
               ) : autoHost?.mode === "forced_off" ? (
                 "Silent — auto-chatter is off"
-              ) : autoHost?.mode === "auto" && listenerCount !== null && listenerCount < 3 ? (
-                `Silent — auto-chatter waiting for 3+ listeners (${listenerCount} now)`
+              ) : autoHost?.mode === "auto" && listenerCount !== null && listenerCount < 4 ? (
+                `Silent — auto-chatter waiting for 4+ listeners (${listenerCount} now)`
               ) : worldAside.mode === "forced_on" ? (
                 `Forced On · ${formatRevertCountdown(worldAside.forcedUntil, nowTick)} · 3 of 20 slots become asides`
               ) : (

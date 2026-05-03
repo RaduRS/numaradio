@@ -220,10 +220,10 @@ test("forced_off skips even when listeners=50", async () => {
   assert.equal(orch.state.slotCounter, 0);
 });
 
-test("auto mode skips when listeners < 3", async () => {
+test("auto mode skips when listeners < 4", async () => {
   const { deps, pushes } = fakeDeps({
     config: async () => configFor("auto"),
-    getListenerCount: async () => 2,
+    getListenerCount: async () => 3,
   });
   const orch = new AutoHostOrchestrator(deps);
   await orch.runChatter();
@@ -231,10 +231,10 @@ test("auto mode skips when listeners < 3", async () => {
   assert.equal(orch.state.slotCounter, 0);
 });
 
-test("auto mode speaks when listeners >= 3", async () => {
+test("auto mode speaks when listeners >= 4", async () => {
   const { deps, pushes } = fakeDeps({
     config: async () => configFor("auto"),
-    getListenerCount: async () => 3,
+    getListenerCount: async () => 4,
   });
   const orch = new AutoHostOrchestrator(deps);
   await orch.runChatter();
@@ -263,7 +263,7 @@ test("expired forced_on lazy-reverts then re-evaluates in auto (skips on low lis
   assert.equal(pushes.length, 0); // reverted to auto, listeners=0, skip
 });
 
-test("expired forced_off lazy-reverts and then speaks when listeners>=3", async () => {
+test("expired forced_off lazy-reverts and then speaks when listeners>=4", async () => {
   const { deps, pushes, reverts } = fakeDeps({
     config: async () => configFor("forced_off", "2000-01-01T00:00:00Z"),
     getListenerCount: async () => 10,
@@ -763,7 +763,7 @@ test("world_aside slot: expired forced state is reverted then call proceeds", as
 
 // ─── YouTube audience fold-in ───────────────────────────────────────────
 
-test("auto + yt live: subtracts encoder, adds viewers, speaks when total >= 3", async () => {
+test("auto + yt live: subtracts encoder, adds viewers, speaks when total >= 4", async () => {
   // icecast=2 (1 real + 1 OBS), yt=live, viewers=5 → effective = 2+5-1 = 6 → speak
   const { deps, pushes } = fakeDeps({
     config: async () => configFor("auto"),
@@ -799,11 +799,11 @@ test("auto + yt off: ignores YT entirely, uses raw icecast (skips at 2)", async 
   assert.equal(pushes.length, 0);
 });
 
-test("auto + yt fetch failed (null): falls back to raw icecast (speaks at 3)", async () => {
-  // icecast=3, yt=null → effective = 3 + 0 - 0 = 3 → speak (today's behaviour)
+test("auto + yt fetch failed (null): falls back to raw icecast (speaks at 4)", async () => {
+  // icecast=4, yt=null → effective = 4 + 0 - 0 = 4 → speak (>= threshold 4)
   const { deps, pushes } = fakeDeps({
     config: async () => configFor("auto"),
-    getListenerCount: async () => 3,
+    getListenerCount: async () => 4,
     getYoutubeAudience: async () => null,
   });
   const orch = new AutoHostOrchestrator(deps);

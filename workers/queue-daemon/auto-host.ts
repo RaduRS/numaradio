@@ -301,7 +301,7 @@ export class AutoHostOrchestrator {
         const effective =
           icecast +
           (liveBroadcast ? (audience?.viewers ?? 0) - 1 : 0);
-        if (effective < 3) {
+        if (effective < 4) {
           this.state.markFailure();
           return;
         }
