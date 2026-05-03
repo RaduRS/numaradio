@@ -168,21 +168,22 @@ export function RequestForm({
         error?: string;
         shoutoutId?: string;
       };
-      if (res.ok && data.ok && data.status === "queued") {
-        setStatusTone("success");
-        setStatusMessage(data.message ?? "Got it. It's on its way to air.");
-        setSendLabel("✓ Sent");
-        setFormKey((k) => k + 1);
-        setRecoveryMessage(null);
-        if (data.shoutoutId) writeShoutoutStash(data.shoutoutId);
-      } else if (res.ok && data.status === "held") {
+      if (res.ok && data.ok && data.status === "moderating" && data.shoutoutId) {
+        // The submit route returns 200 immediately; moderation runs in
+        // after() so we don't burn Vercel CPU waiting on MiniMax. Show
+        // a "checking…" pending state, then poll for the terminal
+        // outcome (queued/held/blocked/failed) over the next few
+        // seconds. Stash the id so a focus-time recovery on a later
+        // visit can also catch silent failures.
         setStatusTone("pending");
         setStatusMessage(
-          data.message ?? "Got it. A moderator's giving it a quick look.",
+          data.message ?? "Got it. Just giving it a quick look…",
         );
-        setSendLabel("✓ Received");
+        setSendLabel("Reviewing…");
         setFormKey((k) => k + 1);
         setRecoveryMessage(null);
+        writeShoutoutStash(data.shoutoutId);
+        await pollModerationOutcome(data.shoutoutId);
       } else if (data.status === "blocked") {
         setStatusTone("error");
         setStatusMessage(data.message ?? "That one can't go on air.");
@@ -202,6 +203,71 @@ export function RequestForm({
         setSendLabel((label) => (label.startsWith("✓") ? "Send another" : label));
       }, 2_000);
     }
+  }
+
+  // Poll /status until moderation lands on a terminal state, then update
+  // the spinner copy. Bounded — gives up after MAX_TRIES so a stuck
+  // pipeline can't leave the spinner spinning forever; the focus-time
+  // recovery on a later visit is the safety net.
+  async function pollModerationOutcome(shoutoutId: string): Promise<void> {
+    const MAX_TRIES = 20; // 20 × ~1s ≈ 20s budget
+    const FIRST_DELAY_MS = 600;
+    const STEP_MS = 1_000;
+    for (let i = 0; i < MAX_TRIES; i++) {
+      await new Promise((r) => setTimeout(r, i === 0 ? FIRST_DELAY_MS : STEP_MS));
+      let res: Response;
+      try {
+        res = await fetch(`/api/booth/shoutout/${shoutoutId}/status`, {
+          cache: "no-store",
+        });
+      } catch {
+        continue; // network blip — try again
+      }
+      if (!res.ok) continue;
+      const json = (await res.json().catch(() => null)) as
+        | { ok?: boolean; status?: string }
+        | null;
+      if (!json?.ok) continue;
+      const s = json.status;
+      // "moderating" = still running. Any other state is terminal-ish.
+      if (s === "moderating") continue;
+      if (s === "pending" || s === "aired") {
+        setStatusTone("success");
+        setStatusMessage("Got it. It's on its way to air.");
+        setSendLabel("✓ Sent");
+        return;
+      }
+      if (s === "held") {
+        setStatusTone("pending");
+        setStatusMessage("Got it. A moderator's giving it a quick look.");
+        setSendLabel("✓ Received");
+        return;
+      }
+      if (s === "blocked") {
+        setStatusTone("error");
+        setStatusMessage("That one can't go on air.");
+        setSendLabel("Send to the booth");
+        clearShoutoutStash();
+        return;
+      }
+      if (s === "failed") {
+        setStatusTone("error");
+        setStatusMessage(
+          "Couldn't send that one — try again in a minute.",
+        );
+        setSendLabel("Send to the booth");
+        clearShoutoutStash();
+        return;
+      }
+    }
+    // Timed out — show a soft "we're checking" so the user isn't stuck
+    // staring at a spinner. The focus-time recovery in the useEffect
+    // above will catch the final state on next visit.
+    setStatusTone("pending");
+    setStatusMessage(
+      "Still working on that — we'll catch up next time you visit.",
+    );
+    setSendLabel("✓ Sent");
   }
 
   return (

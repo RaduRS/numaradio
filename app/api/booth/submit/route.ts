@@ -26,9 +26,11 @@ const INTERNAL_SHOUTOUT_URL =
   "https://api.numaradio.com/api/internal/shoutout";
 
 function publicMessageFor(
-  status: "queued" | "held" | "blocked" | "failed",
+  status: "moderating" | "queued" | "held" | "blocked" | "failed",
 ): string {
   switch (status) {
+    case "moderating":
+      return "Got it. Just giving it a quick look…";
     case "queued":
       return "Got it. It's on its way to air.";
     case "held":
@@ -104,7 +106,69 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const moderation = await moderateShoutout(rawText);
+  // Create the row in "moderating" state and return immediately. The
+  // listener sees a snappy "submitted" within ~200ms; their browser
+  // polls /api/booth/shoutout/[id]/status to learn the outcome a couple
+  // seconds later. Moderation + dispatch run in after() so the request
+  // doesn't burn Vercel Active CPU waiting on MiniMax (was 2-15s of
+  // billable wait per submit). (Moved from synchronous on 2026-05-03.)
+  const shoutout = await prisma.shoutout.create({
+    data: {
+      stationId: station.id,
+      rawText,
+      requesterName,
+      ipHash,
+      // moderationStatus defaults to "pending" via the Prisma enum.
+      deliveryStatus: "moderating",
+    },
+    select: { id: true },
+  });
+
+  const secret = process.env.INTERNAL_API_SECRET;
+  after(() => runModerationPipeline({
+    shoutoutId: shoutout.id,
+    rawText,
+    requesterName,
+    secret,
+  }));
+
+  return NextResponse.json({
+    ok: true,
+    status: "moderating",
+    message: publicMessageFor("moderating"),
+    shoutoutId: shoutout.id,
+  });
+}
+
+// Background pipeline: runs moderation, updates the Shoutout row, then
+// either notifies the held queue, dispatches to internal/shoutout, or
+// marks the row failed. Errors are caught + persisted so the listener's
+// /status poll always lands on a terminal state.
+async function runModerationPipeline(args: {
+  shoutoutId: string;
+  rawText: string;
+  requesterName: string | null;
+  secret: string | undefined;
+}): Promise<void> {
+  const { shoutoutId, rawText, requesterName, secret } = args;
+  let moderation: Awaited<ReturnType<typeof moderateShoutout>>;
+  try {
+    moderation = await moderateShoutout(rawText);
+  } catch (e) {
+    await prisma.shoutout
+      .update({
+        where: { id: shoutoutId },
+        data: { deliveryStatus: "failed", moderationReason: "moderation_threw" },
+      })
+      .catch(() => {});
+    console.warn(
+      `booth-submit: moderation threw for ${shoutoutId}: ${
+        e instanceof Error ? e.message : "unknown"
+      }`,
+    );
+    return;
+  }
+
   const moderationDb = {
     allowed: "allowed" as const,
     rewritten: "rewritten" as const,
@@ -112,167 +176,134 @@ export async function POST(req: Request): Promise<NextResponse> {
     blocked: "blocked" as const,
   }[moderation.decision];
 
-  const initialDelivery =
-    moderation.decision === "allowed" || moderation.decision === "rewritten"
-      ? "pending"
-      : moderation.decision === "held"
-        ? "held"
-        : "blocked";
-
-  const shoutout = await prisma.shoutout.create({
-    data: {
-      stationId: station.id,
-      rawText,
-      cleanText: moderation.decision === "rewritten" ? moderation.text : null,
-      requesterName,
-      ipHash,
-      moderationStatus: moderationDb,
-      moderationReason: moderation.reason,
-      deliveryStatus: initialDelivery,
-    },
-    select: { id: true },
-  });
-
   if (moderation.decision === "blocked") {
-    return NextResponse.json({
-      ok: false,
-      status: "blocked",
-      message: publicMessageFor("blocked"),
-      reason: moderation.reason,
-      shoutoutId: shoutout.id,
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: {
+        moderationStatus: moderationDb,
+        moderationReason: moderation.reason,
+        deliveryStatus: "blocked",
+      },
     });
+    return;
   }
+
   if (moderation.decision === "held") {
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: {
+        moderationStatus: moderationDb,
+        moderationReason: moderation.reason,
+        deliveryStatus: "held",
+      },
+    });
     const notifyUrl =
       process.env.INTERNAL_HELD_NOTIFY_URL ??
       "https://api.numaradio.com/api/internal/shoutouts/held-notify";
-    const secret = process.env.INTERNAL_API_SECRET;
-    if (secret) {
-      after(async () => {
-        try {
-          const res = await fetch(notifyUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-internal-secret": secret,
-            },
-            body: JSON.stringify({
-              id: shoutout.id,
-              rawText,
-              cleanText: undefined,
-              requesterName: requesterName ?? undefined,
-              moderationReason: moderation.reason ?? undefined,
-            }),
-          });
-          if (!res.ok) {
-            console.warn(
-              `booth-submit: held-notify returned ${res.status} for ${shoutout.id}`,
-            );
-          }
-        } catch (e) {
-          console.warn(
-            `booth-submit: held-notify fetch failed for ${shoutout.id}: ${
-              e instanceof Error ? e.message : "unknown"
-            }`,
-          );
-        }
-      });
-    } else {
+    if (!secret) {
       console.warn(
-        `booth-submit: INTERNAL_API_SECRET missing; skipping held-notify for ${shoutout.id}`,
+        `booth-submit: INTERNAL_API_SECRET missing; skipping held-notify for ${shoutoutId}`,
       );
+      return;
     }
-
-    return NextResponse.json({
-      ok: true,
-      status: "held",
-      message: publicMessageFor("held"),
-      shoutoutId: shoutout.id,
-    });
-  }
-
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
-    await prisma.shoutout.update({
-      where: { id: shoutout.id },
-      data: { deliveryStatus: "failed", moderationReason: "internal_secret_missing" },
-    });
-    return NextResponse.json(
-      {
-        ok: false,
-        status: "failed",
-        message: publicMessageFor("failed"),
-        shoutoutId: shoutout.id,
-      },
-      { status: 500 },
-    );
-  }
-
-  // Optimistic: hand the user a confirmation right away. The dashboard's
-  // internal shoutout route runs the radio-host rewrite + Deepgram TTS +
-  // B2 upload + queue push, and marks `Shoutout.deliveryStatus` `aired` or
-  // `failed` when it's done. The client stashes `shoutoutId` and pings
-  // /api/booth/shoutout/[id]/status on next focus to catch the rare silent
-  // failure.
-  const moderatedText = moderation.text;
-  const requesterForForward = requesterName ?? undefined;
-  after(async () => {
     try {
-      const internalRes = await fetch(INTERNAL_SHOUTOUT_URL, {
+      const res = await fetch(notifyUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-internal-secret": secret,
         },
         body: JSON.stringify({
-          shoutoutRowId: shoutout.id,
-          text: moderatedText,
-          requesterName: requesterForForward,
+          id: shoutoutId,
+          rawText,
+          cleanText: undefined,
+          requesterName: requesterName ?? undefined,
+          moderationReason: moderation.reason ?? undefined,
         }),
       });
-      if (!internalRes.ok) {
-        const detail = await internalRes.text().catch(() => "");
-        await prisma.shoutout.update({
-          where: { id: shoutout.id },
-          data: {
-            deliveryStatus: "failed",
-            moderationReason: `http_${internalRes.status}: ${detail.slice(0, 160)}`,
-          },
-        });
+      if (!res.ok) {
         console.warn(
-          `booth-submit: internal forward returned ${internalRes.status} for ${shoutout.id}`,
+          `booth-submit: held-notify returned ${res.status} for ${shoutoutId}`,
         );
       }
-      // On success, the dashboard internal route has already marked
-      // deliveryStatus='aired' as part of its queue-push transaction.
     } catch (e) {
-      // Persist a CONTROLLED reason — not e.message — so a future
-      // change that puts auth headers or PII into the error message
-      // can't leak into the dashboard's Recent feed via
-      // moderationReason. Full message still goes to journald.
-      const reason =
-        e instanceof Error && e.name === "TimeoutError"
-          ? "internal_forward_timeout"
-          : "internal_forward_network";
-      await prisma.shoutout.update({
-        where: { id: shoutout.id },
-        data: {
-          deliveryStatus: "failed",
-          moderationReason: reason,
-        },
-      });
       console.warn(
-        `booth-submit: internal forward fetch failed for ${shoutout.id} (${reason}): ${
+        `booth-submit: held-notify fetch failed for ${shoutoutId}: ${
           e instanceof Error ? e.message : "unknown"
         }`,
       );
     }
+    return;
+  }
+
+  // allowed | rewritten — set moderation result + flip to "pending"
+  // (= "queued for air"), then dispatch downstream.
+  await prisma.shoutout.update({
+    where: { id: shoutoutId },
+    data: {
+      moderationStatus: moderationDb,
+      moderationReason: moderation.reason,
+      cleanText: moderation.decision === "rewritten" ? moderation.text : null,
+      deliveryStatus: "pending",
+    },
   });
 
-  return NextResponse.json({
-    ok: true,
-    status: "queued",
-    message: publicMessageFor("queued"),
-    shoutoutId: shoutout.id,
-  });
+  if (!secret) {
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: { deliveryStatus: "failed", moderationReason: "internal_secret_missing" },
+    });
+    return;
+  }
+
+  // Dispatch to the dashboard internal route — it runs the radio-host
+  // rewrite + Deepgram TTS + B2 upload + queue push, and marks the row
+  // `aired` or `failed` when it's done.
+  try {
+    const internalRes = await fetch(INTERNAL_SHOUTOUT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": secret,
+      },
+      body: JSON.stringify({
+        shoutoutRowId: shoutoutId,
+        text: moderation.text,
+        requesterName: requesterName ?? undefined,
+      }),
+    });
+    if (!internalRes.ok) {
+      const detail = await internalRes.text().catch(() => "");
+      await prisma.shoutout.update({
+        where: { id: shoutoutId },
+        data: {
+          deliveryStatus: "failed",
+          moderationReason: `http_${internalRes.status}: ${detail.slice(0, 160)}`,
+        },
+      });
+      console.warn(
+        `booth-submit: internal forward returned ${internalRes.status} for ${shoutoutId}`,
+      );
+    }
+  } catch (e) {
+    // Persist a CONTROLLED reason — not e.message — so a future change
+    // that puts auth headers or PII into the error message can't leak
+    // into the dashboard's Recent feed via moderationReason.
+    const reason =
+      e instanceof Error && e.name === "TimeoutError"
+        ? "internal_forward_timeout"
+        : "internal_forward_network";
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: {
+        deliveryStatus: "failed",
+        moderationReason: reason,
+      },
+    });
+    console.warn(
+      `booth-submit: internal forward fetch failed for ${shoutoutId} (${reason}): ${
+        e instanceof Error ? e.message : "unknown"
+      }`,
+    );
+  }
 }

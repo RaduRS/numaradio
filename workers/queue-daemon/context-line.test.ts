@@ -120,11 +120,23 @@ test("validateContextLine: empty rejected", () => {
   assert.equal(r.ok, false);
 });
 
-test("validateContextLine: too-long rejected", () => {
-  const long = "a".repeat(201);
+test("validateContextLine: too-long rejected (>250)", () => {
+  const long = "a".repeat(251);
   const r = validateContextLine(long, baseState);
   assert.equal(r.ok, false);
   if (!r.ok) assert.match(r.reason, /^length_/);
+});
+
+test("validateContextLine: 240-char near-miss accepted (was rejected at 200)", () => {
+  // Models routinely run a few words over a tight cap. The dashboard's
+  // On-Air Log was full of length_206/208/211 misses. Cap raised to 250
+  // so these ship instead of falling through to pool tier.
+  const nearMiss = "x".repeat(240);
+  const r = validateContextLine(nearMiss, baseState);
+  // 240 chars passes the length check; some other validator may still
+  // catch it (e.g. no letters). Specifically check the length reason
+  // didn't fire.
+  if (!r.ok) assert.doesNotMatch(r.reason, /^length_/);
 });
 
 test("validateContextLine: banned phrase rejected", () => {

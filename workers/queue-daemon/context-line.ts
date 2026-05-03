@@ -208,7 +208,11 @@ export function validateNumericalClaims(line: string, state: StationState): Vali
 
 export function validateContextLine(line: string, state: StationState): ValidationResult {
   const trimmed = line.trim();
-  if (trimmed.length < 1 || trimmed.length > 200) {
+  // 250 char cap (was 200) — operator log was full of length_206/208/211
+  // misses where the model went a few words over. Pool quotes top out
+  // around 240; keeping the validator at 250 lets near-misses ship while
+  // still guarding against a 1000-char essay. (2026-05-03)
+  if (trimmed.length < 1 || trimmed.length > 250) {
     return { ok: false, reason: `length_${trimmed.length}` };
   }
   if (!/[a-z]/i.test(trimmed)) {
@@ -245,7 +249,7 @@ CRITICAL — VARIETY:
 You'll see "recentLines" in the JSON: the last few asides Lena has already delivered. DO NOT pick the same angle as any of them. If recent lines all reference the track count, pick a different metric (votes, song requests, top genre) OR drop the metric entirely and make an atmospheric observation about the show or the wall. Never start two consecutive lines with the same word or the same metric.
 
 YOUR LINE MUST:
-- Be 1–2 sentences, max 200 characters
+- Be 1–2 sentences, max 250 characters (aim for under 200; the cap is a safety net, not a target)
 - Stay in Lena's voice (calm, dry, AI-aware-but-not-preachy, warm toward listeners)
 - If you reference a number, it MUST match a fact in the JSON exactly. If you say "three of you", the state must show 3. If the state shows 0 of something, do NOT claim activity for it.
 - It is FINE — often better — to make an observation that uses NO numbers at all. Vibe lines, show-mood lines, gentle invitations, observations about the rotation's tempo or genre, all work.

@@ -25,7 +25,10 @@ export async function GET(
 
   const row = await prisma.shoutout.findUnique({
     where: { id },
-    select: { deliveryStatus: true },
+    select: {
+      deliveryStatus: true,
+      moderationStatus: true,
+    },
   });
 
   if (!row) {
@@ -36,7 +39,14 @@ export async function GET(
   }
 
   return NextResponse.json(
-    { ok: true, status: row.deliveryStatus },
+    {
+      ok: true,
+      status: row.deliveryStatus,
+      // Echoed for the booth's spinner so it can distinguish "still
+      // moderating" from "moderated, now airing" without adding a
+      // separate state to deliveryStatus.
+      moderationStatus: row.moderationStatus,
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
