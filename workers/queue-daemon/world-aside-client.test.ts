@@ -109,6 +109,20 @@ test("buildPrompt system prompt has Lena identity + Celsius + staleness rules", 
   assert.match(p.system, /already happened|past tense|stale/i);
 });
 
+test("buildPrompt surfaces local time + bucket so sign-offs match the clock", () => {
+  // Repro of same class of bug as 2026-05-03 humanize/lena-reply leak.
+  // Pre-fix, the world-aside prompt gave the calendar date but no
+  // wall-clock — examples like "Take care of each other tonight" could
+  // fire at 9am as a sign-off independent of event timing.
+  const at10am = new Date(2026, 4, 3, 10, 0, 0); // 2026-05-03 10:00 local
+  const p = buildPrompt({ show: "X", briefing: "y", results: [], now: at10am });
+  assert.match(p.user, /Local time: 10:00 \(morning\)/);
+  // The system prompt must call out wrong-bucket sign-offs (e.g.
+  // "tonight" at 10am morning).
+  assert.match(p.system, /morning[\s\S]*tonight[\s\S]*BANNED/i);
+  assert.match(p.system, /sign-off/i);
+});
+
 // ─── validateLine ───────────────────────────────────────────────────
 
 test("validateLine accepts a clean Lena line", () => {

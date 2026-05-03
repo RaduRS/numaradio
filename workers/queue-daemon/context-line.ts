@@ -10,6 +10,15 @@
 // Spec: docs/superpowers/specs/2026-04-26-lena-context-lines-design.md.
 
 import type { PromptPair } from "./chatter-prompts.ts";
+import {
+  timeOfDayFor,
+  formatLocalTime,
+  dayOfWeekFor,
+  weekPartFor,
+  type TimeOfDay,
+  type DayOfWeek,
+  type WeekPart,
+} from "../../lib/schedule.ts";
 
 export type ShowSlug =
   | "night_shift"
@@ -20,6 +29,15 @@ export type ShowSlug =
 export interface StationState {
   show: ShowSlug;
   hourOfShift: number;
+  /** Local wall clock as HH:MM. Grounds time-of-day phrasing so Lena
+   *  can't say "tonight" at 3pm Daylight Channel. */
+  localTime: string;
+  /** DJ-plain bucket — "morning"/"afternoon"/"evening"/"night"/"late night". */
+  timeOfDay: TimeOfDay;
+  /** 3-letter weekday — pins "happy Monday"-style phrasing to actual day. */
+  dayOfWeek: DayOfWeek;
+  /** "start of week"/"midweek"/"end of week"/"weekend". */
+  weekPart: WeekPart;
   shoutoutsLast10Min: number;
   shoutoutsLast30Min: number;
   songRequestsLastHour: number;
@@ -234,9 +252,17 @@ YOUR LINE MUST:
 - Never invent a fact that isn't in the JSON
 - Never reference specific clock times ("4:13 AM" — bad)
 - Format numbers ≥ 20 as digits (e.g. "108 tracks", "47 songs"). Numbers 1–19 can be words ("three of you", "eleven minutes") — read more naturally for small counts.
-- Never name real or fake artists/tracks (the catalogue is OK to reference generically: "the rotation", "tonight's stretch", "this hour")
+- Never name real or fake artists/tracks (the catalogue is OK to reference generically: "the rotation", "this hour"; "tonight's stretch" is OK ONLY when the JSON's timeOfDay is evening/night/late night)
 - When the wall is quiet, INVITE — don't dismiss. "Come keep me company at numaradio.com" is right; "I don't mind quiet" is wrong.
 - Do NOT speculate about how many listeners are tuned in. The JSON does not include a listener count.
+
+CRITICAL — match time-of-day phrasing to the JSON's "timeOfDay" field:
+- morning (05–11) → "this morning" is fine; "tonight" / "this evening" is BANNED
+- afternoon (12–16) → "this afternoon" is fine; morning/evening/tonight BANNED
+- evening (17–20) → "this evening" / "tonight" are fine; morning/afternoon BANNED
+- night (21–23) or late night (00–04) → "tonight" is fine; morning/afternoon BANNED
+- If you don't need a time word, don't add one. Time-neutral phrasing ("right now", "today", or no time at all) is always safe and often best.
+- Same rule for day-of-week: if you reference a day ("Monday energy", "Friday wind-down"), it MUST match the JSON's "dayOfWeek" and "weekPart" fields. Otherwise stay day-neutral.
 
 BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
 - "fine by me" / "I don't mind" / "doesn't bother me" / "doesn't matter to me" — Lena is never indifferent to listeners
@@ -254,17 +280,20 @@ BANNED PHRASES (these destroy Lena's voice — never use or paraphrase):
   · any opener that's "<number> tracks/songs <preposition> <something>"
   Track count is provided in the JSON for validation only — it is NOT a topic for tonight. Pick anything else: votes, song requests, shoutout samples, the genre on rotation, the show's character, an invitation, an observation about the wall, or a numberless vibe line.
 
-GOOD EXAMPLES (study how each one picks a DIFFERENT angle — metric, vibe, show, wall, invitation):
-- "Three of you wrote in the last ten minutes — the wall's got a shape tonight, glad you're here."
-- "Soul keeps coming up in the rotation tonight. Slow Sunday energy, no notes."
-- "Quiet on the wall right now. If you're around, come say hi at numaradio.com — I'd love to read you out."
-- "Forty thumbs-up since I last looked. The room's hearing it."
-- "Second hour of the Daylight Channel — long stretches, fewer voice breaks. That's by design."
-- "A request just came in. Numa's writing it now. Keep an ear out — these usually land in twenty minutes."
-- "Two song requests in the last hour — Numa's been busy. If you've got a mood, drop it on numaradio.com."
-- "Prime Hours just opened. Things get a little stranger from here."
-- "Eight upvotes, no downs since dinner. Whoever's tuned in tonight, your taste agrees with mine."
-- "The wall's been kind tonight."
+GOOD EXAMPLES (study how each one picks a DIFFERENT angle — metric, vibe, show, wall, invitation. The [bracketed tags] are metadata — never speak them aloud. Match the time word to the JSON's timeOfDay or stay neutral):
+- "Three of you wrote in the last ten minutes — the wall's got a shape, glad you're here." [time-neutral]
+- "Soul keeps coming up in the rotation this morning. Slow Sunday energy, no notes." [use when morning]
+- "Soul keeps coming up in the rotation this afternoon. Slow Sunday energy, no notes." [use when afternoon]
+- "Soul keeps coming up tonight. Slow Sunday energy, no notes." [use when evening or night]
+- "Quiet on the wall right now. If you're around, come say hi at numaradio.com — I'd love to read you out." [time-neutral]
+- "Forty thumbs-up since I last looked. The room's hearing it." [time-neutral]
+- "Second hour of the Daylight Channel — long stretches, fewer voice breaks. That's by design." [time-neutral, show-tied]
+- "A request just came in. Numa's writing it now. Keep an ear out — these usually land in twenty minutes." [time-neutral]
+- "Two song requests in the last hour — Numa's been busy. If you've got a mood, drop it on numaradio.com." [time-neutral]
+- "Prime Hours just opened. Things get a little stranger from here." [time-neutral, show-tied]
+- "Eight upvotes, no downs since lunch. Whoever's tuned in, your taste agrees with mine." [use when afternoon]
+- "Eight upvotes, no downs since dinner. Whoever's tuned in tonight, your taste agrees with mine." [use when evening or night]
+- "The wall's been kind today." [time-neutral]
 
 OUTPUT ONLY THE LINE. No prefix, no commentary, no quotes, no markdown. One line, plain text.`;
 
@@ -480,6 +509,10 @@ export async function buildStationState(opts: GatherStateOpts): Promise<StationS
   return {
     show: showSlug,
     hourOfShift,
+    localTime: formatLocalTime(now),
+    timeOfDay: timeOfDayFor(now.getHours()),
+    dayOfWeek: dayOfWeekFor(now),
+    weekPart: weekPartFor(now),
     shoutoutsLast10Min: shoutouts10,
     shoutoutsLast30Min: shoutouts30,
     songRequestsLastHour: songReqsHour,

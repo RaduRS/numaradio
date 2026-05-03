@@ -15,6 +15,10 @@ import {
 const baseState: StationState = {
   show: "night_shift",
   hourOfShift: 2,
+  localTime: "02:30",
+  timeOfDay: "late night",
+  dayOfWeek: "Sat",
+  weekPart: "weekend",
   shoutoutsLast10Min: 3,
   shoutoutsLast30Min: 7,
   songRequestsLastHour: 1,
@@ -195,6 +199,23 @@ test("buildPrompt: includes numeric state fields", () => {
 test("buildPrompt: includes show label", () => {
   const prompts = buildPrompt({ ...baseState, show: "prime_hours" });
   assert.ok(prompts.user.includes("Prime Hours"));
+});
+
+test("buildPrompt: surfaces local time + bucket so Lena can ground time-of-day phrasing", () => {
+  // Repro of the same class of bug as the 2026-05-03 humanize/lena-reply
+  // "tonight at 10am" leak — context_line had no wall-clock signal AND
+  // examples skewed to "tonight". Without this, the model could call
+  // 3pm Daylight Channel "tonight" by pattern-matching its few-shots.
+  const prompts = buildPrompt({
+    ...baseState,
+    localTime: "10:30",
+    timeOfDay: "morning",
+    dayOfWeek: "Tue",
+    weekPart: "midweek",
+  });
+  assert.ok(prompts.user.includes('"localTime": "10:30"'));
+  assert.ok(prompts.user.includes('"timeOfDay": "morning"'));
+  assert.match(prompts.system, /morning[\s\S]*tonight[\s\S]*BANNED/i);
 });
 
 // ─── showForHour / shiftStart ───────────────────────────────────────

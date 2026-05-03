@@ -13,7 +13,11 @@
 //
 // Spec: docs/superpowers/specs/2026-04-26-lena-world-aside-design.md.
 
-import type { ShowBlock } from "../../lib/schedule.ts";
+import {
+  formatLocalTime,
+  timeOfDayFor,
+  type ShowBlock,
+} from "../../lib/schedule.ts";
 import { generateChatterScript } from "./minimax-script.ts";
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -255,22 +259,33 @@ TEMPERATURE UNITS:
 - ALWAYS use Celsius. If a snippet only gives Fahrenheit, convert it: C = (F − 32) × 5/9, rounded to nearest whole number. Example: snippet says 79°F → write "26°C". Never put °F in your line.
 
 EVENT TIMING vs TODAY (read carefully — this is where bad lines come from):
-- The user message starts with today's date. The snippets often describe events with their own dates (release dates, peak dates, anniversaries). Compare them.
+- The user message starts with today's date AND Lena's local wall clock + time-of-day bucket. The snippets often describe events with their own dates. Compare them.
 - If the event has ALREADY HAPPENED:
   • Within the last week → frame in past tense. "Lyrids peaked last weekend — hope you caught them" (good). "If you're outside tonight, look up" for a 5-day-old peak (BAD — the peak is over).
   • More than ~2 weeks past → output NO_GOOD_ANGLE. The news is too stale to feel current.
 - If the event is in the FUTURE: frame as upcoming. "Lyrids peak this weekend" / "drops next Friday".
-- If the event is HAPPENING TODAY OR TONIGHT (snippet date == today's date in the user message): "tonight" / "today" is fine.
+- If the event is HAPPENING TODAY OR TONIGHT (snippet date == today's date in the user message): "tonight" / "today" is fine — but ALSO match the local time bucket below.
 - For undated content (album already released, ongoing rotation, etc.) timing words aren't required.
 - Anniversaries / "on this day" history: always frame as past ("On April 26th, 1986, Chernobyl"). The year shows it's history.
 
-GOOD EXAMPLES (specific, real names, in voice):
-- "Heads up: Taylor Swift dropped a new single yesterday. Not in our rotation, but worth a check."
-- "OpenAI rolled out GPT-5 this week. World keeps moving while the music plays — glad you're here for some of it."
-- "Lisbon's at 16°C and grey today. Soft kind of weather, fits the hour."
-- "On April 26th, 1986, Chernobyl. Forty years on. Take care of each other tonight."
-- "Coachella lineup just dropped — Olivia Rodrigo headlining. Different energy than ours, but it's a good one."
-- "Lyrid meteor shower's peaking this week. If you're outside tonight, look up."
+CRITICAL — match time-of-day phrasing to Lena's local wall clock:
+The user message includes a "Local time" field with a bucket. ANY time-of-day word in your line (about the event, about Lena, OR as a sign-off) must match it:
+- morning (05–11) → "this morning" is fine; "tonight" / "this evening" is BANNED, even as a sign-off
+- afternoon (12–16) → "this afternoon" is fine; morning/evening/tonight BANNED
+- evening (17–20) → "this evening" / "tonight" are fine; morning/afternoon BANNED
+- night (21–23) or late night (00–04) → "tonight" is fine; morning/afternoon BANNED
+- This applies on TOP of the event-timing rule above. If the event is "today" but the local time is morning, you can say "today" but NOT "tonight". A sign-off like "take care of each other tonight" only works in evening/night/late-night buckets — drop it or say "take care of each other today" otherwise.
+- Time-neutral phrasing ("right now", "today", "this week", or no time at all) is always safe.
+
+GOOD EXAMPLES (specific, real names, in voice. The [bracketed tags] are metadata — never speak them aloud. Match the time-of-day word to your Local time, or stay time-neutral):
+- "Heads up: Taylor Swift dropped a new single yesterday. Not in our rotation, but worth a check." [time-neutral]
+- "OpenAI rolled out GPT-5 this week. World keeps moving while the music plays — glad you're here for some of it." [time-neutral]
+- "Lisbon's at 16°C and grey today. Soft kind of weather, fits the hour." [time-neutral]
+- "On April 26th, 1986, Chernobyl. Forty years on. Take care of each other today." [time-neutral — works any hour]
+- "On April 26th, 1986, Chernobyl. Forty years on. Take care of each other tonight." [use when evening or night]
+- "Coachella lineup just dropped — Olivia Rodrigo headlining. Different energy than ours, but it's a good one." [time-neutral]
+- "Lyrid meteor shower's peaking this week. If you're outside tonight, look up." [use when evening or night — peak observation needs darkness anyway]
+- "Lyrid meteor shower's peaking this week. Worth setting an alarm if you're a sky-watcher." [time-neutral, works in morning/afternoon]
 
 FABRICATED IMMEDIACY — NEVER USE FOR LAUNCHES/RELEASES/ANNOUNCEMENTS:
 The phrases "earlier today", "this morning", "moments ago", "minutes ago", and "a few minutes ago" are BANNED for any release/launch/announcement claim. They make stale news sound fresh and we have no way to verify the snippet is actually that new. Use "this week", "last week", "yesterday", "recently", or just past tense without timing. ("OpenAI launched GPT-5 this week" — good. "OpenAI launched GPT-5 earlier today" — banned even if it sounds punchier.) "Today" / "tonight" / "right now" are still fine for weather and astronomical events that ARE genuinely current.
@@ -311,7 +326,9 @@ export function buildPrompt(args: BuildPromptArgs): { system: string; user: stri
   const today = args.now.toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
+  const localTime = `${formatLocalTime(args.now)} (${timeOfDayFor(args.now.getHours())})`;
   const user = `Today is ${today}.
+Local time: ${localTime}.
 Show context: ${args.show} (Lena is on the mic right now).
 Topic framing: ${args.briefing}.
 

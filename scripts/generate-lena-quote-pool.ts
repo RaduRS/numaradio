@@ -274,11 +274,16 @@ function parseBatch(raw: string): BatchResult {
   return { quotes, rawLength: raw.length };
 }
 
-// Catch banned-phrase leakage that slips past the prompt. Two categories:
+// Catch banned-phrase leakage that slips past the prompt. Categories:
 //   1. Therapy/wellness-speak (Lena is a DJ, not a life coach)
 //   2. Human-physical events Lena cannot witness (she has no body / no booth)
 //   3. AI-meta breaks ("as an AI", "as a language model")
-const BANNED_REGEX = /(you'?ve? got this|you'?re doing (well|fine|it)|keep going|just keep going|almost there|one foot in front|let it rest|let it sit|let it go|no one'?s (watching|checking|caring|cares)|you can do (it|this)|you found (your way|the frequency)|we'?re all (in this|searching|just|on)|it'?s okay to|permission to|close your eyes|take a breath|shoulders drop|the universe|trust the process|you'?re enough|do your best|the cleaner|the kettle|kettle settle|out the window|through (my|the) window|my (hand|hands|lap|cup|mug)|the cat (on|in|just)|lights on next door|pajamas|the neighbour|as an? (ai|language model|assistant)|i'?m just (an? )?(ai|code|software)|fine by me|i don'?t mind|doesn'?t bother me|doesn'?t matter to me|either way is fine|works for me either way|i'?m fine (with|either))/i;
+//   4. Time-of-day labels — pool quotes are EVERGREEN and serve at any
+//      hour. "Heard this morning. Better now." served at 4pm reads as a
+//      lie. Bucket-specific words ("tonight", "this morning", etc.) are
+//      banned; bucket-neutral words ("right now", "today", "this hour")
+//      stay allowed.
+const BANNED_REGEX = /(you'?ve? got this|you'?re doing (well|fine|it)|keep going|just keep going|almost there|one foot in front|let it rest|let it sit|let it go|no one'?s (watching|checking|caring|cares)|you can do (it|this)|you found (your way|the frequency)|we'?re all (in this|searching|just|on)|it'?s okay to|permission to|close your eyes|take a breath|shoulders drop|the universe|trust the process|you'?re enough|do your best|the cleaner|the kettle|kettle settle|out the window|through (my|the) window|my (hand|hands|lap|cup|mug)|the cat (on|in|just)|lights on next door|pajamas|the neighbour|as an? (ai|language model|assistant)|i'?m just (an? )?(ai|code|software)|fine by me|i don'?t mind|doesn'?t bother me|doesn'?t matter to me|either way is fine|works for me either way|i'?m fine (with|either)|\btonight\b|this morning|this evening|this afternoon|last night|earlier tonight|earlier today|in the morning|in the evening|in the afternoon|good morning|good evening|good afternoon|tomorrow morning|tomorrow evening)/i;
 
 function dropBanned(quotes: string[]): { kept: string[]; dropped: string[] } {
   const kept: string[] = [];
