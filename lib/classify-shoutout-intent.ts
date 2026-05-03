@@ -50,18 +50,25 @@ interface MinimaxResponse {
   content?: Array<MinimaxText | MinimaxThinking>;
 }
 
-const SYSTEM_PROMPT = `You triage a YouTube live chat message on a 24/7 AI radio station hosted by Lena. Decide one of THREE outcomes:
+const SYSTEM_PROMPT = `You triage a YouTube live chat message on a 24/7 AI radio station hosted by Lena. The message has ALREADY been filtered for an "@lena" trigger — that mention is stripped before you see it, so the addressee is implicitly Lena unless the listener explicitly names a different recipient.
+
+Decide one of THREE outcomes:
 
 1. "shoutout" — the listener wants Lena to dedicate / shout out / read their message TO someone else (a friend, family, place, group). Lena will narrate it on air to the whole listener pool.
-2. "reply" — the message is addressed TO Lena herself: a thank-you, a comment about the show or music, a simple question, a place check-in WITHOUT a recipient. Lena should answer back conversationally (1-2 sentences).
+2. "reply" — the message is for Lena herself: a thank-you, a comment about the show or music, ANY question (the listener wants an answer from Lena), a simple greeting, a place check-in WITHOUT a recipient. Lena answers back conversationally (1-2 sentences).
 3. "noise" — low-effort or empty. Skip silently.
+
+Hard rules:
+- A question mark "?" with no third-party recipient → ALWAYS reply, never shoutout. Even meta questions about Lena/the show ("is this your first stream?", "how long have you been on?", "what's playing?") → reply.
+- A compliment about the show / music / Lena with no recipient → reply.
+- Only classify as shoutout when the listener names WHO the message is for ("to my brother", "for my mom", "hi friends in Berlin").
 
 Heuristics:
 - "shoutout to <someone>", "playing this for <someone>", "hi to my friends in <place>", "dedicating this to <X>" → shoutout
-- "thanks", "you're awesome", "this is so chill", "love this song", "good morning lena", direct questions to Lena, "tuning in from Tokyo" (no recipient) → reply
+- "thanks", "you're awesome", "this is so chill", "love this song", "good morning lena", any question (direct or indirect), "tuning in from Tokyo" (no recipient) → reply
 - single words, "lol", "first", "test", emoji-only, "hi"/"yo" alone → noise
 
-Borderline messages go to "reply" rather than "shoutout" — a fresh Lena reply is always interesting; reading a flat message can feel awkward.
+Borderline messages go to "reply" rather than "shoutout" — a fresh Lena reply is always interesting; reading a flat message back can feel awkward.
 
 Reply with EXACTLY one of these JSON shapes, nothing else:
 {"d":"shoutout"}
@@ -81,6 +88,11 @@ Examples (input → output):
 "big thank you for this one" → {"d":"reply"}
 "you're amazing lena" → {"d":"reply"}
 "how long have you been on tonight?" → {"d":"reply"}
+"is this your first time streaming? sounds nice" → {"d":"reply"}
+"is this your first stream?" → {"d":"reply"}
+"how's your night going?" → {"d":"reply"}
+"sounds nice" → {"d":"reply"}
+"what's playing?" → {"d":"reply"}
 "🔥🔥🔥" → {"d":"noise","r":"emoji_only"}
 "yo" → {"d":"noise","r":"greeting"}
 "first listening from Tokyo" → {"d":"reply"}
