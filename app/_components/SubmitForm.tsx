@@ -264,7 +264,7 @@ export function SubmitForm() {
         </div>
         <h2>Got it.</h2>
         <p className="lead">
-          Lena will listen and you&apos;ll hear back at{" "}
+          We&apos;ll listen and you&apos;ll hear back at{" "}
           <strong style={{ color: "var(--fg)" }}>{state.email}</strong>.
         </p>
         <p className="meta">
