@@ -14,6 +14,7 @@ import {
   type VoiceProvider,
 } from "./station-config.ts";
 import { fetchListenerCount } from "./icecast-listeners.ts";
+import { fetchYoutubeAudience } from "./youtube-audience.ts";
 import { generateChatterScript } from "./minimax-script.ts";
 import { createSynthesizer } from "./synth-router.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
@@ -33,6 +34,13 @@ const LS_PORT = Number(process.env.NUMA_LS_PORT ?? 1234);
 const HTTP_PORT = Number(process.env.NUMA_DAEMON_PORT ?? 4000);
 const ICECAST_STATUS_URL = process.env.ICECAST_STATUS_URL ?? "http://127.0.0.1:8000/status-json.xsl";
 const ICECAST_MOUNT = process.env.ICECAST_MOUNT ?? "/stream";
+// Loopback to the dashboard's YouTube health endpoint. CF Access auth
+// only applies at the CF edge — never on loopback — so no credentials
+// needed. The dashboard in-process caches the underlying YouTube API
+// call for 30s, so this fetch is effectively free.
+const DASHBOARD_YOUTUBE_HEALTH_URL =
+  process.env.DASHBOARD_YOUTUBE_HEALTH_URL ??
+  "http://127.0.0.1:3001/api/youtube/health";
 
 const sock = new SupervisedSocket({ host: LS_HOST, port: LS_PORT });
 const lastPushes = new RingBuffer<{ at: string; trackId: string; url: string; script?: string }>(10);
@@ -122,6 +130,8 @@ const autoHost = new AutoHostOrchestrator({
   config: () => stationConfig.read(),
   getListenerCount: () =>
     fetchListenerCount({ url: ICECAST_STATUS_URL, mount: ICECAST_MOUNT }),
+  getYoutubeAudience: () =>
+    fetchYoutubeAudience({ url: DASHBOARD_YOUTUBE_HEALTH_URL }),
   revertExpired: async ({ block, fromMode, forcedUntil }) => {
     // Atomic UPDATE: only revert if forcedUntil hasn't moved (operator may
     // have just set a new forced state in the same window). updateMany
