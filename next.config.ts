@@ -21,7 +21,11 @@ const csp = [
   "img-src 'self' data: blob: https://f003.backblazeb2.com https://cdn.numaradio.com",
   "media-src 'self' https://api.numaradio.com https://cdn.numaradio.com https://f003.backblazeb2.com",
   "font-src 'self' data:",
-  "connect-src 'self' https://api.numaradio.com https://cdn.numaradio.com",
+  // B2 S3-style endpoint is needed for the song-submit flow: browser
+  // uploads .mp3 + artwork directly via presigned PUT URLs to the
+  // bucket subdomain. Without this, flipping CSP to enforce mode would
+  // break submissions.
+  "connect-src 'self' https://api.numaradio.com https://cdn.numaradio.com https://numaradio.s3.eu-central-003.backblazeb2.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
