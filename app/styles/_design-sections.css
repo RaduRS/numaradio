@@ -1836,6 +1836,15 @@
   .nav .live-chip { display: none; }
   .nav-right { gap: 10px; }
   .nav-inner { height: 56px; }
+  /* Submit pill stays visible — secondary CTA for artists. Drop the
+     "Submit" word at very narrow widths so it doesn't crowd the logo. */
+  .nav-cta { padding: 6px 11px; }
+}
+
+@media (max-width: 479px) {
+  .nav-cta { padding: 6px 9px; gap: 0; }
+  .nav-cta-text { display: none; }
+}
 
   .hero { padding: 48px 0 80px; }
   .hero-stats { flex-wrap: wrap; gap: 24px; }

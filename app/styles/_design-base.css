@@ -188,6 +188,38 @@ section { position: relative; }
   animation: pulseDot 1.6s ease-in-out infinite;
 }
 
+/* Submit CTA pill — visual rhyme with .live-chip (same geometry,
+   same mono uppercase 11px, same letter-spacing). The + replaces the
+   pulsing red dot to signal action instead of status. */
+.nav-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+.nav-cta:hover {
+  background: rgba(79, 209, 197, 0.18);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-glow);
+  color: #FFFFFF;
+}
+.nav-cta-mark {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  margin-top: -1px;
+}
+
 /* ============ BUTTONS ============ */
 
 .btn {
