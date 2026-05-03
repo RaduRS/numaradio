@@ -21,9 +21,19 @@ export async function GET(): Promise<NextResponse> {
     ]);
     const rawListeners =
       typeof s.listeners === "number" ? Math.max(0, s.listeners) : 0;
+    // Mirror the daemon's auto-chatter gate exactly:
+    //   effective = icecast + (live ? yt_viewers - 1 : 0)
+    // The -1 accounts for the OBS/encoder pulling icecast as a media
+    // source while broadcasting. Keeps the /shoutouts label honest
+    // about why Lena spoke (or didn't).
+    const liveBroadcast = yt?.state === "live";
+    const ytViewers =
+      liveBroadcast && typeof yt?.concurrentViewers === "number"
+        ? Math.max(0, yt.concurrentViewers)
+        : 0;
     const listeners = Math.max(
       0,
-      rawListeners - (yt?.state === "live" ? 1 : 0),
+      rawListeners + (liveBroadcast ? ytViewers - 1 : 0),
     );
     return NextResponse.json({
       ok: true,
