@@ -16,6 +16,11 @@
 // measurable win we wanted.
 import { useEffect, useState } from "react";
 
+// Encoder-tab guard — see useNowPlaying.ts for the rationale.
+const BROADCAST_MODE =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("broadcast") === "1";
+
 // Expanded-player singleton — slower than Broadcast.tsx's homepage
 // poller because the expanded player is opt-in surface and doesn't
 // need sub-10s freshness. Bumped from 6_000 in the 2026-05-03
@@ -71,9 +76,13 @@ async function poll() {
   if (!abortCtrl) return;
   // Skip polling while the tab is hidden; the visibilitychange listener
   // below re-fires poll() the moment the tab becomes visible.
-  if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+  // Encoder tab (?broadcast=1) is exempt — see useNowPlaying for why.
+  if (!BROADCAST_MODE && typeof document !== "undefined" && document.visibilityState !== "visible") return;
   try {
-    const r = await fetch("/api/station/broadcast", {
+    const url = BROADCAST_MODE
+      ? `/api/station/broadcast?t=${Date.now()}`
+      : "/api/station/broadcast";
+    const r = await fetch(url, {
       signal: abortCtrl.signal,
       cache: "no-store",
     });

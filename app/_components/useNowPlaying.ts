@@ -12,6 +12,15 @@
 
 import { useEffect, useState } from "react";
 
+// True when this tab is the headless Chromium pulled by the YouTube
+// encoder (`/live?broadcast=1`). In that mode we MUST NOT skip polls
+// on visibilityState (Xvfb without a compositor reports unreliably)
+// and we bypass the edge cache so the encoder shows track changes
+// within seconds of the listener actually hearing them.
+const BROADCAST_MODE =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("broadcast") === "1";
+
 export type ShoutoutStatus =
   | { active: false }
   | { active: true; startedAt: string; expectedEndAt: string };
@@ -95,9 +104,12 @@ async function poll() {
   // for every backgrounded tab the user has open. The visibilitychange
   // listener below re-fires poll() the moment the tab becomes visible,
   // so the first thing the user sees on tab focus is fresh data.
-  if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+  if (!BROADCAST_MODE && typeof document !== "undefined" && document.visibilityState !== "visible") return;
   try {
-    const r = await fetch("/api/station/now-playing", {
+    const url = BROADCAST_MODE
+      ? `/api/station/now-playing?t=${Date.now()}`
+      : "/api/station/now-playing";
+    const r = await fetch(url, {
       signal: abortCtrl.signal,
       cache: "no-store",
     });

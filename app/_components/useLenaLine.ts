@@ -7,6 +7,11 @@
 
 import { useEffect, useState } from "react";
 
+// Encoder-tab guard — see useNowPlaying.ts for the rationale.
+const BROADCAST_MODE =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("broadcast") === "1";
+
 export type LenaLineLive = {
   source: "live";
   script: string;
@@ -38,9 +43,13 @@ async function poll() {
   if (!abortCtrl) return;
   // Skip polling while the tab is hidden; visibilitychange listener
   // re-fires poll() the moment the tab becomes visible.
-  if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+  // Encoder tab (?broadcast=1) is exempt — see useNowPlaying for why.
+  if (!BROADCAST_MODE && typeof document !== "undefined" && document.visibilityState !== "visible") return;
   try {
-    const r = await fetch("/api/station/lena-line", {
+    const url = BROADCAST_MODE
+      ? `/api/station/lena-line?t=${Date.now()}`
+      : "/api/station/lena-line";
+    const r = await fetch(url, {
       signal: abortCtrl.signal,
       cache: "no-store",
     });
