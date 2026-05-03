@@ -1,5 +1,5 @@
 [Unit]
-Description=Numa Radio — YouTube 24/7 broadcast encoder
+Description=Numa Radio — YouTube 24/7 broadcast encoder (COLD FALLBACK; primary is Windows OBS since 2026-05-01)
 After=network-online.target numa-liquidsoap.service
 Wants=network-online.target
 # Crash-loop protection — if the encoder fails 5 times in 5 minutes,

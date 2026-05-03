@@ -1,3 +1,11 @@
+// /live?broadcast=1 is loaded as a Browser Source by OBS Studio on the
+// Windows host — that's the live encoder pushing to YouTube (since
+// 2026-05-01). The WSL numa-youtube-encoder.service is a cold fallback
+// only. Pushing a code change to this page won't reach YouTube until
+// the OBS Browser Source is refreshed (right-click → Properties →
+// "Refresh cache of current page"). The hooks under _components also
+// detect ?broadcast=1 to bypass the visibility gate + edge cache so
+// the encoder shows track changes within seconds.
 import type { Metadata } from "next";
 import { BroadcastStage } from "../_components/BroadcastStage";
 

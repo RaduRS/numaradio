@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # Numa Radio → YouTube live encoder
 #
+# ⚠ COLD FALLBACK ONLY — DO NOT RESTART TO PUSH NEW BROADCAST CODE.
+# Primary encoder since 2026-05-01 is OBS Studio on the Windows host
+# (chronic videoIngestionStarved on WSL2 made WSL unsuitable for
+# 24/7 RTMP). To pick up new /live JS in production: in OBS, right-
+# click the Browser Source → Properties → "Refresh cache of current
+# page". Restarting THIS systemd unit only matters if you've cut
+# OBS over and need WSL to take traffic again.
+#
 # Pipes a headless Chromium of /live?broadcast=1 plus the Icecast
 # audio stream into YouTube's RTMP ingest. Designed to run under
 # systemd as numa-youtube-encoder.service on Orion (WSL2 Ubuntu).
