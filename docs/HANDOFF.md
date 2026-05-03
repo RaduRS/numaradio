@@ -6,107 +6,68 @@ Last updated: 2026-05-03
 
 ## Backlog — do only if needed
 
-Quality-of-life / cost wins identified in audits but not worth shipping
-yet. If Vercel CPU runs hot again or one of these starts hurting, pick
-it up. Each is 5-30 min of work.
+Pick up only if Vercel CPU runs hot again or these start hurting.
 
-- **Broadcast boundary poll 1s → 3s** in `app/_components/Broadcast.tsx`
-  (`BOUNDARY_POLL_MS`). Cuts ~3× the per-track-flip burst. Visually
-  still feels instant. Pair with the next item.
-- **`/api/station/broadcast` edge cache 5s → 10s.** Cuts function fires
-  ~2× during normal play. UX cost: a track flip might appear ~5s late
-  on listeners between boundary polls — small.
-- **`/api/booth/song` moderation in `after()`** — same #4 pattern as
-  booth/submit + yt-chat-shoutout (2026-05-03 audit). Skipped because
-  it touches the song-worker (need a "moderating" status the worker
-  skips). Modest CPU win since song requests are lower-volume than
-  shoutouts.
-- **`@@index([fingerprintHash])` on Shoutout** in
-  `prisma/schema.prisma`. yt-chat-shoutout dispatches do a `findFirst`
-  on this column for idempotency. Sequential scan today; small now,
-  grows linearly with chat volume. Migration only.
-- **Heartbeat sweep dampening** in `app/api/presence/heartbeat/route.ts`.
-  Currently does a `deleteMany` cleanup on every beat; works fine but
-  chatty. Either gate on a 1-in-60 random roll, or move the sweep into
-  the daily privacy-sweep cron.
-- **World-aside circuit-breaker on Brave outage** in
-  `workers/queue-daemon/world-aside-client.ts`. Single attempt today,
-  no exponential backoff. If Brave (free tier 2k/mo) has a sustained
-  outage, daemon retries every ~3 min and could chew the quota fast.
-  Add: N consecutive failures → skip world_aside slots for 30 min.
-- **Timing-safe token compare in `app/api/cron/privacy-sweep/route.ts`**
-  — currently plain `===`. Tiny attack surface (one daily probe), but
-  match the `lib/internal-auth.ts` pattern so the codebase is
-  consistent.
+- Broadcast boundary poll 1s → 3s (`Broadcast.tsx:BOUNDARY_POLL_MS`)
+  + `/api/station/broadcast` edge cache 5s → 10s. Cuts homepage
+  poll cost ~5×, ~5s flip lag during normal play.
+- booth/song moderation into `after()` (same #4 pattern; needs a
+  "moderating" status the song-worker skips).
+- `@@index([fingerprintHash])` on Shoutout — yt-chat does findFirst
+  on it for idempotency, sequential scan today.
+- Heartbeat sweep dampening (`presence/heartbeat`) — gate the
+  `deleteMany` on 1-in-60 or move to daily privacy-sweep cron.
+- World-aside circuit-breaker on Brave outage — N consecutive
+  failures → skip world_aside slots 30 min.
+- Timing-safe token compare in `cron/privacy-sweep` — match
+  `lib/internal-auth.ts` pattern.
 
 ---
 
-## 2026-05-03 — Vercel free-tier audit + 2 prompt-bug sweeps
+## 2026-05-03 — Vercel free-tier audit + Lena prompt sweep
 
-Vercel Hobby Fluid Active CPU hit 75% in 2.5 days. One audit pass
-shipped 8 commits to cut the burn rate; one prompt audit shipped
-fixes for 5 surfaces of the "Lena said tonight at 10am" bug.
+Hobby Fluid Active CPU hit 75% in 2.5 days. Two parallel audits →
+8 commits between `ce43c63` and `cd88c62`. Burn rate ~5-10 min/hour
+→ ~1 min/hour. Still over free-tier; recommend Pro (£15/mo) for May.
 
-**Lena prompt time-grounding** (5 surfaces, all matching
-`workers/queue-daemon/chatter-prompts.ts`'s 2026-04-24 pattern):
-- `dashboard/lib/humanize.ts` (shoutout rewrite before TTS) and
-  `lib/lena-reply.ts` (YouTube chat replies) — both framed Lena as
-  "warm late-night radio host" / "2am voice" with no wall-clock
-  signal. Now inject `Local time: HH:MM (bucket)` + ban table per
-  bucket; reframed as 24/7 host.
-- `workers/queue-daemon/context-line.ts` (portrait quote, every 10
-  min) — StationState gains `localTime` / `timeOfDay` / `dayOfWeek` /
-  `weekPart`; examples rebalanced with `[bracketed]` usage tags;
-  validator length cap 200 → 250 to reduce log noise from
-  `length_206/208/211` near-misses.
-- `workers/queue-daemon/world-aside-client.ts` (Brave-sourced asides,
-  3/20 chatter slots) — Local time added to user message; system
-  prompt has SEPARATE rule for sign-off time-of-day on top of the
-  existing event-timing rule.
-- `patterns/lena-quotes/*.json` — scrubbed 47 time-locked lines that
-  shipped in the evergreen pool. `scripts/generate-lena-quote-pool.ts`
-  BANNED_REGEX gains time-of-day labels so future regens stay clean.
+**Lena prompt time-grounding (5 surfaces)** — same class as the
+2026-04-24 chatter-prompts "tonight at 08:40" leak. All inject
+`Local time: HH:MM (bucket)` + per-bucket ban table:
+- `dashboard/lib/humanize.ts` + `lib/lena-reply.ts` — dropped
+  "warm late-night host" / "2am voice" framing → 24/7 host
+- `workers/queue-daemon/context-line.ts` — StationState gains
+  localTime/timeOfDay/dayOfWeek/weekPart; length cap 200 → 250
+  (was full of `length_206/208/211` log noise)
+- `workers/queue-daemon/world-aside-client.ts` — sign-off time
+  rule added on top of existing event-timing rule
+- `patterns/lena-quotes/*.json` — scrubbed 47 time-locked lines;
+  pool generator BANNED_REGEX gains time labels
 
-**Cost cuts** (Vercel CPU, in priority order shipped):
-- `/api/station/{broadcast,now-playing,lena-line,listeners}` edge
-  cache TTLs bumped to amortize across visitors. lena-line was the
-  big find — `no-store` so every visitor's 60s poll hit the function.
-- All 10 client pollers gated on `document.visibilityState`.
-  Mirrors `dashboard/hooks/use-polling.ts` pattern. Backgrounded tabs
-  stop polling instantly; resume re-fires on `visibilitychange`.
+**Cost cuts:**
+- Edge cache TTLs bumped on `/api/station/{broadcast,now-playing,
+  lena-line,listeners}`. lena-line was the big find (was
+  `no-store` → every 60s poll per visitor hit the function)
+- All 10 client pollers gated on `document.visibilityState` —
+  mirrors `dashboard/hooks/use-polling.ts`
 - `getCachedNowPlayingSnapshot()` wraps SSR snapshot in
-  `unstable_cache` with 5s revalidate — `RootLayout` was paying 4
-  Prisma roundtrips on every uncached page visit.
-- `app/api/booth/submit/route.ts` and
-  `app/api/internal/youtube-chat-shoutout/route.ts` moderation moved
-  into `after()`. Listener gets a snappy 200ms "submitted" + spinner
-  polls /status; was 2-15s of billable wait. Daemon's yt-chat path
-  has no UX surface — pure CPU win.
+  `unstable_cache` (5s revalidate) — was 4 Prisma roundtrips per
+  uncached page visit
+- `booth/submit` + `internal/youtube-chat-shoutout` moderation
+  moved into `after()`. Listener sees instant submit + spinner
+  polls /status. Was 2-15s billable wait per call.
 
 **Security:** `/api/submissions/[id]/audio` was unauthenticated on
-public Vercel — anyone who guessed a 25-char cuid could stream
-pending unmoderated artist audio. Added HMAC-signed URLs minted
-server-side by the dashboard's `/api/submissions/list`, verified on
-the public route. 1h TTL fits the operator approval window.
-`dashboard/lib/sign-audio-url.ts` + `lib/verify-audio-sig.ts` (8
-tests).
-
-**Outcome (mid-rollout snapshot, 2026-05-03):** burn rate dropped
-from ~5-10 min/hour to ~1 min/hour. Still over free-tier monthly
-budget given Reddit traffic. Recommendation: upgrade to Pro for
-£15/mo, downgrade in June if traffic settles. Region IAD1 doesn't
-matter for cost (CPU is CPU); affects UK latency only via uncached
-TTFB — Cloudflare already absorbs most of it.
+public Vercel (CF Access didn't reach it — wrong subdomain). Now
+HMAC-signed URLs minted by dashboard's `/api/submissions/list`,
+verified on the public route. `dashboard/lib/sign-audio-url.ts` +
+`lib/verify-audio-sig.ts` (8 tests). 1h TTL.
 
 **Operator follow-ups:**
-1. `sudo systemctl restart numa-queue-daemon` — for the context-line
-   + world-aside prompt fixes to load. The pool JSON scrub doesn't
-   need a restart (loaded fresh on every request).
-2. Watch the Vercel Settings → Billing → Usage graph for 24h.
-3. Decide on Pro upgrade.
+1. `sudo systemctl restart numa-queue-daemon` for context-line +
+   world-aside prompt fixes to load (pool JSON loads fresh per req).
+2. Watch Vercel Settings → Billing → Usage for 24h, decide Pro.
 
-Commits between `ce43c63` and `cd88c62` on `main`. ~8 commits.
-436/436 root tests pass; 50/50 dashboard pass.
+436/436 root + 50/50 dashboard tests pass.
 
 ---
 
