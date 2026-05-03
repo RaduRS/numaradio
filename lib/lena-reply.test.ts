@@ -120,3 +120,37 @@ test("generateLenaReply: returns null on network error", async (t) => {
   assert.equal(r.text, null);
   assert.equal(r.reason, "minimax_network");
 });
+
+test("generateLenaReply: injects local time into prompt and bans wrong-bucket time words", async (t) => {
+  // Repro of the 2026-05-03 incident: at ~10:00 AM Lena said
+  // "tonight" while reading out a listener's message. Root cause
+  // was the same as the auto-chatter "tonight at 08:40" bug — no
+  // wall-clock signal in the prompt, plus a "warm late-night host"
+  // framing that pulled the model toward evening phrasing.
+  process.env.MINIMAX_API_KEY = "test-key";
+  t.after(() => delete process.env.MINIMAX_API_KEY);
+  let body: { system?: string; messages?: { content: string }[] } | null = null;
+  const fetcher: typeof fetch = (async (_url, init) => {
+    body = JSON.parse((init as RequestInit).body as string) as typeof body;
+    return new Response(
+      JSON.stringify({
+        content: [{ type: "text", text: "Hey Berlin. Glad you found us this morning." }],
+      }),
+    );
+  }) as typeof fetch;
+  const at10am = new Date(2026, 4, 3, 10, 0, 0); // 2026-05-03 10:00 local
+  await generateLenaReply("@lena tuning in from Berlin", {
+    displayName: "maja",
+    now: at10am,
+    fetcher,
+  });
+
+  const sent = body!.messages![0].content;
+  assert.match(sent, /Local time: 10:00 \(morning\)/);
+
+  // System prompt must call out the time-of-day bans + drop the
+  // late-night-only framing.
+  assert.match(body!.system!, /morning[\s\S]*tonight[\s\S]*BANNED/i);
+  assert.match(body!.system!, /24\/7|around the clock/i, "must reframe Lena as 24/7, not late-night-only");
+  assert.doesNotMatch(body!.system!, /warm late-night host/i, "old late-night framing must be gone");
+});

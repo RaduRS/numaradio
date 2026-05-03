@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSuspiciousRewrite } from "./humanize.ts";
+import { humanizeScript, isSuspiciousRewrite } from "./humanize.ts";
 
 test("isSuspiciousRewrite: empty rewrite → suspicious", () => {
   assert.equal(isSuspiciousRewrite("hello world", ""), true);
@@ -65,4 +65,54 @@ test("isSuspiciousRewrite: very short input (< 20 chars) only checked against ab
   // ceiling applies. This was already the behaviour before; pin it
   // so it can't quietly regress.
   assert.equal(isSuspiciousRewrite("hi!", "Sending one out to whoever's tuning in. Stay close."), false);
+});
+
+// ─── time-of-day grounding ──────────────────────────────────────────────
+
+interface CapturedBody {
+  system?: string;
+  messages?: { content: string }[];
+}
+
+test("humanizeScript: injects local time + bucket into the prompt", async (t) => {
+  // Repro of the 2026-05-03 incident: at ~10:00 AM Lena read out a
+  // shoutout that said "tonight". The MiniMax humanizer had no
+  // wall-clock signal AND was framed as a "warm late-night radio
+  // host", so its rewrite naturally drifted to evening phrasing.
+  // The fix injects Local time: HH:MM (bucket) into the user message.
+  const prevKey = process.env.MINIMAX_API_KEY;
+  process.env.MINIMAX_API_KEY = "test-key";
+  t.after(() => {
+    if (prevKey === undefined) delete process.env.MINIMAX_API_KEY;
+    else process.env.MINIMAX_API_KEY = prevKey;
+  });
+
+  let body: CapturedBody | null = null;
+  const realFetch = global.fetch;
+  global.fetch = (async (_url: unknown, init: unknown) => {
+    body = JSON.parse((init as RequestInit).body as string) as CapturedBody;
+    return new Response(
+      JSON.stringify({
+        content: [
+          { type: "text", text: "Going out to Marek.\nA listener wrote in to say hi." },
+        ],
+      }),
+    );
+  }) as typeof fetch;
+  t.after(() => {
+    global.fetch = realFetch;
+  });
+
+  const at10am = new Date(2026, 4, 3, 10, 0, 0); // 2026-05-03 10:00 local
+  await humanizeScript("hey marek, hope you're well tonight", { now: at10am });
+
+  const sent = body!.messages![0].content;
+  assert.match(sent, /Local time: 10:00 \(morning\)/);
+
+  // System prompt must explicitly forbid "tonight" in the morning so
+  // the model can't pattern-match its way into evening framing.
+  assert.match(body!.system!, /morning.*tonight.*BANNED/is);
+  assert.match(body!.system!, /24\/7|around the clock/i, "must reframe Lena as 24/7, not a late-night host");
+  assert.doesNotMatch(body!.system!, /warm late-night radio host/i, "old late-night framing must be gone");
+  assert.doesNotMatch(body!.system!, /2am voice/i, "2am voice framing must be gone");
 });

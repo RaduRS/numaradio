@@ -51,6 +51,24 @@ const NAME_PROFANITY_PATTERNS: ReadonlyArray<RegExp> = [
 
 const ANONYMOUS_TOKENS = /^(anon|anonymous|n\/a|none|null|undefined)$/i;
 
+// DJ-plain time-of-day buckets (morning / afternoon / evening / night /
+// late night). Matches the bucketing in `lib/schedule.ts:timeOfDayFor`
+// but inlined here because dashboard/ is a separate Next app and can't
+// import from the main repo's lib/.
+type TimeOfDay = "late night" | "morning" | "afternoon" | "evening" | "night";
+function timeOfDayFor(h: number): TimeOfDay {
+  if (h < 5) return "late night";
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  if (h < 21) return "evening";
+  return "night";
+}
+function formatLocalTime(d: Date): string {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 /**
  * Sanitise the booth's requesterName before it reaches the humaniser.
  * Returns null when the name is missing, profanity-laced, or an
@@ -69,12 +87,22 @@ export function sanitiseRequesterName(raw: string | undefined | null): string | 
   return trimmed;
 }
 
-const SYSTEM_PROMPT = `You're rewriting a listener shoutout so Lena (the warm late-night radio host) can deliver it on air. The listener wrote a message TO someone — your job is to reframe it as Lena NARRATING the shoutout to the whole listener pool, NOT reading the listener's words verbatim.
+const SYSTEM_PROMPT = `You're rewriting a listener shoutout so Lena (the warm radio host of Numa Radio, on air 24/7) can deliver it on air. The listener wrote a message TO someone — your job is to reframe it as Lena NARRATING the shoutout to the whole listener pool, NOT reading the listener's words verbatim.
 
 The user message you receive is formatted as:
 
 Sender: <name, location, or anonymous>
+Local time: <HH:MM (bucket)>   ← Lena's local wall clock at airtime
 Message: <the shoutout text>
+
+CRITICAL — time-of-day grounding:
+The shoutout might air at any hour. Lena is on air around the clock, NOT a late-night host. Anchor any time language to the Local time given:
+- morning (05–11) → "this morning" is fine; "tonight" / "this evening" is BANNED
+- afternoon (12–16) → "this afternoon" is fine; "tonight" / "this morning" are BANNED
+- evening (17–20) → "this evening" / "tonight" are fine; "this morning" / "this afternoon" are BANNED
+- night (21–23) or late night (00–04) → "tonight" is fine; morning/afternoon BANNED
+- If the original message uses a time word that conflicts with Local time (listener wrote "tonight" but it's 09:00 morning), DROP the time word — paraphrase without it. Do NOT preserve the listener's "tonight" verbatim when it's morning.
+- If you don't need a time word, don't add one. Time-neutral phrasing ("right now", "today", or no time at all) is always safe.
 
 CRITICAL — perspective shift (the whole point of this rewrite):
 The listener wrote in first person to a recipient. Lena is a third-party narrator.
@@ -111,7 +139,7 @@ Do:
 - Use contractions ("you're", "they're", "that's", "she's", "he's").
 - 6-14 words per line, one phrase per line.
 - Use ellipses (...) for thinking-pauses, commas for breath.
-- Stay warm, present, intimate — 2am voice.
+- Stay warm, present, intimate — like a host who's always on, no matter the hour.
 
 Don't:
 - Add facts, names, or places not in the original.
@@ -176,6 +204,9 @@ export interface HumanizeOpts {
    *  When provided, Lena names the sender in third person; when absent
    *  Lena says "A listener" / "Someone". */
   requesterName?: string;
+  /** Wall-clock now used to ground time-of-day phrasing in the rewrite.
+   *  Defaults to `new Date()`. Tests pin a specific instant. */
+  now?: Date;
 }
 
 /**
@@ -196,7 +227,9 @@ export async function humanizeScript(
   // protected — no chance a future caller forgets to clean the name.
   const cleanName = sanitiseRequesterName(opts.requesterName);
   const senderLabel = cleanName ?? "anonymous";
-  const userMessage = `Sender: ${senderLabel}\nMessage: ${original}`;
+  const now = opts.now ?? new Date();
+  const localTime = `${formatLocalTime(now)} (${timeOfDayFor(now.getHours())})`;
+  const userMessage = `Sender: ${senderLabel}\nLocal time: ${localTime}\nMessage: ${original}`;
 
   let res: Response;
   try {
