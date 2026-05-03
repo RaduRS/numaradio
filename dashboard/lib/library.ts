@@ -20,6 +20,16 @@ export interface LibraryTrack {
   createdAt: string;
   audioStreamUrl: string | null;
   artworkUrl: string | null;
+  /**
+   * Origin of the cover art when the track came from an artist
+   * submission: "upload" (artist uploaded a file), "id3" (embedded
+   * in the MP3), "fallback" (per-show brand PNG), or null (no
+   * MusicSubmission row, e.g. internal Suno/MiniMax tracks). The
+   * dashboard uses this to disable the regenerate-artwork button
+   * for "upload" / "id3" so an operator can't accidentally wipe
+   * art the artist provided.
+   */
+  artworkSource: string | null;
   votesUp: number;
   votesDown: number;
 }
@@ -42,6 +52,7 @@ const LIBRARY_TRACKS_SQL = `
     t."createdAt",
     audio."publicUrl" AS audio_stream_url,
     art."publicUrl"   AS artwork_url,
+    sub."artworkSource" AS artwork_source,
     COALESCE(v.up, 0)   AS votes_up,
     COALESCE(v.down, 0) AS votes_down
   FROM "Track" t
@@ -60,6 +71,12 @@ const LIBRARY_TRACKS_SQL = `
     ORDER BY "createdAt" DESC
     LIMIT 1
   ) art ON true
+  LEFT JOIN LATERAL (
+    SELECT "artworkSource"
+    FROM "MusicSubmission"
+    WHERE "trackId" = t.id
+    LIMIT 1
+  ) sub ON true
   LEFT JOIN LATERAL (
     SELECT
       COUNT(*) FILTER (WHERE value = 1)  AS up,
@@ -92,6 +109,7 @@ interface RawRow {
   createdAt: Date;
   audio_stream_url: string | null;
   artwork_url: string | null;
+  artwork_source: string | null;
   votes_up: string | number;
   votes_down: string | number;
 }
@@ -113,6 +131,7 @@ export async function fetchLibraryTracks(pool: Pool): Promise<LibraryTrack[]> {
     createdAt: r.createdAt.toISOString(),
     audioStreamUrl: r.audio_stream_url,
     artworkUrl: r.artwork_url,
+    artworkSource: r.artwork_source,
     // pg returns bigints as strings; coerce explicitly.
     votesUp: typeof r.votes_up === "string" ? parseInt(r.votes_up, 10) : r.votes_up,
     votesDown:

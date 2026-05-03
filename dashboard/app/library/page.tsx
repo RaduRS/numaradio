@@ -679,16 +679,31 @@ export default function LibraryPage() {
                               >
                                 <PlayIcon size={15} strokeWidth={2} />
                               </ActionIcon>
-                              <ActionIcon
-                                onClick={() => { setRegenTarget(t); setRegenHint(""); }}
-                                disabled={isRegen || isPending}
-                                title={isRegen ? "Regenerating…" : "Regenerate artwork"}
-                                tone="muted"
-                              >
-                                {isRegen
-                                  ? <Loader2Icon size={15} className="animate-spin" />
-                                  : <ImageIcon size={15} strokeWidth={2} />}
-                              </ActionIcon>
+                              {(() => {
+                                // Lock the regen action when the artist
+                                // supplied their own art (uploaded a file
+                                // or embedded it in the MP3) so an
+                                // accidental click can't wipe their work.
+                                const artistArt = t.artworkSource === "upload" || t.artworkSource === "id3";
+                                return (
+                                  <ActionIcon
+                                    onClick={() => { setRegenTarget(t); setRegenHint(""); }}
+                                    disabled={isRegen || isPending || artistArt}
+                                    title={
+                                      artistArt
+                                        ? "Artist-supplied artwork — regenerate disabled"
+                                        : isRegen
+                                          ? "Regenerating…"
+                                          : "Regenerate artwork"
+                                    }
+                                    tone="muted"
+                                  >
+                                    {isRegen
+                                      ? <Loader2Icon size={15} className="animate-spin" />
+                                      : <ImageIcon size={15} strokeWidth={2} />}
+                                  </ActionIcon>
+                                );
+                              })()}
                               <ActionIcon
                                 onClick={() => setDeleteTarget(t)}
                                 disabled={isRegen || isPending || deleting}
