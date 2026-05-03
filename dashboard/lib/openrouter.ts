@@ -49,11 +49,27 @@ export function extractPngBase64(resp: OpenRouterImageResponse): string | null {
  * Generate album cover art via FLUX Pro on OpenRouter.
  * Returns the raw image buffer (PNG/JPEG depending on model output).
  *
- * The prompt is wrapped to enforce "no text, no logos" because Suno's
- * built-in art occasionally embeds tracklisting/watermark text — the
- * whole point of regen here is to get a clean visual.
+ * Prompt strategy: the original wrapper led with "Album cover artwork"
+ * which is itself a typography trigger — Flux's training set heavily
+ * associates "album cover" with written titles + band names, so even
+ * "no text whatsoever" downstream got under-weighted. The new wrapper:
+ *   1. Avoids the "album cover" phrase entirely
+ *   2. Front-loads the no-text constraint AND repeats it at the end
+ *   3. Spells out specific forbidden surfaces (signage, license plates,
+ *      tattoos, books, posters, screens) where Flux often sneaks text in
  */
 export async function generateArtwork(prompt: string): Promise<Buffer> {
+  const wrapped = [
+    "Wordless painterly square 1:1 illustration.",
+    "ABSOLUTELY NO TEXT — no letters, no words, no numbers, no captions, no titles, no band names, no song names, no signage, no logos, no watermarks, no typography, no calligraphy, no writing of any kind anywhere in the image.",
+    "Avoid surfaces that typically carry text: no readable book covers, no license plates, no shop signs, no posters, no phone screens, no t-shirts with print, no graffiti, no street signs.",
+    `Scene: ${prompt}`,
+    "Cinematic, atmospheric, rich painterly brushwork.",
+    "FINAL CHECK: the rendered image must contain ZERO written language or symbols. If you start to draw any letter shape, stop and replace it with abstract texture.",
+  ].join(" ");
+
+  console.log(`[artwork-flux] prompt (${wrapped.length} chars): ${wrapped.slice(0, 600)}${wrapped.length > 600 ? "…" : ""}`);
+
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
@@ -71,7 +87,7 @@ export async function generateArtwork(prompt: string): Promise<Buffer> {
           content: [
             {
               type: "text",
-              text: `Album cover artwork, square 1:1 composition, no text whatsoever, no logos, no watermarks, no titles, no song names, no band names, no captions, no typography, painterly, cinematic. Prompt: ${prompt}`,
+              text: wrapped,
             },
           ],
         },

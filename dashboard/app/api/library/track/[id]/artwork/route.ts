@@ -111,6 +111,9 @@ export async function POST(
     operatorNote: body.hint ?? null,
   });
   const prompt = llmScene ?? buildBarePrompt(track, body.hint ?? null);
+  console.log(
+    `[artwork-regen] track=${id} title="${track.title?.slice(0, 60) ?? ""}" llm=${llmScene ? "ok" : "fallback"} prompt_len=${prompt.length}`,
+  );
   let imgBuf: Buffer;
   let mimeType = "image/jpeg";
   let extension = "jpg";
