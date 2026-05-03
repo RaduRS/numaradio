@@ -108,92 +108,10 @@ function fmtDur(s: number | null): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-/** Slugify a string for use in a filename (lowercase, hyphens, ASCII-ish). */
-function slugForFilename(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "submission";
-}
-
-/** Builds a markdown rejection note (email-ready draft + metadata) and
- *  triggers a browser download. The browser saves it to whatever the
- *  user has configured (Desktop, Downloads, or "Save As" prompt).
- */
-function downloadRejectionMarkdown(
-  p: Pending,
-  reasons: string[],
-  notes: string,
-): void {
-  const now = new Date();
-  const submittedAt = new Date(p.createdAt);
-  const reasonsBlock =
-    reasons.length > 0
-      ? `**Reasons:**\n\n${reasons.map((r) => `- ${r}`).join("\n")}`
-      : "";
-  const notesBlock = notes ? `**Additional notes:** ${notes}` : "";
-  const reasonForEmail =
-    reasons.length === 1 && !notes
-      ? reasons[0].toLowerCase()
-      : reasons.length > 0
-        ? `${reasons.map((r) => r.toLowerCase()).join("; ")}${notes ? `. ${notes}` : ""}`
-        : notes;
-
-  const md = `# Numa Radio — submission rejected
-
-**To:** ${p.email}
-**Subject:** Re: your submission to Numa Radio — ${p.artistName}
-
----
-
-Hi,
-
-Thanks for sending us **${p.artistName}** (${fmtDur(p.durationSeconds)}, ${p.airingPreference === "permanent" ? "permanent rotation" : "one-off play"}) on ${submittedAt.toISOString().slice(0, 10)}. We've listened through and unfortunately won't be adding it to Numa Radio at this time.
-
-**Reason:** ${reasonForEmail}
-
-We appreciate you sharing your work and welcome future submissions.
-
-— Numa Radio
-
----
-
-## Reviewer record
-
-${[reasonsBlock, notesBlock].filter(Boolean).join("\n\n")}
-
-## Submission
-
-- **Submission ID:** \`${p.id}\`
-- **Artist / track name:** ${p.artistName}
-- **Contact email:** ${p.email}
-- **Duration:** ${fmtDur(p.durationSeconds)}
-- **Airing preference:** ${p.airingPreference}
-- **Submitted at:** ${submittedAt.toISOString()}
-- **Has uploaded artwork:** ${p.artworkStorageKey ? "yes" : "no"}
-- **Rejected at:** ${now.toISOString()}
-`;
-
-  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  const dateStamp = now.toISOString().slice(0, 10);
-  a.download = `submission-reject-${dateStamp}-${slugForFilename(p.artistName)}.md`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 export function SubmissionsPanel() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
-  const [rejectingSnapshot, setRejectingSnapshot] = useState<Pending | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -271,7 +189,7 @@ export function SubmissionsPanel() {
       const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
       if (!r.ok) throw new Error(j.message ?? j.error ?? `HTTP ${r.status}`);
       const showLabel = SHOW_OPTIONS.find((s) => s.value === show)?.label ?? show;
-      toast.success(`Approved → ${showLabel}`);
+      toast.success(`Approved → ${showLabel} · artist notified by email.`);
       await refresh();
     } catch (err) {
       toast.error(`Approve failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -290,11 +208,6 @@ export function SubmissionsPanel() {
       selectedReasons.length > 0
         ? `${selectedReasons.join("; ")}${notes ? `. Notes: ${notes}` : ""}`
         : notes;
-    // Prefer the snapshot captured when the operator opened the reject
-    // panel — the auto-refresh poll runs every 30s and may have already
-    // pruned the row from local state by the time we get here. Fall
-    // back to the live list as a defensive last resort.
-    const submission = rejectingSnapshot ?? data?.pending.find((p) => p.id === id) ?? null;
     setBusy(id);
     try {
       const r = await fetch(`/api/submissions/${id}/reject`, {
@@ -304,14 +217,8 @@ export function SubmissionsPanel() {
       });
       const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
       if (!r.ok) throw new Error(j.message ?? j.error ?? `HTTP ${r.status}`);
-      if (submission) {
-        downloadRejectionMarkdown(submission, [...selectedReasons], notes);
-        toast.success("Rejected — markdown downloaded.");
-      } else {
-        toast.success("Rejected.");
-      }
+      toast.success("Rejected — artist notified by email.");
       setRejectingId(null);
-      setRejectingSnapshot(null);
       setRejectReason("");
       setSelectedReasons([]);
       await refresh();
@@ -572,7 +479,6 @@ export function SubmissionsPanel() {
                       variant="outline"
                       onClick={() => {
                         setRejectingId(null);
-                        setRejectingSnapshot(null);
                         setRejectReason("");
                         setSelectedReasons([]);
                       }}
@@ -617,10 +523,7 @@ export function SubmissionsPanel() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      setRejectingId(p.id);
-                      setRejectingSnapshot(p);
-                    }}
+                    onClick={() => setRejectingId(p.id)}
                     disabled={busy !== null}
                   >
                     Reject

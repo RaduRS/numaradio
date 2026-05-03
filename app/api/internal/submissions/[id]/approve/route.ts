@@ -17,12 +17,14 @@
 // Operator email in body for the audit trail (set by dashboard proxy).
 
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { ingestTrack } from "@/lib/ingest";
 import { getObject, deleteObject } from "@/lib/storage";
 import { extractId3Artwork } from "@/lib/extract-id3-artwork";
 import { loadFallbackArtwork } from "@/lib/fallback-artwork";
 import { internalAuthOk } from "@/lib/internal-auth";
+import { sendSubmissionApprovedEmail } from "@/lib/email/submission-approved";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -199,6 +201,19 @@ export async function POST(
   if (submission.artworkStorageKey) {
     await deleteObject(submission.artworkStorageKey).catch(() => undefined);
   }
+
+  // Fire the artist notification off the hot path so the dashboard
+  // toast lands instantly. Failure is logged in lib/email/client; we
+  // don't roll back the approve.
+  after(async () => {
+    await sendSubmissionApprovedEmail({
+      email: submission.email,
+      artistName: submission.artistName,
+      trackTitle: submission.trackTitle,
+      durationSeconds: submission.durationSeconds,
+      airingPreference: submission.airingPreference,
+    });
+  });
 
   return NextResponse.json({ ok: true, trackId: result.trackId });
 }

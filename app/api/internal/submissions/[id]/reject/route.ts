@@ -6,9 +6,11 @@
 // artwork from B2 (cost saver), keeps the row for audit.
 
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { deleteObject } from "@/lib/storage";
 import { internalAuthOk } from "@/lib/internal-auth";
+import { sendSubmissionRejectedEmail } from "@/lib/email/submission-rejected";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +61,19 @@ export async function POST(
   if (submission.artworkStorageKey) {
     await deleteObject(submission.artworkStorageKey).catch(() => undefined);
   }
+
+  // Notify the artist off the hot path; failure logged, never rolled back.
+  after(async () => {
+    await sendSubmissionRejectedEmail({
+      email: submission.email,
+      artistName: submission.artistName,
+      trackTitle: submission.trackTitle,
+      durationSeconds: submission.durationSeconds,
+      airingPreference: submission.airingPreference,
+      submittedAt: submission.createdAt,
+      reason,
+    });
+  });
 
   return NextResponse.json({ ok: true });
 }
