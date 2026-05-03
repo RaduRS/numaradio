@@ -16,7 +16,12 @@
 // measurable win we wanted.
 import { useEffect, useState } from "react";
 
-const POLL_MS = 6_000;
+// Expanded-player singleton — slower than Broadcast.tsx's homepage
+// poller because the expanded player is opt-in surface and doesn't
+// need sub-10s freshness. Bumped from 6_000 in the 2026-05-03
+// free-tier audit. The "Lena on air" pill may appear up to ~15s late
+// here; homepage Broadcast.tsx still picks it up faster.
+const POLL_MS = 15_000;
 
 type TrackSummary = {
   trackId: string;

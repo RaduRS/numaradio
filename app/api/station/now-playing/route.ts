@@ -9,7 +9,10 @@ import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
 export const dynamic = "force-dynamic";
 
 const HEADERS = {
-  "Cache-Control": "public, s-maxage=2, stale-while-revalidate=10",
+  // Bumped from s-maxage=2 (2026-05-03 free-tier audit). Client-side
+  // useNowPlaying polls every 15s and computes elapsed locally from
+  // startedAt + durationSeconds — 5s of edge cushion is invisible.
+  "Cache-Control": "public, s-maxage=5, stale-while-revalidate=15",
   "Content-Type": "application/json",
 };
 

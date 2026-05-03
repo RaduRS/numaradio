@@ -53,6 +53,16 @@ const NAME_TO_ENUM: Record<ShowBlockName, string> = {
 
 const FALLBACK_LINE = "Always live. Stay a while.";
 
+// Edge cache for the lena-line feed. Per-URL cache key includes ?show=,
+// so each show variant gets its own cache. Was previously `no-store` →
+// every visitor's 60s poll hit the function. Live chatter rotates ~every
+// few minutes, context_line every 10 min, pool picks rotate per fetch —
+// so 30s of edge cushion is invisible to listeners but lets one fire
+// serve every visitor in the cache window. (2026-05-03 free-tier audit.)
+const LENA_LINE_HEADERS = {
+  "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+};
+
 const poolCache: Partial<Record<string, string[]>> = {};
 
 function loadPool(showSlug: string): string[] {
@@ -141,7 +151,7 @@ export async function GET(req: Request): Promise<Response> {
         type: live.chatterType,
         show: showSlug,
       },
-      { headers: { "Cache-Control": "no-store" } },
+      { headers: LENA_LINE_HEADERS },
     );
   }
 
@@ -153,7 +163,7 @@ export async function GET(req: Request): Promise<Response> {
         atIso: context.airedAt.toISOString(),
         show: showSlug,
       },
-      { headers: { "Cache-Control": "no-store" } },
+      { headers: LENA_LINE_HEADERS },
     );
   }
 
@@ -162,6 +172,6 @@ export async function GET(req: Request): Promise<Response> {
   const script = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : FALLBACK_LINE;
   return Response.json(
     { source: "pool" as const, script, show: showSlug },
-    { headers: { "Cache-Control": "no-store" } },
+    { headers: LENA_LINE_HEADERS },
   );
 }

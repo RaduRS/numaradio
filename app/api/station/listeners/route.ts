@@ -23,7 +23,10 @@
 import { ambientFloor } from "@/lib/ambient-floor";
 
 const STATUS_URL = "https://api.numaradio.com/status-json.xsl";
-const CACHE_SECONDS = 5;
+// Bumped from 5s (2026-05-03 free-tier audit). Listener count is
+// already fudged via ambientFloor() and the public hero adds +15 — a
+// 30s lag is invisible to listeners but cuts function fires by 6×.
+const CACHE_SECONDS = 30;
 
 type IcecastSource = {
   listenurl?: string;

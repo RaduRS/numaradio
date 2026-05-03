@@ -30,10 +30,13 @@ const HISTORY_LIMIT = 5;
 const STALE_GRACE_SECONDS = 30;
 
 const HEADERS = {
-  // Very tight CDN TTL — this feed surfaces live track changes. Any extra
-  // staleness gets perceived by the listener as "the UI is lying about
-  // what I'm hearing". One second fresh, two seconds while revalidating.
-  "Cache-Control": "public, s-maxage=1, stale-while-revalidate=2",
+  // Tight CDN TTL — this feed surfaces live track changes. The homepage
+  // poller (Broadcast.tsx) already ramps to 1s polls within the 30s
+  // track-boundary window so flips still feel instant; outside that
+  // window 5s of edge cushion is invisible. Bumped from s-maxage=1 to
+  // amortize across visitors — was the heaviest serverless route on
+  // free tier (2026-05-03).
+  "Cache-Control": "public, s-maxage=5, stale-while-revalidate=10",
 };
 
 type TrackSummary = {
