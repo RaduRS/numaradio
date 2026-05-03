@@ -9,7 +9,7 @@ import { PresenceHeartbeat } from "./_components/PresenceHeartbeat";
 import { LiveOnYouTubeBanner } from "./_components/LiveOnYouTubeBanner";
 import { NowPlayingSeeder } from "./_components/NowPlayingSeeder";
 import { FallbackArtworkProvider } from "./_components/FallbackArtworkProvider";
-import { getNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
+import { getCachedNowPlayingSnapshot } from "@/lib/now-playing-snapshot";
 import { fallbackArtworkSrc, showSlugFor } from "@/lib/show-slug";
 
 // Schema.org graph describing the station. Rendered as an inline
@@ -151,10 +151,13 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   // Server-fetch the current track so the first paint has artwork/title
-  // already populated. Falls back to offline state on DB error.
+  // already populated. Cached 5s via unstable_cache — without this every
+  // uncached page visit pays 4 sequential Prisma roundtrips of Vercel
+  // Active CPU. Stale window is invisible; client polls catch up on
+  // hydrate. Falls back to offline state on DB error.
   let initialNowPlaying;
   try {
-    initialNowPlaying = await getNowPlayingSnapshot();
+    initialNowPlaying = await getCachedNowPlayingSnapshot();
   } catch {
     initialNowPlaying = { isPlaying: false, shoutout: { active: false } as const };
   }

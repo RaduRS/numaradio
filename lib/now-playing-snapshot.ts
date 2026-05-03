@@ -3,6 +3,7 @@
 // on first paint so the hero shows artwork/title/artist without a flash
 // of "— by —". The API route uses it for subsequent polls.
 
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 
 export type ShoutoutPayload =
@@ -90,3 +91,17 @@ export async function getNowPlayingSnapshot(): Promise<NowPlayingSnapshot> {
     shoutout,
   };
 }
+
+// Cached wrapper for SSR call sites (notably app/layout.tsx, which fires
+// on every uncached page visit). Without this, every cold visitor pays
+// 4 sequential Prisma roundtrips of Vercel Active CPU. With a 5s
+// revalidate window, one set of queries serves every SSR render in the
+// window. The client-side poll (15s) catches up immediately on hydrate
+// so the stale window is invisible. The /api/station/now-playing route
+// keeps its own edge cache and is unaffected by this wrapper. (Added
+// 2026-05-03 free-tier audit.)
+export const getCachedNowPlayingSnapshot = unstable_cache(
+  () => getNowPlayingSnapshot(),
+  ["now-playing-snapshot-v1"],
+  { revalidate: 5 },
+);
