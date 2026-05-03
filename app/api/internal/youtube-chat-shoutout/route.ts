@@ -135,7 +135,83 @@ export async function POST(req: Request): Promise<NextResponse> {
     });
   }
 
-  const moderation = await moderateShoutout(rawText);
+  // requesterName carries the source so the dashboard's Recent feed
+  // and held-shoutout cards make the YouTube origin obvious.
+  const requesterName = `[YT] ${displayName}`.slice(0, MAX_NAME);
+
+  // Create the row in "moderating" state and return immediately.
+  // Moderation + dispatch run in after() so we don't burn Vercel CPU
+  // waiting on MiniMax (was 2-5s of billable wait per chat message).
+  // The daemon doesn't poll for the outcome — it just logs the
+  // dispatch — so no /status surface is needed here. (Moved from
+  // synchronous on 2026-05-03.)
+  const shoutout = await prisma.shoutout.create({
+    data: {
+      stationId: station.id,
+      rawText,
+      requesterName,
+      // Stash the YT message ID for idempotency. authorChannelId is
+      // already in requesterName indirectly via displayName + the
+      // poller's per-author rate limit.
+      fingerprintHash: ytFingerprint,
+      // moderationStatus defaults to "pending" via the Prisma enum.
+      deliveryStatus: "moderating",
+    },
+    select: { id: true },
+  });
+
+  const secret = process.env.INTERNAL_API_SECRET;
+  const isReply = intent.category === "reply";
+
+  after(() => runYoutubeChatPipeline({
+    shoutoutId: shoutout.id,
+    rawText,
+    displayName,
+    requesterName,
+    isReply,
+    secret,
+  }));
+
+  return NextResponse.json({
+    ok: true,
+    status: "moderating",
+    shoutoutId: shoutout.id,
+  });
+}
+
+// Background: moderate the message, then either notify the held queue
+// or dispatch to the internal shoutout pipeline. For "reply" intent
+// we also generate Lena's conversational response inline before
+// dispatching (skipHumanize=true to bypass the booth-style rewrite).
+// Errors persist a CONTROLLED moderationReason on the row.
+async function runYoutubeChatPipeline(args: {
+  shoutoutId: string;
+  rawText: string;
+  displayName: string;
+  requesterName: string;
+  isReply: boolean;
+  secret: string | undefined;
+}): Promise<void> {
+  const { shoutoutId, rawText, displayName, requesterName, isReply, secret } = args;
+
+  let moderation: Awaited<ReturnType<typeof moderateShoutout>>;
+  try {
+    moderation = await moderateShoutout(rawText);
+  } catch (e) {
+    await prisma.shoutout
+      .update({
+        where: { id: shoutoutId },
+        data: { deliveryStatus: "failed", moderationReason: "moderation_threw" },
+      })
+      .catch(() => {});
+    console.warn(
+      `yt-chat-shoutout: moderation threw for ${shoutoutId}: ${
+        e instanceof Error ? e.message : "unknown"
+      }`,
+    );
+    return;
+  }
+
   const moderationDb = (
     {
       allowed: "allowed",
@@ -145,183 +221,155 @@ export async function POST(req: Request): Promise<NextResponse> {
     } as const
   )[moderation.decision];
 
-  const initialDelivery =
-    moderation.decision === "allowed" || moderation.decision === "rewritten"
-      ? "pending"
-      : moderation.decision === "held"
-        ? "held"
-        : "blocked";
-
-  // requesterName carries the source so the dashboard's Recent feed
-  // and held-shoutout cards make the YouTube origin obvious.
-  const requesterName = `[YT] ${displayName}`.slice(0, MAX_NAME);
-
-  const shoutout = await prisma.shoutout.create({
-    data: {
-      stationId: station.id,
-      rawText,
-      cleanText: moderation.decision === "rewritten" ? moderation.text : null,
-      requesterName,
-      // Stash the YT message ID for idempotency. authorChannelId is
-      // already in requesterName indirectly via displayName + the
-      // poller's per-author rate limit.
-      fingerprintHash: ytFingerprint,
-      moderationStatus: moderationDb,
-      moderationReason: moderation.reason,
-      deliveryStatus: initialDelivery,
-    },
-    select: { id: true },
-  });
-
   if (moderation.decision === "blocked") {
-    return NextResponse.json({
-      ok: true,
-      status: "blocked",
-      shoutoutId: shoutout.id,
-      reason: moderation.reason,
-    });
-  }
-
-  const secret = process.env.INTERNAL_API_SECRET;
-
-  if (moderation.decision === "held") {
-    if (secret) {
-      after(async () => {
-        try {
-          const res = await fetch(INTERNAL_HELD_NOTIFY_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-internal-secret": secret,
-            },
-            body: JSON.stringify({
-              id: shoutout.id,
-              rawText,
-              cleanText: undefined,
-              requesterName,
-              moderationReason: moderation.reason ?? undefined,
-            }),
-          });
-          if (!res.ok) {
-            console.warn(
-              `yt-chat-shoutout: held-notify returned ${res.status} for ${shoutout.id}`,
-            );
-          }
-        } catch (e) {
-          console.warn(
-            `yt-chat-shoutout: held-notify failed for ${shoutout.id}: ${
-              e instanceof Error ? e.message : "unknown"
-            }`,
-          );
-        }
-      });
-    }
-    return NextResponse.json({
-      ok: true,
-      status: "held",
-      shoutoutId: shoutout.id,
-    });
-  }
-
-  // Allowed / rewritten — forward to the existing internal pipeline
-  // for radio-host rewrite + TTS + B2 + queue push.
-  if (!secret) {
     await prisma.shoutout.update({
-      where: { id: shoutout.id },
+      where: { id: shoutoutId },
       data: {
-        deliveryStatus: "failed",
-        moderationReason: "internal_secret_missing",
+        moderationStatus: moderationDb,
+        moderationReason: moderation.reason,
+        deliveryStatus: "blocked",
       },
     });
-    return NextResponse.json(
-      { ok: false, error: "internal secret missing", shoutoutId: shoutout.id },
-      { status: 500 },
-    );
+    return;
   }
 
-  const moderatedText = moderation.text;
-  const isReply = intent.category === "reply";
-  after(async () => {
-    let textToAir = moderatedText;
-    let skipHumanize = false;
-
-    if (isReply) {
-      // Generate Lena's conversational response. Failure here means
-      // we can't air anything sensible — drop quietly rather than
-      // falling back to the host-rewrite of the listener's words
-      // (which sounded wrong: "inRhino said big thank you" is awkward
-      // when the listener was thanking Lena, not the audience).
-      const reply = await generateLenaReply(moderatedText, { displayName });
-      if (!reply.text) {
-        await prisma.shoutout.update({
-          where: { id: shoutout.id },
-          data: {
-            deliveryStatus: "failed",
-            moderationReason: `reply_gen_${reply.reason}`,
-          },
-        });
-        console.warn(
-          `yt-chat-shoutout: reply generation failed for ${shoutout.id} (${reply.reason})`,
-        );
-        return;
-      }
-      textToAir = reply.text;
-      skipHumanize = true;
-      // Persist what Lena will actually say so the dashboard's
-      // Recent feed shows the reply, not the listener's question.
-      await prisma.shoutout.update({
-        where: { id: shoutout.id },
-        data: { cleanText: textToAir },
-      });
-    }
-
+  if (moderation.decision === "held") {
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: {
+        moderationStatus: moderationDb,
+        moderationReason: moderation.reason,
+        deliveryStatus: "held",
+      },
+    });
+    if (!secret) return;
     try {
-      const internalRes = await fetch(INTERNAL_SHOUTOUT_URL, {
+      const res = await fetch(INTERNAL_HELD_NOTIFY_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-internal-secret": secret,
         },
         body: JSON.stringify({
-          shoutoutRowId: shoutout.id,
-          text: textToAir,
+          id: shoutoutId,
+          rawText,
+          cleanText: undefined,
           requesterName,
-          skipHumanize,
+          moderationReason: moderation.reason ?? undefined,
         }),
       });
-      if (!internalRes.ok) {
-        const detail = await internalRes.text().catch(() => "");
-        await prisma.shoutout.update({
-          where: { id: shoutout.id },
-          data: {
-            deliveryStatus: "failed",
-            moderationReason: `http_${internalRes.status}: ${detail.slice(0, 160)}`,
-          },
-        });
+      if (!res.ok) {
         console.warn(
-          `yt-chat-shoutout: internal forward returned ${internalRes.status} for ${shoutout.id}`,
+          `yt-chat-shoutout: held-notify returned ${res.status} for ${shoutoutId}`,
         );
       }
     } catch (e) {
-      const reason =
-        e instanceof Error && e.name === "TimeoutError"
-          ? "internal_forward_timeout"
-          : "internal_forward_network";
-      await prisma.shoutout.update({
-        where: { id: shoutout.id },
-        data: { deliveryStatus: "failed", moderationReason: reason },
-      });
       console.warn(
-        `yt-chat-shoutout: internal forward fetch failed for ${shoutout.id} (${reason}): ${
+        `yt-chat-shoutout: held-notify failed for ${shoutoutId}: ${
           e instanceof Error ? e.message : "unknown"
         }`,
       );
     }
+    return;
+  }
+
+  // allowed | rewritten — set moderation result + flip to "pending",
+  // then either generate Lena's reply (for "reply" intent) or dispatch
+  // straight to the host-rewrite pipeline (for "shoutout" intent).
+  await prisma.shoutout.update({
+    where: { id: shoutoutId },
+    data: {
+      moderationStatus: moderationDb,
+      moderationReason: moderation.reason,
+      cleanText: moderation.decision === "rewritten" ? moderation.text : null,
+      deliveryStatus: "pending",
+    },
   });
 
-  return NextResponse.json({
-    ok: true,
-    status: "queued",
-    shoutoutId: shoutout.id,
-  });
+  if (!secret) {
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: {
+        deliveryStatus: "failed",
+        moderationReason: "internal_secret_missing",
+      },
+    });
+    return;
+  }
+
+  let textToAir = moderation.text;
+  let skipHumanize = false;
+
+  if (isReply) {
+    // Generate Lena's conversational response. Failure here means we
+    // can't air anything sensible — drop quietly rather than falling
+    // back to the host-rewrite of the listener's words (which sounded
+    // wrong: "inRhino said big thank you" is awkward when the listener
+    // was thanking Lena, not the audience).
+    const reply = await generateLenaReply(moderation.text, { displayName });
+    if (!reply.text) {
+      await prisma.shoutout.update({
+        where: { id: shoutoutId },
+        data: {
+          deliveryStatus: "failed",
+          moderationReason: `reply_gen_${reply.reason}`,
+        },
+      });
+      console.warn(
+        `yt-chat-shoutout: reply generation failed for ${shoutoutId} (${reply.reason})`,
+      );
+      return;
+    }
+    textToAir = reply.text;
+    skipHumanize = true;
+    // Persist what Lena will actually say so the dashboard's Recent
+    // feed shows the reply, not the listener's question.
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: { cleanText: textToAir },
+    });
+  }
+
+  try {
+    const internalRes = await fetch(INTERNAL_SHOUTOUT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": secret,
+      },
+      body: JSON.stringify({
+        shoutoutRowId: shoutoutId,
+        text: textToAir,
+        requesterName,
+        skipHumanize,
+      }),
+    });
+    if (!internalRes.ok) {
+      const detail = await internalRes.text().catch(() => "");
+      await prisma.shoutout.update({
+        where: { id: shoutoutId },
+        data: {
+          deliveryStatus: "failed",
+          moderationReason: `http_${internalRes.status}: ${detail.slice(0, 160)}`,
+        },
+      });
+      console.warn(
+        `yt-chat-shoutout: internal forward returned ${internalRes.status} for ${shoutoutId}`,
+      );
+    }
+  } catch (e) {
+    const reason =
+      e instanceof Error && e.name === "TimeoutError"
+        ? "internal_forward_timeout"
+        : "internal_forward_network";
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: { deliveryStatus: "failed", moderationReason: reason },
+    });
+    console.warn(
+      `yt-chat-shoutout: internal forward fetch failed for ${shoutoutId} (${reason}): ${
+        e instanceof Error ? e.message : "unknown"
+      }`,
+    );
+  }
 }
