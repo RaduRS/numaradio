@@ -4,6 +4,7 @@ import { PutObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client
 import { getDbPool } from "@/lib/db";
 import { generateArtwork } from "@/lib/openrouter";
 import { loadFallbackArtwork, fallbackShowOr } from "@/lib/fallback-artwork";
+import { generateArtworkScene } from "@/lib/artwork-prompt-llm";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -49,14 +50,16 @@ const SHOW_HINT: Record<string, string> = {
   prime_hours: "evening, vivid sunset/dusk, electric, celebratory",
 };
 
-function buildPrompt(track: TrackRow, hint: string | null): string {
+/** Bare fallback prompt used when the Minimax visual-scene step fails.
+ *  Intentionally excludes the title — Flux sometimes renders quoted
+ *  strings as on-image text no matter the negative prompt. */
+function buildBarePrompt(track: TrackRow, hint: string | null): string {
   const parts: string[] = [];
   if (track.description) parts.push(`mood: ${track.description.slice(0, 240)}`);
   else if (track.mood) parts.push(`mood: ${track.mood}`);
   if (track.genre) parts.push(`genre: ${track.genre}`);
   if (track.show && SHOW_HINT[track.show]) parts.push(`time-of-day feel: ${SHOW_HINT[track.show]}`);
   if (hint && hint.trim()) parts.push(`operator note: ${hint.trim().slice(0, 240)}`);
-  if (track.title) parts.push(`evocative of the title "${track.title}" (do not show the words)`);
   return parts.join(". ");
 }
 
@@ -90,11 +93,24 @@ export async function POST(
     : { rows: [] };
   const oldAsset = oldAssetRes.rows[0];
 
-  // Generate new image. On Flux failure (most often "no credits") we
-  // fall back to the per-show brand PNG instead of 502'ing — operator
-  // gets a real cover and a `fallback: true` flag in the response so
-  // the UI can flag it.
-  const prompt = buildPrompt(track, body.hint ?? null);
+  // Two-stage prompt build:
+  // 1. Ask Minimax to translate {title, mood, genre, show, hint} into a
+  //    vivid concrete visual scene (no proper nouns, no quoted strings).
+  //    This lets the title's THEME inform the image without ever feeding
+  //    Flux the literal title string — Flux sometimes renders quoted
+  //    text on the cover no matter the negative prompt.
+  // 2. If that step fails (no MINIMAX_API_KEY, network error, unusable
+  //    output), fall back to the bare mood + genre + show concatenation.
+  const showHint = track.show && SHOW_HINT[track.show] ? SHOW_HINT[track.show] : null;
+  const llmScene = await generateArtworkScene({
+    title: track.title,
+    description: track.description,
+    mood: track.mood,
+    genre: track.genre,
+    showHint,
+    operatorNote: body.hint ?? null,
+  });
+  const prompt = llmScene ?? buildBarePrompt(track, body.hint ?? null);
   let imgBuf: Buffer;
   let mimeType = "image/jpeg";
   let extension = "jpg";
