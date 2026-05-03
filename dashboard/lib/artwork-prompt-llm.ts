@@ -9,7 +9,7 @@
 
 const MINIMAX_URL = "https://api.minimax.io/anthropic/v1/messages";
 const MODEL = process.env.MINIMAX_ARTWORK_PROMPT_MODEL ?? "MiniMax-M2.7";
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 25_000;
 
 const SYSTEM_PROMPT = `You translate music metadata into a vivid concrete visual scene description for an image-generation model. The result is a standalone full-bleed square painting — NOT an album cover, NOT framed, NOT packaged.
 
@@ -100,22 +100,38 @@ export async function generateArtworkScene(
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
+  } catch (err) {
+    console.warn("[artwork-scene] minimax network/timeout:", err instanceof Error ? err.message : err);
     return null;
   }
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.warn(`[artwork-scene] minimax http ${res.status}: ${body.slice(0, 300)}`);
+    return null;
+  }
 
   let json: MinimaxResponse;
   try {
     json = (await res.json()) as MinimaxResponse;
-  } catch {
+  } catch (err) {
+    console.warn("[artwork-scene] minimax json parse:", err instanceof Error ? err.message : err);
     return null;
   }
 
   const textBlock = json.content?.find((b): b is MinimaxText => b.type === "text");
   const scene = textBlock?.text?.trim();
-  if (!scene) return null;
-  if (!looksUsable(scene, input.title)) return null;
+  if (!scene) {
+    console.warn(
+      `[artwork-scene] minimax returned no text block (content_blocks=${json.content?.length ?? 0})`,
+    );
+    return null;
+  }
+  if (!looksUsable(scene, input.title)) {
+    console.warn(
+      `[artwork-scene] minimax output rejected by looksUsable (len=${scene.length}): ${scene.slice(0, 200)}`,
+    );
+    return null;
+  }
   return scene;
 }
