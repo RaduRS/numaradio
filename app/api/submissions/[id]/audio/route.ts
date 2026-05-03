@@ -1,10 +1,15 @@
-// GET /api/submissions/:id/audio
+// GET /api/submissions/:id/audio?exp=<unix>&sig=<hmac>
 //
 // Streams a pending submission's audio for the dashboard preview
 // player. Public B2 URLs are not handed to the browser — pending
 // content shouldn't be reachable without going through this gate.
-// Auth is loose for now (any caller); the dashboard sits behind CF
-// Access so the surface is reachable only by authorised operators.
+//
+// Auth: requires a short-lived HMAC signature minted by the dashboard
+// (`dashboard/lib/sign-audio-url.ts`). The dashboard sits behind CF
+// Access; only authorised operators can call its `/api/submissions/list`
+// route, which is the only thing that mints valid sigs. Without sig +
+// exp, or with an expired/invalid sig, this route returns 404 — same
+// shape as a missing submission so existence isn't leaked.
 //
 // Honors HTTP Range requests with 206 Partial Content so the
 // browser can scrub mid-track without re-downloading from byte 0.
@@ -12,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getObject } from "@/lib/storage";
+import { verifySubmissionAudioSig } from "@/lib/verify-audio-sig";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +26,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
+  const url = new URL(req.url);
+  const exp = url.searchParams.get("exp");
+  const sig = url.searchParams.get("sig");
+  if (!verifySubmissionAudioSig(id, exp, sig)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const submission = await prisma.musicSubmission.findUnique({
     where: { id },
     select: { audioStorageKey: true, status: true },

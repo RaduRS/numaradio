@@ -20,6 +20,10 @@ type Pending = {
   durationSeconds: number | null;
   artworkStorageKey: string | null;
   createdAt: string;
+  /** Pre-signed by the dashboard's /api/submissions/list route. The
+   *  signature expires after 1h; the public-site route 404s without
+   *  it so random visitors can't stream pending unmoderated audio. */
+  audioUrl: string;
 };
 
 type Reviewed = {
@@ -68,8 +72,6 @@ function fmtSweepIn(d: Date): string {
   if (hrs < 24) return `in ${hrs}h`;
   return `in ${Math.floor(hrs / 24)}d`;
 }
-
-const PUBLIC_SITE = "https://numaradio.com";
 
 const SHOW_OPTIONS = [
   { value: "night_shift", label: "Night Shift · 00–05" },
@@ -516,7 +518,7 @@ export function SubmissionsPanel() {
                 {p.artworkStorageKey && <span className="text-fg-dim">+ artwork</span>}
               </div>
               <audio
-                src={`${PUBLIC_SITE}/api/submissions/${p.id}/audio`}
+                src={p.audioUrl}
                 controls
                 preload="none"
                 className="w-full"

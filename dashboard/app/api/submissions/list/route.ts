@@ -9,8 +9,14 @@
 
 import { NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
+import { signSubmissionAudioQuery } from "@/lib/sign-audio-url";
 
 export const dynamic = "force-dynamic";
+
+// Public host (where the audio route lives — Vercel, not the dashboard).
+// Override via env in non-prod.
+const PUBLIC_SITE =
+  process.env.PUBLIC_SITE_URL ?? "https://numaradio.com";
 
 interface PendingRow {
   id: string;
@@ -69,6 +75,12 @@ export async function GET(): Promise<NextResponse> {
         durationSeconds: r.durationSeconds,
         artworkStorageKey: r.artworkStorageKey,
         createdAt: r.createdAt.toISOString(),
+        // Pre-signed audio URL — short-lived HMAC verified by the
+        // public-site route. Operator browser fetches this directly
+        // (the URL bypasses CF Access since it points to numaradio.com),
+        // so the sig is the only thing standing between random visitors
+        // and pending unmoderated audio.
+        audioUrl: `${PUBLIC_SITE}/api/submissions/${r.id}/audio${signSubmissionAudioQuery(r.id)}`,
       })),
       reviewed: reviewedRes.rows.map((r) => ({
         id: r.id,
