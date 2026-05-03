@@ -164,6 +164,11 @@ function fakeDeps(overrides: Partial<Parameters<typeof AutoHostOrchestrator.prot
   const deps = {
     config: async () => AUTO_CFG,
     getListenerCount: async () => 100 as number | null,
+    // Default: no YouTube fold-in. Tests that exercise the fold-in
+    // override this. null preserves pre-fold-in behaviour for every
+    // existing test.
+    getYoutubeAudience: async () =>
+      null as { state: string; viewers: number } | null,
     revertExpired: async (entry: RecordedRevert) => { reverts.push(entry); },
     // Default: duration=null so the orchestrator skips the pre-end wait
     // and pushes immediately. Tests that care about timing override this.
@@ -753,5 +758,55 @@ test("world_aside slot: expired forced state is reverted then call proceeds", as
     "expected a worldAside revert",
   );
   // Effective mode is now auto → world_aside fires (NanoClaw mocked ok)
+  assert.equal(pushes.length, 1);
+});
+
+// ─── YouTube audience fold-in ───────────────────────────────────────────
+
+test("auto + yt live: subtracts encoder, adds viewers, speaks when total >= 3", async () => {
+  // icecast=2 (1 real + 1 OBS), yt=live, viewers=5 → effective = 2+5-1 = 6 → speak
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("auto"),
+    getListenerCount: async () => 2,
+    getYoutubeAudience: async () => ({ state: "live", viewers: 5 }),
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 1);
+});
+
+test("auto + yt live: encoder-only icecast + zero viewers → skips", async () => {
+  // icecast=1 (just OBS), yt=live, viewers=0 → effective = 1+0-1 = 0 → skip
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("auto"),
+    getListenerCount: async () => 1,
+    getYoutubeAudience: async () => ({ state: "live", viewers: 0 }),
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 0);
+});
+
+test("auto + yt off: ignores YT entirely, uses raw icecast (skips at 2)", async () => {
+  // icecast=2, yt=off → effective = 2 + 0 - 0 = 2 → skip
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("auto"),
+    getListenerCount: async () => 2,
+    getYoutubeAudience: async () => ({ state: "off", viewers: 0 }),
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
+  assert.equal(pushes.length, 0);
+});
+
+test("auto + yt fetch failed (null): falls back to raw icecast (speaks at 3)", async () => {
+  // icecast=3, yt=null → effective = 3 + 0 - 0 = 3 → speak (today's behaviour)
+  const { deps, pushes } = fakeDeps({
+    config: async () => configFor("auto"),
+    getListenerCount: async () => 3,
+    getYoutubeAudience: async () => null,
+  });
+  const orch = new AutoHostOrchestrator(deps);
+  await orch.runChatter();
   assert.equal(pushes.length, 1);
 });

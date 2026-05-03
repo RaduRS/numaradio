@@ -112,6 +112,15 @@ export interface AutoHostDeps {
    */
   getListenerCount: () => Promise<number | null>;
   /**
+   * Returns the current YouTube broadcast audience: state + concurrent
+   * viewers. Returns null on any fetch error — gate then ignores YouTube
+   * and uses pure icecast count (no fold-in, no encoder subtraction).
+   *
+   * Loopback fetch to the dashboard's /api/youtube/health, which is
+   * in-process cached 30s. Effectively free.
+   */
+  getYoutubeAudience: () => Promise<{ state: string; viewers: number } | null>;
+  /**
    * Called when runChatter() discovers an expired forced_* state. The
    * caller performs an atomic UPDATE ... WHERE autoHostForcedUntil =
    * <entry.forcedUntil> to avoid racing with a concurrent operator toggle,
@@ -275,13 +284,29 @@ export class AutoHostOrchestrator {
         return;
       }
       if (cfg.autoHost.mode === "auto") {
-        const listeners = await this.deps.getListenerCount();
-        if (listeners === null || listeners < 3) {
+        const [icecast, audience] = await Promise.all([
+          this.deps.getListenerCount(),
+          this.deps.getYoutubeAudience(),
+        ]);
+        // null icecast = unknown stream state → fail-closed (skip).
+        if (icecast === null) {
+          this.state.markFailure();
+          return;
+        }
+        // Effective audience = real icecast listeners + YouTube viewers,
+        // minus 1 for the OBS/encoder pull when broadcast is live.
+        // audience===null (YT fetch failed) → no fold-in, no subtraction
+        // → falls back to pre-fold-in behaviour (raw icecast only).
+        const liveBroadcast = audience?.state === "live";
+        const effective =
+          icecast +
+          (liveBroadcast ? (audience?.viewers ?? 0) - 1 : 0);
+        if (effective < 3) {
           this.state.markFailure();
           return;
         }
       }
-      // forced_on or auto-with-enough-listeners → proceed
+      // forced_on or auto-with-enough-effective-audience → proceed
 
       // Snapshot current-track info BEFORE generation so timing is
       // anchored to what's playing when we fire, not whatever is playing
