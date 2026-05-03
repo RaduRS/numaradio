@@ -56,8 +56,26 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-bottom: 14px;
+}
+
+/* Quiet artist CTA tucked under the loud listener pair. Same mono
+   treatment as the "Got finished music?" line on /#requests so the
+   two pages feel like one system. */
+.hero-artist-cta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
   margin-bottom: 56px;
 }
+.hero-artist-cta a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+.hero-artist-cta a:hover { color: var(--fg); }
 
 .hero-stats {
   display: flex;
@@ -1836,10 +1854,6 @@
   .nav .live-chip { display: none; }
   .nav-right { gap: 10px; }
   .nav-inner { height: 56px; }
-  /* Submit pill stays visible — secondary CTA for artists. Drop the
-     "Submit" word at very narrow widths so it doesn't crowd the logo. */
-  .nav-cta { padding: 6px 11px; }
-
   .hero { padding: 48px 0 80px; }
   .hero-stats { flex-wrap: wrap; gap: 24px; }
   .hero-ctas { flex-wrap: wrap; }
@@ -1887,11 +1901,6 @@
 
   /* Content pages (/about, /submit) — collapse 2-col grid to 1 col. */
   .about-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
-}
-
-@media (max-width: 479px) {
-  .nav-cta { padding: 6px 9px; gap: 0; }
-  .nav-cta-text { display: none; }
 }
 
 /* ============ TWEAKS PANEL ============ */

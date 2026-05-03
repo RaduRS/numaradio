@@ -15,12 +15,9 @@ export function Nav() {
           <Link href="/#format">The Station</Link>
           <Link href="/#now">Now Playing</Link>
           <Link href="/#schedule">Shows</Link>
+          <Link href="/submit">Submit</Link>
         </div>
         <div className="nav-right">
-          <Link href="/submit" className="nav-cta" aria-label="Submit your track">
-            <span className="nav-cta-mark" aria-hidden>+</span>
-            <span className="nav-cta-text">Submit</span>
-          </Link>
           <div className="live-chip">
             <span className="dot" /> On Air
           </div>

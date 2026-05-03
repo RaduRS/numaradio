@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ListenLiveButton } from "./ListenLiveButton";
 import { ListenerCount } from "./ListenerCount";
 import { SparklesIcon } from "./Icons";
@@ -34,6 +35,10 @@ export function Hero() {
               <SparklesIcon className="btn-icon" />
               Send it to Lena
             </a>
+          </div>
+          <div className="hero-artist-cta">
+            Got a finished track?{" "}
+            <Link href="/submit">Submit it here →</Link>
           </div>
           <HeroStats />
         </div>
