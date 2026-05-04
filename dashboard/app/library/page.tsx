@@ -237,16 +237,23 @@ export default function LibraryPage() {
   function playPreview(src: PreviewSource | null) {
     const audio = audioRef.current;
     if (!audio) return;
-    if (src === null || preview?.key === src?.key) {
+    if (src === null || preview?.key === src.key) {
       audio.pause();
-      audio.currentTime = 0;
       setPreview(null);
       return;
     }
+    // Pause-then-load avoids the AbortError race when switching sources
+    // mid-load (https://goo.gl/LdLk22). Setting `src` resets currentTime
+    // to 0 on its own. We flip the UI state optimistically so the button
+    // animates immediately, even before the first byte loads.
+    audio.pause();
     audio.src = src.audioUrl;
-    audio.currentTime = 0;
-    audio.play().then(() => setPreview(src)).catch((err) => {
-      toast.error(`Preview failed: ${err.message ?? err}`);
+    setPreview(src);
+    audio.play().catch((err: unknown) => {
+      // AbortError: another src change interrupted this load. Harmless —
+      // the new source's play() will resolve on its own.
+      if ((err as { name?: string })?.name === "AbortError") return;
+      toast.error(`Preview failed: ${(err as Error).message ?? err}`);
       setPreview(null);
     });
   }

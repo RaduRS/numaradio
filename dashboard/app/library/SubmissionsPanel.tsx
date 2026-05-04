@@ -303,27 +303,28 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
     return (
       <li
         key={r.id}
-        className="border border-line rounded p-2.5 flex flex-col gap-1.5 bg-bg"
+        className="flex flex-col gap-2 rounded-lg border border-line/70 bg-bg p-3 transition-colors hover:border-line"
       >
-        <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <div className="flex flex-col min-w-0">
-            <span className="text-sm text-fg font-medium truncate" title={r.trackTitle ?? ""}>
-              {r.trackTitle ?? <span className="italic text-fg-mute">Untitled</span>}
-            </span>
-            <span className="text-[10px] text-fg-mute truncate" title={r.email}>
-              {r.artistName} <span className="text-fg-dim">·</span>{" "}
-              <span className="font-mono">{r.email}</span>
-            </span>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h4 className="truncate text-sm font-medium leading-tight text-fg" title={r.trackTitle ?? ""}>
+              {r.trackTitle ?? <span className="font-normal italic text-fg-mute">Untitled</span>}
+            </h4>
+            <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-fg-mute">
+              <span className="truncate">{r.artistName}</span>
+              <span className="text-fg-dim" aria-hidden>·</span>
+              <span className="truncate font-mono text-[10px]" title={r.email}>{r.email}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] shrink-0">
+          <div className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.15em]">
             <span
-              className={
+              className={`rounded-full border px-2 py-0.5 ${
                 r.status === "approved"
-                  ? "text-accent"
+                  ? "border-accent/50 text-accent"
                   : r.status === "rejected"
-                  ? "text-bad"
-                  : "text-fg-mute"
-              }
+                    ? "border-[var(--bad)]/40 text-bad"
+                    : "border-line text-fg-mute"
+              }`}
             >
               {r.status}
             </span>
@@ -332,7 +333,7 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
         </div>
         {r.trackGenre && (
           <span
-            className="self-start px-1.5 py-0.5 rounded border border-line text-fg-mute font-mono uppercase text-[9px] tracking-[0.15em]"
+            className="self-start rounded-full border border-line/70 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-fg-mute"
             title="Genre supplied by the artist"
           >
             {r.trackGenre}
@@ -432,77 +433,95 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
           <p className="text-sm text-fg-mute">Nothing waiting.</p>
         )}
 
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-4">
           {data.pending.map((p) => {
             const previewKey = `submission:${p.id}`;
             const isPreviewing = activePreviewKey === previewKey;
             return (
             <li
               key={p.id}
-              className="border border-line rounded p-3 flex flex-col gap-2 bg-bg"
+              className="flex flex-col gap-3 rounded-lg border border-line bg-bg p-4 transition-colors hover:border-line/80 hover:bg-bg/60"
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-medium truncate" title={p.trackTitle ?? ""}>
-                    {p.trackTitle ?? <span className="italic text-fg-mute">Untitled</span>}
-                  </span>
-                  <span className="text-xs text-fg-mute truncate">
-                    {p.artistName} <span className="text-fg-dim">·</span>{" "}
-                    <span className="font-mono">{p.email}</span>
-                  </span>
+              {/* Header — track title leads, artist + email subtitle, time top-right */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <h3
+                    className="truncate text-[15px] font-semibold leading-tight text-fg"
+                    title={p.trackTitle ?? ""}
+                  >
+                    {p.trackTitle ?? <span className="font-normal italic text-fg-mute">Untitled</span>}
+                  </h3>
+                  <div className="flex min-w-0 items-center gap-1.5 text-xs text-fg-mute">
+                    <span className="truncate">{p.artistName}</span>
+                    <span className="text-fg-dim" aria-hidden>·</span>
+                    <span className="truncate font-mono text-[11px]">{p.email}</span>
+                  </div>
                 </div>
-                <span className="text-xs text-fg-dim shrink-0">{relativeTime(p.createdAt)}</span>
+                <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-fg-dim">
+                  {relativeTime(p.createdAt)}
+                </span>
               </div>
-              <div className="flex items-center gap-2 text-xs flex-wrap">
-                <span
-                  className={`px-2 py-0.5 rounded border ${
-                    p.airingPreference === "permanent"
-                      ? "border-accent text-accent"
-                      : "border-line text-fg-mute"
+
+              {/* Meta strip — uniform chips with the Preview pill docked right */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] ${
+                      p.airingPreference === "permanent"
+                        ? "border-accent/50 text-accent"
+                        : "border-line text-fg-mute"
+                    }`}
+                  >
+                    {p.airingPreference === "permanent" ? "Permanent" : "One-off"}
+                  </span>
+                  <span className="rounded-full border border-line/70 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] tabular-nums text-fg-mute">
+                    {fmtDur(p.durationSeconds)}
+                  </span>
+                  {p.trackGenre && (
+                    <span
+                      className="rounded-full border border-line/70 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-fg-mute"
+                      title="Genre supplied by the artist"
+                    >
+                      {p.trackGenre}
+                    </span>
+                  )}
+                  {p.artworkStorageKey && (
+                    <span className="rounded-full border border-line/70 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-fg-mute">
+                      + artwork
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    isPreviewing
+                      ? onPreview(null)
+                      : onPreview({
+                          key: previewKey,
+                          title: p.trackTitle ?? `Untitled — ${p.artistName}`,
+                          artist: p.artistName,
+                          artworkUrl: null,
+                          audioUrl: p.audioUrl,
+                        })
+                  }
+                  aria-pressed={isPreviewing}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.15em] transition-colors ${
+                    isPreviewing
+                      ? "border-accent bg-[var(--accent-soft)] text-accent"
+                      : "border-line text-fg-mute hover:border-accent/50 hover:text-accent"
                   }`}
                 >
-                  {p.airingPreference === "permanent" ? "Permanent" : "One-off"}
-                </span>
-                <span className="text-fg-dim">{fmtDur(p.durationSeconds)}</span>
-                {p.trackGenre && (
-                  <span
-                    className="px-1.5 py-0.5 rounded border border-line text-fg-mute font-mono uppercase text-[9px] tracking-[0.15em]"
-                    title="Genre supplied by the artist"
-                  >
-                    {p.trackGenre}
-                  </span>
-                )}
-                {p.artworkStorageKey && <span className="text-fg-dim">+ artwork</span>}
+                  {isPreviewing ? (
+                    <><PauseIcon size={11} strokeWidth={2.5} /> Pause</>
+                  ) : (
+                    <><PlayIcon size={11} strokeWidth={2.5} /> Preview</>
+                  )}
+                </button>
               </div>
-              {/* Preview button — feeds the shared bottom player on /library so
-                  only one preview (track or submission) plays at a time. */}
-              <button
-                type="button"
-                onClick={() =>
-                  isPreviewing
-                    ? onPreview(null)
-                    : onPreview({
-                        key: previewKey,
-                        title: p.trackTitle ?? `Untitled — ${p.artistName}`,
-                        artist: p.artistName,
-                        artworkUrl: null,
-                        audioUrl: p.audioUrl,
-                      })
-                }
-                aria-pressed={isPreviewing}
-                className={`self-start inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-mono uppercase tracking-[0.15em] transition-colors ${
-                  isPreviewing
-                    ? "border-accent text-accent bg-[var(--accent-soft)]"
-                    : "border-line text-fg-mute hover:text-accent hover:border-accent/60"
-                }`}
-              >
-                {isPreviewing
-                  ? <><PauseIcon size={13} strokeWidth={2} /> Pause preview</>
-                  : <><PlayIcon size={13} strokeWidth={2} /> Preview</>}
-              </button>
 
+              {/* Action row — separated by hairline so it reads as its own zone */}
               {rejectingId === p.id ? (
-                <div className="flex flex-col gap-3 rounded border border-line bg-bg-1/40 p-3">
+                <div className="mt-1 flex flex-col gap-3 rounded-md border border-line/70 bg-bg-1/40 p-3">
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-mute">
                     Why rejecting?
                   </div>
@@ -558,7 +577,7 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-2 items-center flex-wrap">
+                <div className="flex flex-wrap items-center gap-2 border-t border-line/50 pt-3">
                   <Select
                     value={showBySubmission[p.id] ?? "daylight_channel"}
                     onValueChange={(v) => {
@@ -570,14 +589,14 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
                   >
                     <SelectTrigger
                       size="sm"
-                      className="h-8 text-xs font-mono w-[200px] disabled:opacity-50"
+                      className="h-8 w-[200px] font-mono text-xs disabled:opacity-50"
                       title="Show this track will be added to on approve"
                     >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {SHOW_OPTIONS.map((s) => (
-                        <SelectItem key={s.value} value={s.value} className="text-xs font-mono">
+                        <SelectItem key={s.value} value={s.value} className="font-mono text-xs">
                           {s.label}
                         </SelectItem>
                       ))}
