@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PlayIcon, PauseIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { PreviewSource } from "@/lib/preview-source";
 
 type Pending = {
   id: string;
   artistName: string;
+  trackTitle: string | null;
+  trackGenre: string | null;
   email: string;
   airingPreference: "one_off" | "permanent";
   durationSeconds: number | null;
@@ -29,6 +33,8 @@ type Pending = {
 type Reviewed = {
   id: string;
   artistName: string;
+  trackTitle: string | null;
+  trackGenre: string | null;
   email: string;
   airingPreference: "one_off" | "permanent";
   status: "approved" | "rejected" | "withdrawn";
@@ -38,6 +44,13 @@ type Reviewed = {
   reviewedAt: string | null;
   reviewedBy: string | null;
 };
+
+interface SubmissionsPanelProps {
+  /** Called when the operator clicks Play on a pending row. Pass null to stop. */
+  onPreview: (src: PreviewSource | null) => void;
+  /** The currently-playing preview's key (or null). Used to flip Play↔Pause. */
+  activePreviewKey: string | null;
+}
 
 type ListResponse = { pending: Pending[]; reviewed: Reviewed[] };
 
@@ -108,7 +121,7 @@ function fmtDur(s: number | null): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export function SubmissionsPanel() {
+export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPanelProps) {
   const [data, setData] = useState<ListResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -177,7 +190,14 @@ export function SubmissionsPanel() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  /** Stop the bottom preview bar if it's currently playing this row.
+   *  Called before any mutation so playback doesn't outlive its source. */
+  function stopPreviewIf(id: string) {
+    if (activePreviewKey === `submission:${id}`) onPreview(null);
+  }
+
   async function approve(id: string) {
+    stopPreviewIf(id);
     setBusy(id);
     try {
       const show = showBySubmission[id] ?? "daylight_channel";
@@ -208,6 +228,7 @@ export function SubmissionsPanel() {
       selectedReasons.length > 0
         ? `${selectedReasons.join("; ")}${notes ? `. Notes: ${notes}` : ""}`
         : notes;
+    stopPreviewIf(id);
     setBusy(id);
     try {
       const r = await fetch(`/api/submissions/${id}/reject`, {
@@ -230,6 +251,7 @@ export function SubmissionsPanel() {
   }
 
   async function withdraw(id: string) {
+    stopPreviewIf(id);
     setBusy(id);
     try {
       const r = await fetch(`/api/submissions/${id}/withdraw`, {
@@ -253,6 +275,7 @@ export function SubmissionsPanel() {
   }
 
   async function fullDelete(id: string) {
+    stopPreviewIf(id);
     setBusy(id);
     try {
       const r = await fetch(`/api/submissions/${id}/full-delete`, {
@@ -283,13 +306,16 @@ export function SubmissionsPanel() {
         className="border border-line rounded p-2.5 flex flex-col gap-1.5 bg-bg"
       >
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <div className="flex flex-col">
-            <span className="text-sm text-fg font-medium">{r.artistName}</span>
-            <span className="text-[10px] text-fg-mute" title={r.email}>
-              {r.email}
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm text-fg font-medium truncate" title={r.trackTitle ?? ""}>
+              {r.trackTitle ?? <span className="italic text-fg-mute">Untitled</span>}
+            </span>
+            <span className="text-[10px] text-fg-mute truncate" title={r.email}>
+              {r.artistName} <span className="text-fg-dim">·</span>{" "}
+              <span className="font-mono">{r.email}</span>
             </span>
           </div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em]">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] shrink-0">
             <span
               className={
                 r.status === "approved"
@@ -304,6 +330,14 @@ export function SubmissionsPanel() {
             <span className="text-fg-dim">{ts ? relativeTime(ts) : "—"}</span>
           </div>
         </div>
+        {r.trackGenre && (
+          <span
+            className="self-start px-1.5 py-0.5 rounded border border-line text-fg-mute font-mono uppercase text-[9px] tracking-[0.15em]"
+            title="Genre supplied by the artist"
+          >
+            {r.trackGenre}
+          </span>
+        )}
         {r.status === "rejected" && r.rejectReason && (
           <p className="text-[11px] text-fg-mute italic">{r.rejectReason}</p>
         )}
@@ -399,19 +433,27 @@ export function SubmissionsPanel() {
         )}
 
         <ul className="flex flex-col gap-3">
-          {data.pending.map((p) => (
+          {data.pending.map((p) => {
+            const previewKey = `submission:${p.id}`;
+            const isPreviewing = activePreviewKey === previewKey;
+            return (
             <li
               key={p.id}
               className="border border-line rounded p-3 flex flex-col gap-2 bg-bg"
             >
               <div className="flex items-baseline justify-between gap-2">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{p.artistName}</span>
-                  <span className="text-xs text-fg-mute">{p.email}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-medium truncate" title={p.trackTitle ?? ""}>
+                    {p.trackTitle ?? <span className="italic text-fg-mute">Untitled</span>}
+                  </span>
+                  <span className="text-xs text-fg-mute truncate">
+                    {p.artistName} <span className="text-fg-dim">·</span>{" "}
+                    <span className="font-mono">{p.email}</span>
+                  </span>
                 </div>
-                <span className="text-xs text-fg-dim">{relativeTime(p.createdAt)}</span>
+                <span className="text-xs text-fg-dim shrink-0">{relativeTime(p.createdAt)}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs flex-wrap">
                 <span
                   className={`px-2 py-0.5 rounded border ${
                     p.airingPreference === "permanent"
@@ -422,14 +464,42 @@ export function SubmissionsPanel() {
                   {p.airingPreference === "permanent" ? "Permanent" : "One-off"}
                 </span>
                 <span className="text-fg-dim">{fmtDur(p.durationSeconds)}</span>
+                {p.trackGenre && (
+                  <span
+                    className="px-1.5 py-0.5 rounded border border-line text-fg-mute font-mono uppercase text-[9px] tracking-[0.15em]"
+                    title="Genre supplied by the artist"
+                  >
+                    {p.trackGenre}
+                  </span>
+                )}
                 {p.artworkStorageKey && <span className="text-fg-dim">+ artwork</span>}
               </div>
-              <audio
-                src={p.audioUrl}
-                controls
-                preload="none"
-                className="w-full"
-              />
+              {/* Preview button — feeds the shared bottom player on /library so
+                  only one preview (track or submission) plays at a time. */}
+              <button
+                type="button"
+                onClick={() =>
+                  isPreviewing
+                    ? onPreview(null)
+                    : onPreview({
+                        key: previewKey,
+                        title: p.trackTitle ?? `Untitled — ${p.artistName}`,
+                        artist: p.artistName,
+                        artworkUrl: null,
+                        audioUrl: p.audioUrl,
+                      })
+                }
+                aria-pressed={isPreviewing}
+                className={`self-start inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-mono uppercase tracking-[0.15em] transition-colors ${
+                  isPreviewing
+                    ? "border-accent text-accent bg-[var(--accent-soft)]"
+                    : "border-line text-fg-mute hover:text-accent hover:border-accent/60"
+                }`}
+              >
+                {isPreviewing
+                  ? <><PauseIcon size={13} strokeWidth={2} /> Pause preview</>
+                  : <><PlayIcon size={13} strokeWidth={2} /> Preview</>}
+              </button>
 
               {rejectingId === p.id ? (
                 <div className="flex flex-col gap-3 rounded border border-line bg-bg-1/40 p-3">
@@ -531,7 +601,8 @@ export function SubmissionsPanel() {
                 </div>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
 
         {/* Find-by-email — for acting on tracks older than the recent-20 list */}

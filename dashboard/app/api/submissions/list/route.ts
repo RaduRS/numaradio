@@ -21,6 +21,8 @@ const PUBLIC_SITE =
 interface PendingRow {
   id: string;
   artistName: string;
+  trackTitle: string | null;
+  trackGenre: string | null;
   email: string;
   airingPreference: "one_off" | "permanent";
   durationSeconds: number | null;
@@ -31,6 +33,8 @@ interface PendingRow {
 interface ReviewedRow {
   id: string;
   artistName: string;
+  trackTitle: string | null;
+  trackGenre: string | null;
   email: string;
   airingPreference: "one_off" | "permanent";
   status: "approved" | "rejected" | "withdrawn";
@@ -46,16 +50,17 @@ export async function GET(): Promise<NextResponse> {
     const pool = getDbPool();
     const [pendingRes, reviewedRes] = await Promise.all([
       pool.query<PendingRow>(
-        `SELECT id, "artistName", email, "airingPreference",
-                "durationSeconds", "artworkStorageKey", "createdAt"
+        `SELECT id, "artistName", "trackTitle", "trackGenre", email,
+                "airingPreference", "durationSeconds", "artworkStorageKey",
+                "createdAt"
            FROM "MusicSubmission"
           WHERE status = 'pending'
           ORDER BY "createdAt" DESC`,
       ),
       pool.query<ReviewedRow>(
-        `SELECT id, "artistName", email, "airingPreference", status,
-                "rejectReason", "withdrawnAt", "withdrawnReason",
-                "reviewedAt", "reviewedBy"
+        `SELECT id, "artistName", "trackTitle", "trackGenre", email,
+                "airingPreference", status, "rejectReason", "withdrawnAt",
+                "withdrawnReason", "reviewedAt", "reviewedBy"
            FROM "MusicSubmission"
           WHERE status IN ('approved', 'rejected', 'withdrawn')
           ORDER BY GREATEST(
@@ -70,6 +75,8 @@ export async function GET(): Promise<NextResponse> {
       pending: pendingRes.rows.map((r) => ({
         id: r.id,
         artistName: r.artistName,
+        trackTitle: r.trackTitle,
+        trackGenre: r.trackGenre,
         email: r.email,
         airingPreference: r.airingPreference,
         durationSeconds: r.durationSeconds,
@@ -85,6 +92,8 @@ export async function GET(): Promise<NextResponse> {
       reviewed: reviewedRes.rows.map((r) => ({
         id: r.id,
         artistName: r.artistName,
+        trackTitle: r.trackTitle,
+        trackGenre: r.trackGenre,
         email: r.email,
         airingPreference: r.airingPreference,
         status: r.status,

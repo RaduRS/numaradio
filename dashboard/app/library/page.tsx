@@ -28,6 +28,7 @@ import type { LibraryTrack } from "@/lib/library";
 import { SubmissionsPanel } from "./SubmissionsPanel";
 import { UpcomingQueue } from "@/components/upcoming-queue";
 import { LibraryPreviewBar } from "@/components/library-preview-bar";
+import type { PreviewSource } from "@/lib/preview-source";
 import type {
   DaemonFailure,
   DaemonPush,
@@ -225,27 +226,39 @@ export default function LibraryPage() {
   const [page, setPage] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState<Set<string>>(new Set());
-  // In-page preview: one shared <audio> element so only one track plays
-  // at a time. Click another row → that one starts, the previous stops.
-  // (The `previewTrack` derivation is below `const tracks = ...` to avoid
-  // a temporal-dead-zone reference; defined just before its consumer.)
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  // In-page preview: one shared <audio> element drives the bottom bar
+  // for both library tracks AND submissions panel — only one preview
+  // plays at a time across the whole page. Source is identified by an
+  // opaque key like `track:<id>` or `submission:<id>` so SubmissionsPanel
+  // can hook in without colliding with library track ids.
+  const [preview, setPreview] = useState<PreviewSource | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  function playPreview(src: PreviewSource | null) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (src === null || preview?.key === src?.key) {
+      audio.pause();
+      audio.currentTime = 0;
+      setPreview(null);
+      return;
+    }
+    audio.src = src.audioUrl;
+    audio.currentTime = 0;
+    audio.play().then(() => setPreview(src)).catch((err) => {
+      toast.error(`Preview failed: ${err.message ?? err}`);
+      setPreview(null);
+    });
+  }
 
   function togglePreview(track: LibraryTrack) {
     if (!track.audioStreamUrl) return;
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (previewId === track.id) {
-      audio.pause();
-      setPreviewId(null);
-      return;
-    }
-    audio.src = track.audioStreamUrl;
-    audio.currentTime = 0;
-    audio.play().then(() => setPreviewId(track.id)).catch((err) => {
-      toast.error(`Preview failed: ${err.message ?? err}`);
-      setPreviewId(null);
+    playPreview({
+      key: `track:${track.id}`,
+      title: track.title,
+      artist: track.artist,
+      artworkUrl: track.artworkUrl,
+      audioUrl: track.audioStreamUrl,
     });
   }
   const [regenTarget, setRegenTarget] = useState<LibraryTrack | null>(null);
@@ -265,10 +278,10 @@ export default function LibraryPage() {
       toast.success(`Deleted "${t.title}" — ${j.assetsDeletedFromB2 ?? 0} B2 file(s) removed${j.b2Failures ? ` (${j.b2Failures} failed)` : ""}`);
       setDeleteTarget(null);
       // Stop preview if it was the deleted track
-      if (previewId === t.id) {
+      if (preview?.key === `track:${t.id}`) {
         const audio = audioRef.current;
         if (audio) { audio.pause(); audio.currentTime = 0; }
-        setPreviewId(null);
+        setPreview(null);
       }
       tracksPoll.refresh();
     } catch (e) {
@@ -279,13 +292,6 @@ export default function LibraryPage() {
   }
 
   const tracks = tracksPoll.data?.tracks ?? [];
-  const previewTrack = useMemo(
-    () => (previewId ? (tracks.find((t) => t.id === previewId) ?? null) : null),
-    // tracks is rebuilt from tracksPoll.data each render — depending on its
-    // identity is fine here, the find is O(N) on a small list
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [previewId, tracksPoll.data],
-  );
 
   // Shoutouts are deleted from the DB by /api/internal/shoutout-ended
   // immediately after they air, so the library should rarely see one.
@@ -403,7 +409,10 @@ export default function LibraryPage() {
       </header>
 
       {/* ── Music submissions panel ───────────────────────── */}
-      <SubmissionsPanel />
+      <SubmissionsPanel
+        onPreview={playPreview}
+        activePreviewKey={preview?.key ?? null}
+      />
 
       {/* ── Up Next: drag-and-drop rotation override ──────── */}
       <UpcomingQueue />
@@ -624,20 +633,25 @@ export default function LibraryPage() {
 
                           {/* Preview — in-page audio toggle */}
                           <td className="px-2 py-3 text-center">
-                            <ActionIcon
-                              onClick={() => togglePreview(t)}
-                              disabled={!t.audioStreamUrl}
-                              title={
-                                !t.audioStreamUrl ? "No audio asset"
-                                : previewId === t.id ? "Pause preview"
-                                : "Preview"
-                              }
-                              tone={previewId === t.id ? "accent" : "muted"}
-                            >
-                              {previewId === t.id
-                                ? <PauseIcon size={15} strokeWidth={2} />
-                                : <PlayIcon size={15} strokeWidth={2} />}
-                            </ActionIcon>
+                            {(() => {
+                              const isPreviewing = preview?.key === `track:${t.id}`;
+                              return (
+                                <ActionIcon
+                                  onClick={() => togglePreview(t)}
+                                  disabled={!t.audioStreamUrl}
+                                  title={
+                                    !t.audioStreamUrl ? "No audio asset"
+                                    : isPreviewing ? "Pause preview"
+                                    : "Preview"
+                                  }
+                                  tone={isPreviewing ? "accent" : "muted"}
+                                >
+                                  {isPreviewing
+                                    ? <PauseIcon size={15} strokeWidth={2} />
+                                    : <PlayIcon size={15} strokeWidth={2} />}
+                                </ActionIcon>
+                              );
+                            })()}
                           </td>
 
                           {/* Time */}
@@ -920,19 +934,19 @@ export default function LibraryPage() {
       {/* Shared preview audio. Hidden — togglePreview controls it via ref.
           onEnded clears the row's playing state so the icon flips back to
           Play when the track finishes naturally. */}
-      <audio ref={audioRef} onEnded={() => setPreviewId(null)} preload="none" />
+      <audio ref={audioRef} onEnded={() => setPreview(null)} preload="none" />
 
       {/* Floating preview bar with scrub slider — visible whenever a row is
           selected for preview (regardless of paused state). Adds bottom
           padding to the main content so the bar doesn't cover the last row. */}
-      {previewTrack ? (
+      {preview ? (
         <>
           <div className="h-20" aria-hidden />
           <LibraryPreviewBar
             audioRef={audioRef}
-            trackTitle={previewTrack.title}
-            trackArtist={previewTrack.artist}
-            artworkUrl={previewTrack.artworkUrl}
+            trackTitle={preview.title}
+            trackArtist={preview.artist}
+            artworkUrl={preview.artworkUrl}
             onTogglePlay={() => {
               const audio = audioRef.current;
               if (!audio) return;
@@ -942,7 +956,7 @@ export default function LibraryPage() {
             onClose={() => {
               const audio = audioRef.current;
               if (audio) { audio.pause(); audio.currentTime = 0; }
-              setPreviewId(null);
+              setPreview(null);
             }}
           />
         </>
