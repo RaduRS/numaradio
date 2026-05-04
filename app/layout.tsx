@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { PlayerProvider } from "./_components/PlayerProvider";
 import { MiniPlayer } from "./_components/MiniPlayer";
@@ -220,6 +221,7 @@ export default async function RootLayout({
           </PlayerProvider>
         </FallbackArtworkProvider>
         <PresenceHeartbeat />
+        <Analytics />
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }`}
         </Script>

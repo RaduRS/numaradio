@@ -51,7 +51,7 @@ export default function PrivacyPage() {
             className="lead"
             style={{ marginTop: 16, fontSize: 14, color: "var(--fg-mute)" }}
           >
-            Last updated: 2026-04-27. Run by Numa Radio · contact{" "}
+            Last updated: 2026-05-04. Run by Numa Radio · contact{" "}
             <a href="mailto:hello@numaradio.com" style={{ color: "var(--accent)" }}>
               hello@numaradio.com
             </a>
@@ -226,9 +226,13 @@ export default function PrivacyPage() {
             yours and ours.
           </li>
           <li>
-            <strong style={{ color: "var(--fg)" }}>Vercel</strong> (US,
-            global edge). Hosts the site you&apos;re on. Sees standard
-            server access logs.
+            <strong style={{ color: "var(--fg)" }}>Vercel</strong> (London
+            edge). Hosts the site you&apos;re on. Sees standard server
+            access logs. We also use Vercel&apos;s built-in Web Analytics
+            to count anonymous page views — it sets{" "}
+            <strong style={{ color: "var(--fg)" }}>no cookies</strong>,
+            doesn&apos;t fingerprint, and uses a daily-rotating hash so
+            you can&apos;t be followed across sites or across days.
           </li>
           <li>
             <strong style={{ color: "var(--fg)" }}>Cloudflare</strong> (US,
