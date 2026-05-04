@@ -10,9 +10,10 @@ export async function GET() {
   const state = await fetchPublicYoutubeState();
   return NextResponse.json(state, {
     headers: {
-      // CDN-cache for a short window so Vercel's edge handles
-      // multiple visitors with one origin call.
-      "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+      // CDN-cache for 6 min so Vercel's edge serves homepage visitors
+      // without re-hitting YouTube. Banner state changes ~once a day
+      // (broadcast on/off) — sub-minute freshness is overkill.
+      "Cache-Control": "public, s-maxage=360, stale-while-revalidate=720",
     },
   });
 }

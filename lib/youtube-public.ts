@@ -4,15 +4,15 @@
 // homepage visitors don't need the operator-grade detail).
 //
 // Used by /api/youtube/state to power the "live on YouTube" banner.
-// Same OAuth refresh-token flow, in-process cache to keep quota tame
-// (~1u per snapshot, 60s cache → 1,440u/day even with constant
-// homepage traffic).
+// Same OAuth refresh-token flow, in-process cache mirrors the route's
+// 6-min edge cache so a cold Vercel instance after edge revalidation
+// can't burn extra quota (~1u per snapshot, 360s cache → 240u/day).
 
 import { recordYoutubeQuota } from "./youtube-quota";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 360_000;
 
 export interface PublicYoutubeState {
   /** "live" → on YouTube right now (show the banner).

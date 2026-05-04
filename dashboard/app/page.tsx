@@ -33,12 +33,12 @@ export default function OperatorDashboard() {
     bandwidthPoll.data && bandwidthPoll.data.ok
       ? (bandwidthPoll.data as BandwidthToday)
       : null;
-  // 90s cadence to leave headroom under the 10k/day default. Chat
-  // poll (5u/90s = 4.8k/day) + health (3u/90s = 2.88k/day) = ~7.7k/day.
-  // 60s here got us to ~9.1k/day — no margin, blew the cap on 2026-05-04.
+  // 360s cadence — health is almost always "live · good" once the
+  // encoder is up, so refreshing every 6 min is fine. 3u × 10 polls/hr
+  // × 24h = ~720/day even at 24/7 live.
   const youtubePoll = usePolling<YoutubeBroadcastSnapshot>(
     "/api/youtube/health",
-    90_000,
+    360_000,
   );
 
   return (
