@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MegaphoneIcon, SparklesIcon, SendIcon, LoadingIcon } from "./Icons";
 import { SongTab } from "./SongTab";
 import {
@@ -46,6 +46,10 @@ export function RequestForm({
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [whoError, setWhoError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
+  // Set on unmount so the moderation-outcome poll bails instead of
+  // calling setState on a torn-down component (and burning ~20 fetch
+  // cycles for a user who navigated away mid-submission).
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     const id = setInterval(
@@ -53,6 +57,13 @@ export function RequestForm({
       4_200,
     );
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => {
+      cancelledRef.current = true;
+    };
   }, []);
 
   // Focus-time recovery: if the last optimistic submit's background pipeline
@@ -215,6 +226,7 @@ export function RequestForm({
     const STEP_MS = 1_000;
     for (let i = 0; i < MAX_TRIES; i++) {
       await new Promise((r) => setTimeout(r, i === 0 ? FIRST_DELAY_MS : STEP_MS));
+      if (cancelledRef.current) return;
       let res: Response;
       try {
         res = await fetch(`/api/booth/shoutout/${shoutoutId}/status`, {
@@ -223,6 +235,7 @@ export function RequestForm({
       } catch {
         continue; // network blip — try again
       }
+      if (cancelledRef.current) return;
       if (!res.ok) continue;
       const json = (await res.json().catch(() => null)) as
         | { ok?: boolean; status?: string }

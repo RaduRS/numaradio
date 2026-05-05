@@ -33,6 +33,11 @@ export async function synthesizeChatter(
 
   let res = await callDeepgram(text, MODEL_PRIMARY, opts.apiKey, fetcher);
   if (!res.ok && [400, 404, 422].includes(res.status)) {
+    // Drain the primary response body before reassigning. Without
+    // this, undici's keep-alive pool holds the socket open until
+    // server-side timeout fires — one leaked connection per fallback
+    // accumulates across a multi-day daemon run.
+    await res.body?.cancel().catch(() => undefined);
     res = await callDeepgram(text, MODEL_FALLBACK, opts.apiKey, fetcher);
   }
   if (!res.ok) {

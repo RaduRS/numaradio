@@ -115,11 +115,13 @@ export async function classifyShoutoutIntent(
 
   const apiKey = process.env.MINIMAX_API_KEY;
   if (!apiKey) {
-    // Fail-open — we let it through as a shoutout; the existing
-    // moderator still runs.
+    // Fail-closed — symmetric with moderate.ts which also fails
+    // closed on missing key. A misconfigured deploy otherwise turns
+    // every YouTube chat message (questions, hellos, "lol", emoji)
+    // into a full shoutout pipeline run, burning Deepgram + B2 quota.
     return {
-      category: "shoutout",
-      worthy: true,
+      category: "noise",
+      worthy: false,
       reason: "classifier_not_configured",
     };
   }

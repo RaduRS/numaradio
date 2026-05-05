@@ -133,11 +133,11 @@ test("classifyShoutoutIntent forwards noise verdict from MiniMax", async (t) => 
   });
 });
 
-test("classifyShoutoutIntent fails open when API key missing", async () => {
+test("classifyShoutoutIntent fails closed when API key missing", async () => {
   delete process.env.MINIMAX_API_KEY;
   const r = await classifyShoutoutIntent("hello there");
-  assert.equal(r.category, "shoutout");
-  assert.equal(r.worthy, true);
+  assert.equal(r.category, "noise");
+  assert.equal(r.worthy, false);
   assert.equal(r.reason, "classifier_not_configured");
 });
 

@@ -10,6 +10,7 @@
 // grow unbounded. Doesn't need a cron.
 
 import { prisma } from "@/lib/db";
+import { clientIpFromRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,35 @@ export const dynamic = "force-dynamic";
 // out of the count and back in.
 const SWEEP_MINUTES = 2;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Per-IP token-bucket rate limit. Normal client posts at 30s cadence,
+// so 6 in a 60s window is 3× headroom for tab churn / clock skew. A
+// bot sending 100 req/s with rotating UUIDs would otherwise grow
+// SiteVisitor unboundedly until the 2-min sweep catches up. Map is
+// per-Lambda-instance — Vercel's serverless ephemerality makes this
+// approximate, not absolute, but it does cap any single warm
+// instance.
+const HEARTBEAT_WINDOW_MS = 60_000;
+const HEARTBEAT_LIMIT = 6;
+const ipBuckets = new Map<string, { count: number; windowStart: number }>();
+let sweepCounter = 0;
+
+function rateLimitOk(ip: string, now: number): boolean {
+  sweepCounter++;
+  if (sweepCounter > 200) {
+    sweepCounter = 0;
+    for (const [k, b] of ipBuckets) {
+      if (now - b.windowStart > HEARTBEAT_WINDOW_MS * 2) ipBuckets.delete(k);
+    }
+  }
+  const bucket = ipBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart > HEARTBEAT_WINDOW_MS) {
+    ipBuckets.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= HEARTBEAT_LIMIT;
+}
 
 export async function POST(req: Request) {
   let body: { sessionId?: unknown };
@@ -31,6 +61,10 @@ export async function POST(req: Request) {
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
   if (!UUID_RE.test(sessionId)) {
     return Response.json({ error: "bad sessionId" }, { status: 400 });
+  }
+
+  if (!rateLimitOk(clientIpFromRequest(req), Date.now())) {
+    return Response.json({ error: "rate_limited" }, { status: 429 });
   }
 
   const now = new Date();

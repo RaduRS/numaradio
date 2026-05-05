@@ -186,8 +186,36 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 30_000);
-    return () => clearInterval(id);
+    // Pause polling while the tab is hidden, mirroring the rest of
+    // the dashboard's usePolling pattern. A backgrounded tab was
+    // hitting /api/submissions/list and /api/sweep-status every 30s
+    // — the exact regression the 2026-05-03 cost audit fixed
+    // elsewhere.
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (id !== null) return;
+      id = setInterval(refresh, 30_000);
+    };
+    const stop = () => {
+      if (id !== null) {
+        clearInterval(id);
+        id = null;
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [refresh]);
 
   /** Stop the bottom preview bar if it's currently playing this row.

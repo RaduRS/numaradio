@@ -94,6 +94,11 @@ export async function generateArtwork(prompt: string): Promise<Buffer> {
         },
       ],
     }),
+    // Without this, a hung OpenRouter call holds the Vercel function
+    // until the platform's 60s maxDuration fires, leaking pg pool
+    // connections (the wrapping route holds a client checkout open
+    // for the duration). 45s gives Flux comfortable headroom.
+    signal: AbortSignal.timeout(45_000),
   });
 
   if (!res.ok) {
@@ -108,7 +113,9 @@ export async function generateArtwork(prompt: string): Promise<Buffer> {
   }
   if (extracted.startsWith("__REMOTE__:")) {
     const url = extracted.slice("__REMOTE__:".length);
-    const imgRes = await fetch(url);
+    const imgRes = await fetch(url, {
+      signal: AbortSignal.timeout(15_000),
+    });
     if (!imgRes.ok) {
       throw new Error(`openrouter remote image fetch ${imgRes.status}`);
     }

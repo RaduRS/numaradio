@@ -250,6 +250,12 @@ export async function humanizeScript(
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: userMessage }],
       }),
+      // Symmetry with moderate.ts / lena-reply.ts /
+      // classify-shoutout-intent.ts which all bound MiniMax calls
+      // explicitly. Approve-shoutout flow blocks on this; without a
+      // ceiling, a hung upstream holds the operator dashboard's
+      // route until Vercel's 30s wall-clock kills it.
+      signal: AbortSignal.timeout(20_000),
     });
   } catch (e) {
     console.warn("[humanize] network error:", e instanceof Error ? e.message : e);

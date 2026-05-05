@@ -97,6 +97,19 @@ enum ModerationStatus {
   held
 }
 
+// Lifecycle of a Shoutout's audio delivery, separate from moderation.
+// Was a freeform String before — typos like "aired" vs "AIRED" would
+// silently disappear from operator queue queries that filter on
+// `IN ('pending','held')`.
+enum DeliveryStatus {
+  pending
+  moderating
+  held
+  aired
+  failed
+  blocked
+}
+
 enum QueueType {
   music
   host_intro
@@ -263,6 +276,11 @@ model Track {
 
   @@index([stationId, trackStatus, airingPolicy])
   @@index([stationId, show, trackStatus, airingPolicy])
+  // track-started callback's title-fallback lookup hits Track WHERE
+  // stationId=$1 AND title ILIKE $2 on every music-track boundary
+  // (24/7). Without this it's a station-scoped seq-scan that grows
+  // with the catalogue.
+  @@index([stationId, title])
 }
 
 model TrackAsset {
@@ -339,7 +357,7 @@ model Shoutout {
   ipHash            String?
   moderationStatus  ModerationStatus @default(pending)
   moderationReason  String?
-  deliveryStatus    String           @default("pending")
+  deliveryStatus    DeliveryStatus   @default(pending)
   linkedQueueItemId String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
@@ -347,6 +365,14 @@ model Shoutout {
   station Station @relation(fields: [stationId], references: [id])
 
   @@index([moderationStatus, deliveryStatus, createdAt])
+  // Hot path: rate-limit.ts COUNTs by ipHash + recent createdAt on
+  // every booth submission. Was a full table scan against the only
+  // existing index.
+  @@index([ipHash, createdAt])
+  // YouTube chat idempotency: youtube-chat-loop does findFirst on
+  // fingerprintHash for "yt:<msgId>" before dispatching a shoutout
+  // so a daemon restart can't double-fire.
+  @@index([fingerprintHash])
 }
 
 model Vote {
@@ -386,6 +412,9 @@ model QueueItem {
   segments BroadcastSegment[]
 
   @@index([stationId, queueStatus, positionIndex])
+  // delete-aired-shoutout.ts cascades by trackId. Was a seq-scan on
+  // a table that grows with every queue push.
+  @@index([trackId])
 }
 
 model BroadcastSegment {
@@ -452,6 +481,10 @@ model PlayHistory {
   track   Track?  @relation(fields: [trackId], references: [id])
 
   @@index([stationId, startedAt])
+  // delete-aired-shoutout.ts deleteMany by trackId. PlayHistory
+  // grows linearly forever, so an unindexed trackId scan gets worse
+  // with every track aired.
+  @@index([trackId])
 }
 
 model ModerationFlag {

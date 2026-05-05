@@ -39,6 +39,14 @@ priority = request.queue(id="priority")
 
 # Lena's voice overlay. Mixed ON TOP of music; never replaces it. The
 # daemon pushes shoutouts here with `overlay_queue.push <url>`.
+#
+# DEPTH CAP: request.queue in 2.2.x has no length parameter. Today
+# the per-source rate limits (booth IP limits, auto-host slot
+# rotation, YouTube-chat author limit) prevent any realistic
+# runaway. If a future bug ever piles items here, telnet
+# `overlay_queue.queue` lists pending request IDs and `.flush`
+# drops them — keep that recovery path in mind. A daemon-side
+# pre-push depth check is the right place to enforce a cap.
 overlay_queue = request.queue(id="overlay_queue")
 
 # Rotation playlist — polled every 2 min in sync with the refresher's

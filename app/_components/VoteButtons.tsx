@@ -67,7 +67,17 @@ function subscribe(trackId: string, fn: (s: VoteState) => void): () => void {
   if (cached) fn(cached);
   ensureFetched(trackId);
   return () => {
-    subscribers.get(trackId)?.delete(fn);
+    const s = subscribers.get(trackId);
+    if (!s) return;
+    s.delete(fn);
+    // GC the per-trackId map entries when the last subscriber leaves.
+    // Otherwise a long-lived tab playing through hours of rotation
+    // accumulates an entry per distinct trackId, with cached vote
+    // counts and resolved Promise refs that never get released.
+    if (s.size === 0) {
+      subscribers.delete(trackId);
+      stateCache.delete(trackId);
+    }
   };
 }
 

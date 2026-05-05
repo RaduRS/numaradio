@@ -71,6 +71,11 @@ export async function generateChatterScript(
       system: prompts.system,
       messages: [{ role: "user", content: prompts.user }],
     }),
+    // Without this, a hung MiniMax connection (their maintenance
+    // windows occasionally produce socket-accept-but-no-response)
+    // blocks runChatter's #inFlight forever — Lena permanently
+    // silenced until daemon restart.
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) throw new Error(`minimax http ${res.status}`);
