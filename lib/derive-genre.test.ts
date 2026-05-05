@@ -34,3 +34,21 @@ test("deriveGenreFromText is case-insensitive", () => {
   assert.equal(deriveGenreFromText("EDM TRACK"), "EDM");
   assert.equal(deriveGenreFromText("Pop song"), "Pop");
 });
+
+test("deriveGenreFromText does not false-positive on common English uses of ambiguous words", () => {
+  // No music-context word in any of these → null.
+  assert.equal(deriveGenreFromText("chill house warming vibes"), null);
+  assert.equal(deriveGenreFromText("lost my soul"), null);
+  assert.equal(deriveGenreFromText("country roads ahead"), null);
+  assert.equal(deriveGenreFromText("folk wisdom from grandma"), null);
+  assert.equal(deriveGenreFromText("got the blues today"), null);
+});
+
+test("deriveGenreFromText still matches ambiguous genres when music context is present", () => {
+  assert.equal(deriveGenreFromText("house music"), "House");
+  assert.equal(deriveGenreFromText("deep house track"), "House");
+  assert.equal(deriveGenreFromText("soul song"), "Soul");
+  assert.equal(deriveGenreFromText("country tune"), "Country");
+  assert.equal(deriveGenreFromText("folk song"), "Folk");
+  assert.equal(deriveGenreFromText("blues album"), "Blues");
+});

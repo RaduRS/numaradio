@@ -14,7 +14,7 @@
  * Order matters: more specific patterns first. "edm" wins over "dance",
  * "lo-fi" wins over "indie".
  */
-const GENRE_PATTERNS: Array<[RegExp, string]> = [
+const STRICT_PATTERNS: Array<[RegExp, string]> = [
   [/\b(dubstep)\b/i, "Dubstep"],
   [/\b(synthwave|synth-?wave)\b/i, "Synthwave"],
   [/\b(drum.?and.?bass|d.?n.?b)\b/i, "Drum & Bass"],
@@ -26,20 +26,15 @@ const GENRE_PATTERNS: Array<[RegExp, string]> = [
   [/\b(r-?and-?b|rnb)\b/i, "R&B"],
   [/\b(edm)\b/i, "EDM"],
   [/\b(trap)\b/i, "Trap"],
-  [/\b(house)\b/i, "House"],
   [/\b(techno)\b/i, "Techno"],
   [/\b(ambient)\b/i, "Ambient"],
   [/\b(jazz)\b/i, "Jazz"],
   [/\b(indie)\b/i, "Indie"],
   [/\b(metal)\b/i, "Metal"],
-  [/\b(country)\b/i, "Country"],
-  [/\b(folk)\b/i, "Folk"],
-  [/\b(soul)\b/i, "Soul"],
   [/\b(funk)\b/i, "Funk"],
   [/\b(reggae)\b/i, "Reggae"],
   [/\b(dance)\b/i, "Dance"],
   [/\b(rap)\b/i, "Rap"],
-  [/\b(blues)\b/i, "Blues"],
   [/\b(classical)\b/i, "Classical"],
   [/\b(punk)\b/i, "Punk"],
   [/\b(disco)\b/i, "Disco"],
@@ -49,9 +44,30 @@ const GENRE_PATTERNS: Array<[RegExp, string]> = [
   [/\b(pop)\b/i, "Pop"],
 ];
 
+// These five are common English words ("house warming", "lost my soul",
+// "country roads", "folk wisdom", "got the blues") so a bare \bword\b
+// match false-positives constantly. Only treat them as a genre when the
+// prompt also contains a music-context word ("house music", "soul song").
+// Acceptable trade-off: the rare bare "blues guitar" prompt now falls
+// back to "Listener Pick", which is fine.
+const AMBIGUOUS_PATTERNS: Array<[RegExp, string]> = [
+  [/\bhouse\b/i, "House"],
+  [/\bsoul\b/i, "Soul"],
+  [/\bcountry\b/i, "Country"],
+  [/\bfolk\b/i, "Folk"],
+  [/\bblues\b/i, "Blues"],
+];
+
+const MUSIC_CONTEXT =
+  /\b(music|tracks?|songs?|tunes?|beats?|albums?|genres?|playlists?)\b/i;
+
 export function deriveGenreFromText(text: string | null | undefined): string | null {
   if (!text) return null;
-  for (const [re, label] of GENRE_PATTERNS) {
+  for (const [re, label] of STRICT_PATTERNS) {
+    if (re.test(text)) return label;
+  }
+  if (!MUSIC_CONTEXT.test(text)) return null;
+  for (const [re, label] of AMBIGUOUS_PATTERNS) {
     if (re.test(text)) return label;
   }
   return null;
