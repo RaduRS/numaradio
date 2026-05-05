@@ -23,7 +23,13 @@ import { recordYoutubeQuota } from "./youtube-quota";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
-const CACHE_TTL_MS = 30_000;
+// Shared snapshot cache. Three routes call fetchYoutubeSnapshot:
+// /api/status (polled every 5s by the dashboard), /api/youtube/health
+// (360s), /api/station/listeners. A short TTL here means /api/status
+// alone burns ~8.6k/day on the YouTube quota — by far the dominant
+// source. 360s lag on "is YT live?" only affects encoder-listener
+// subtraction (off by 1 listener for ~6 min after broadcast on/off).
+const CACHE_TTL_MS = 360_000;
 
 export interface YoutubeBroadcastSnapshot {
   /** "live" → broadcast is currently airing on YouTube.
