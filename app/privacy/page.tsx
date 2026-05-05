@@ -150,6 +150,23 @@ export default function PrivacyPage() {
           90 days.
         </p>
         <p>
+          By sending a shoutout you also agree that your typed message and
+          the name (or handle) you supplied{" "}
+          <strong style={{ color: "var(--fg)" }}>
+            may appear in short promotional clips on the station&apos;s social
+            media accounts
+          </strong>{" "}
+          (TikTok, Instagram Reels, YouTube Shorts) — the same words that
+          aired on the live broadcast, framed for a 15–30 second video. If
+          you&apos;d rather your shoutout stayed on-air-only, leave the
+          name field blank or email{" "}
+          <a href="mailto:hello@numaradio.com" style={{ color: "var(--accent)" }}>
+            hello@numaradio.com
+          </a>{" "}
+          and we&apos;ll exclude it (and pull any clip already posted
+          within 24 hours).
+        </p>
+        <p>
           <strong style={{ color: "var(--fg)" }}>Song requests.</strong> Your
           prompt, your handle, and your hashed IP. If we generated a track
           from your prompt and aired it, the request stays linked to that
@@ -338,6 +355,19 @@ export default function PrivacyPage() {
                   audio stream). If your rights deal with a label or
                   distributor restricts YouTube distribution, please don&apos;t
                   submit.
+                </li>
+                <li>
+                  You authorise Numa Radio to use{" "}
+                  <strong style={{ color: "var(--fg)" }}>
+                    short promotional clips
+                  </strong>{" "}
+                  of the track (typically 8–15 seconds) on the station&apos;s
+                  social media accounts — TikTok, Instagram Reels, YouTube
+                  Shorts and equivalent — to promote the broadcast. Your
+                  artist name, track title, and (where the post is built
+                  around your track specifically) cover artwork may appear
+                  on screen. We don&apos;t use any other personal
+                  information of yours in those clips.
                 </li>
                 <li>
                   You&apos;re solely responsible for the rights status of

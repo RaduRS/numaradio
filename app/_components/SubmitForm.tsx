@@ -518,9 +518,11 @@ export function SubmitForm() {
           />
           <span className="submit-vouch-text">
             I confirm this is my own work or I have all rights to it, and I&apos;m
-            authorising Numa Radio to broadcast it on its 24/7 audio stream and
-            on its public YouTube simulcast. I understand I can withdraw it any
-            time by emailing{" "}
+            authorising Numa Radio to broadcast it on its 24/7 audio stream,
+            on its public YouTube simulcast, and in short promotional clips
+            on social media (TikTok, Instagram Reels, YouTube Shorts) where
+            my artist name and track title may appear. I understand I can
+            withdraw it any time by emailing{" "}
             <a href="mailto:hello@numaradio.com">hello@numaradio.com</a>. I&apos;ve read
             the <a href="/privacy#submissions">terms</a>.
           </span>
