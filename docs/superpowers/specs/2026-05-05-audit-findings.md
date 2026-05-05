@@ -12,7 +12,7 @@ This doc is the canonical list. The post-mortem doc covers the deploy incident s
 |---|---|---|---|
 | P0 | 14 | 14 | 0 |
 | P1 | ~22 | 14 | 8 (incl. schema migration **reverted**) |
-| P2 | ~30 | 4 | ~26 |
+| P2 | ~30 | 6 | ~24 |
 
 Shipped commits:
 - `fa186b5` — P0 sweep
@@ -26,6 +26,8 @@ Shipped commits:
 - `1fa7a7b` — derive-genre regex tightened on ambiguous English words (P1 deferred → done)
 - `4f1b14e` — hardcode operator=\"nanoclaw\" in internal-tool routes (P2)
 - `3c413c8` — verify-audio-sig 4h ceiling on exp (P2)
+- `4890334` — ListenerCount singleton (P2 — kill duplicate pollers)
+- `31d68d3` — brand-aware global-error fallback (P2 — layout-throw gap)
 
 ---
 
@@ -114,7 +116,7 @@ Lower priority. Group by theme:
 ### Performance / memory
 - `app/api/submissions/[id]/audio/route.ts:43` — buffers the full MP3 in Vercel function memory before streaming. Range requests still pull the whole file. Switch to a presigned redirect or Range-forwarding stream.
 - `app/_components/ShoutoutWall.tsx` and `app/_components/OnAirFeed.tsx` independently poll `/api/station/shoutouts/recent` every 30s. With expanded player open on homepage that's two pollers. Extract a singleton hook.
-- `app/_components/ListenerCount.tsx` — Hero + Footer instances both poll independently with separate `AbortController`s.
+- ~~`app/_components/ListenerCount.tsx` — Hero + Footer instances both poll independently~~ ✅ **SHIPPED `4890334`** — module-level singleton, all 5 mount sites (Hero, Footer, ExpandedPlayerMobile, About, BroadcastStage) share one poller.
 
 ### Schema / DB hygiene
 - `Shoutout.deliveryStatus` is freeform `String` not enum (was the P1 attempt — now reverted). Typos like "AIRED" disappear from operator queue queries. Re-introduce after `_prisma_migrations` baseline.
@@ -126,7 +128,7 @@ Lower priority. Group by theme:
 - `dashboard/app/api/library/track/[id]/artwork/route.ts:80` — no `stationId` check on artwork regen. Single-tenant deploy makes this harmless today but it's a cross-station write surface for future.
 
 ### Frontend UX
-- `app/error.tsx` only catches client-component throws below the segment, not throws inside `app/layout.tsx` (PlayerProvider, MiniPlayer, ExpandedPlayer). A throw there bubbles to `global-error.tsx` (brutalist styling, no nav).
+- ~~`app/error.tsx` only catches client-component throws below the segment~~ ✅ **SHIPPED `31d68d3`** — `global-error.tsx` now has a brand-aware fallback (NUMA · RADIO wordmark, broadcast-theme copy, plain anchor that survives dead hydration). Layout-level throws still go to global-error (no way around that — the layout has failed) but the fallback no longer looks broken.
 - `app/_components/SongTab.tsx:153` — `tick()` after 404 can land on unmounted component (lower-severity than RequestForm because the 404 path is rare).
 
 ### Scripts hygiene
