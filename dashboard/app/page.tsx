@@ -7,6 +7,7 @@ import { LogsCard } from "@/components/logs-card";
 import { HeldShoutoutsCard } from "@/components/held-shoutouts-card";
 import { BandwidthPill } from "@/components/bandwidth-pill";
 import { YoutubeCard } from "@/components/youtube-card";
+import { YoutubeOauthCard } from "@/components/youtube-oauth-card";
 import type { StatusSnapshot } from "@/lib/types";
 import type { ShoutoutRow } from "@/lib/shoutouts";
 import type { BandwidthToday } from "@/lib/bandwidth";
@@ -58,6 +59,7 @@ export default function OperatorDashboard() {
       <StatusPills data={data} isStale={isStale} youtube={youtubePoll.data ?? null} />
       <BandwidthPill data={bandwidthData} isStale={bandwidthPoll.isStale} />
       <YoutubeCard data={youtubePoll.data} isStale={youtubePoll.isStale} />
+      <YoutubeOauthCard />
       <HeldShoutoutsCard
         held={shoutoutsPoll.data?.held ?? []}
         onAction={shoutoutsPoll.refresh}
