@@ -97,3 +97,35 @@ test("verify-then-sign roundtrip works (compatibility with sign helper)", async 
     assert.equal(verifySubmissionAudioSig(id, String(exp), sig), true);
   });
 });
+
+test("rejects exp beyond the 4h TTL ceiling", () => {
+  const id = "abc123";
+  // 5h in the future — over the ceiling.
+  const exp = Math.floor(Date.now() / 1000) + 5 * 60 * 60;
+  const sig = mintSig(id, exp);
+  withEnv(SECRET, () => {
+    assert.equal(verifySubmissionAudioSig(id, String(exp), sig), false);
+  });
+});
+
+test("rejects a units-bug token (exp in millis instead of seconds)", () => {
+  const id = "abc123";
+  // The classic bug: exp = Date.now() (millis) → ~50,000 years away
+  // when interpreted as seconds. Without the ceiling this would pass
+  // the "in the future" check and validate forever.
+  const expBuggy = Date.now();
+  const sig = mintSig(id, expBuggy);
+  withEnv(SECRET, () => {
+    assert.equal(verifySubmissionAudioSig(id, String(expBuggy), sig), false);
+  });
+});
+
+test("accepts exp just under the 4h ceiling", () => {
+  const id = "abc123";
+  // 4h - 60s — comfortably under the ceiling.
+  const exp = Math.floor(Date.now() / 1000) + 4 * 60 * 60 - 60;
+  const sig = mintSig(id, exp);
+  withEnv(SECRET, () => {
+    assert.equal(verifySubmissionAudioSig(id, String(exp), sig), true);
+  });
+});
