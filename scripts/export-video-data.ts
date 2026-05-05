@@ -18,10 +18,21 @@
 // faithful Lena reading.
 
 import "../lib/load-env.ts";
+import { config as loadDotenv } from "dotenv";
 import { writeFile, mkdir, readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { prisma } from "../lib/db/index.ts";
 import { synthesizeChatter } from "../workers/queue-daemon/deepgram-tts.ts";
+import { synthesizeVertex } from "../workers/queue-daemon/vertex-tts.ts";
+
+// Vertex Leda lives behind GOOGLE_CLOUD_PROJECT — that env var is in
+// dashboard/.env.local on Orion (where the dashboard runs), NOT in this
+// repo's .env.local. Pull it in so the exporter matches whatever
+// Station.voiceProvider is set to (production is on "vertex" /
+// gemini-3.1-flash-tts-preview / Leda).
+const dashboardEnv = resolve(process.cwd(), "dashboard/.env.local");
+if (existsSync(dashboardEnv)) loadDotenv({ path: dashboardEnv, override: false });
 
 const VIDEOS_REPO = resolve("/home/marku/saas/numaradio-videos");
 const DATA_DIR = join(VIDEOS_REPO, "src/assets/data");
@@ -127,9 +138,33 @@ async function downloadIfMissing(
 
 // ----------------- shoutouts -----------------
 
-async function exportShoutouts(): Promise<ShoutoutClip[]> {
+// Match production's TTS pipeline: Vertex Leda when configured (current
+// Station.voiceProvider), with the same Deepgram Helena fallback the live
+// dashboard/lib/shoutout.ts uses when Vertex errors. That keeps marketing
+// audio acoustically identical to what aired.
+async function synthesizeLikeProduction(text: string): Promise<Buffer> {
+  const project = process.env.GOOGLE_CLOUD_PROJECT;
+  if (project) {
+    try {
+      return await synthesizeVertex(text, { project });
+    } catch (err) {
+      console.warn(
+        `[export]    vertex failed, falling back to deepgram: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  } else {
+    console.warn(
+      "[export]    GOOGLE_CLOUD_PROJECT not set — using deepgram fallback",
+    );
+  }
   const apiKey = process.env.DEEPGRAM_API_KEY;
-  if (!apiKey) throw new Error("DEEPGRAM_API_KEY missing — needed to re-synth shoutout audio");
+  if (!apiKey) throw new Error("DEEPGRAM_API_KEY not set (and vertex unavailable)");
+  return synthesizeChatter(text, { apiKey });
+}
+
+async function exportShoutouts(): Promise<ShoutoutClip[]> {
+  const provider = process.env.GOOGLE_CLOUD_PROJECT ? "vertex (Leda)" : "deepgram (Helena)";
+  console.log(`[export]  using TTS provider: ${provider}`);
 
   const rows = await prisma.shoutout.findMany({
     where: {
@@ -163,7 +198,7 @@ async function exportShoutouts(): Promise<ShoutoutClip[]> {
     if (!(await fileExists(abs))) {
       console.log(`[export]  · synth shoutout ${i}/${rows.length} (${row.broadcastText.length} chars)`);
       try {
-        const buf = await synthesizeChatter(row.broadcastText, { apiKey });
+        const buf = await synthesizeLikeProduction(row.broadcastText);
         await writeBuffer(filename, buf);
       } catch (e) {
         console.warn(`[export]  ! deepgram fail on ${row.id}: ${e instanceof Error ? e.message : e}`);
