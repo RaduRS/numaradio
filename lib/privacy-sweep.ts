@@ -35,7 +35,7 @@ function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-function shoutoutWhere(): Prisma.ShoutoutWhereInput {
+function shoutoutWhere() {
   return {
     createdAt: { lt: daysAgo(SHOUTOUT_UNAIRED_DAYS) },
     OR: [

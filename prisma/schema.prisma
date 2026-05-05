@@ -97,19 +97,6 @@ enum ModerationStatus {
   held
 }
 
-// Lifecycle of a Shoutout's audio delivery, separate from moderation.
-// Was a freeform String before — typos like "aired" vs "AIRED" would
-// silently disappear from operator queue queries that filter on
-// `IN ('pending','held')`.
-enum DeliveryStatus {
-  pending
-  moderating
-  held
-  aired
-  failed
-  blocked
-}
-
 enum QueueType {
   music
   host_intro
@@ -357,7 +344,7 @@ model Shoutout {
   ipHash            String?
   moderationStatus  ModerationStatus @default(pending)
   moderationReason  String?
-  deliveryStatus    DeliveryStatus   @default(pending)
+  deliveryStatus    String           @default("pending")
   linkedQueueItemId String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
