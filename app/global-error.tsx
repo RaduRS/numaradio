@@ -1,13 +1,29 @@
 "use client";
 
 // Last-resort error boundary — fires when even the root layout crashes
-// (rare, but Next.js requires its own <html><body> because layout has
-// already failed by the time this renders). Inline styles only so it
-// works even if app CSS didn't load.
+// (PlayerProvider, MiniPlayer, ExpandedPlayer all live in layout.tsx,
+// so a throw there bubbles here, not to app/error.tsx). Next.js 16
+// requires this file to render its own <html><body> because the
+// layout has already failed.
 //
-// Next.js 16 file convention.
+// Constraints:
+//   - Inline styles only — app CSS may not have loaded.
+//   - No imports from `_components/` or layout — those depend on the
+//     thing that just failed.
+//   - The "Back to numaradio.com" link is a plain anchor on purpose:
+//     works even if React's hydration/router is dead.
 
 import { useEffect } from "react";
+
+const TEAL = "#4FD1C5";
+const RED = "#FF4F57";
+const BG = "#0A0D0E";
+const FG = "#E6E9EC";
+const MUTED = "#9CA3AF";
+const SUBTLE = "#6B7280";
+const MONO = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace';
+const SANS =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
 export default function GlobalError({
   error,
@@ -27,84 +43,163 @@ export default function GlobalError({
           margin: 0,
           minHeight: "100vh",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#0A0D0E",
-          color: "#E6E9EC",
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          padding: "32px",
-          textAlign: "center",
+          flexDirection: "column",
+          background: BG,
+          color: FG,
+          fontFamily: SANS,
         }}
       >
-        <div style={{ maxWidth: 480 }}>
-          <div
+        {/* Inline keyframes — everything self-contained because external
+            CSS may not have loaded. */}
+        <style>{`
+          @keyframes numa-pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .numa-pulse { animation: none !important; opacity: 0.7 !important; }
+          }
+        `}</style>
+        {/* Lightweight wordmark header — stands in for the missing Nav so
+            users still know they're on Numa Radio, not a generic 500. */}
+        <header
+          style={{
+            padding: "20px 24px",
+            borderBottom: `1px solid rgba(230, 233, 236, 0.08)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            fontFamily: MONO,
+            fontSize: 12,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+          }}
+        >
+          <span
+            className="numa-pulse"
             style={{
-              fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-              fontSize: 11,
-              letterSpacing: "0.25em",
-              textTransform: "uppercase",
-              color: "#FF4F57",
-              marginBottom: 16,
+              display: "inline-block",
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: RED,
+              animation: "numa-pulse 1.4s ease-in-out infinite",
             }}
-          >
-            OFF AIR · CRITICAL
-          </div>
-          <h1
-            style={{
-              fontSize: 40,
-              fontWeight: 700,
-              lineHeight: 1.05,
-              letterSpacing: "-0.02em",
-              margin: "0 0 16px 0",
-            }}
-          >
-            The station went silent for a moment.
-          </h1>
-          <p
-            style={{
-              fontSize: 16,
-              lineHeight: 1.5,
-              color: "#9CA3AF",
-              margin: "0 0 32px 0",
-            }}
-          >
-            We lost the signal at the deepest layer. Reload to put us back on
-            the air.
-          </p>
-          <button
-            type="button"
-            onClick={() => reset()}
-            style={{
-              padding: "12px 24px",
-              borderRadius: 999,
-              border: "1px solid #4FD1C5",
-              background: "#4FD1C5",
-              color: "#0A0D0E",
-              fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-              fontSize: 11,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Reload
-          </button>
-          {error.digest ? (
+            aria-hidden
+          />
+          <span style={{ color: FG }}>NUMA · RADIO</span>
+          <span style={{ color: SUBTLE, marginLeft: "auto" }}>OFF AIR</span>
+        </header>
+
+        <main
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 32,
+            textAlign: "center",
+          }}
+        >
+          <div style={{ maxWidth: 480 }}>
             <div
               style={{
-                marginTop: 32,
-                fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-                fontSize: 10,
-                letterSpacing: "0.2em",
-                color: "#6B7280",
+                fontFamily: MONO,
+                fontSize: 11,
+                letterSpacing: "0.25em",
+                textTransform: "uppercase",
+                color: RED,
+                marginBottom: 16,
               }}
             >
-              REF · {error.digest}
+              OFF AIR · CRITICAL · ERR 500
             </div>
-          ) : null}
-        </div>
+            <h1
+              style={{
+                fontSize: 40,
+                fontWeight: 700,
+                lineHeight: 1.05,
+                letterSpacing: "-0.02em",
+                margin: "0 0 16px 0",
+              }}
+            >
+              The station went silent
+              <br />
+              <span style={{ color: TEAL }}>for a moment.</span>
+            </h1>
+            <p
+              style={{
+                fontSize: 16,
+                lineHeight: 1.5,
+                color: MUTED,
+                margin: "0 0 32px 0",
+              }}
+            >
+              We lost the signal at the deepest layer. Lena&apos;s still on
+              the mic — reload to put us back on the air.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => reset()}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: 999,
+                  border: `1px solid ${TEAL}`,
+                  background: TEAL,
+                  color: BG,
+                  fontFamily: MONO,
+                  fontSize: 11,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Reload
+              </button>
+              {/* Plain anchor — survives even if hydration is dead. */}
+              <a
+                href="/"
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: 999,
+                  border: `1px solid rgba(230, 233, 236, 0.16)`,
+                  background: "transparent",
+                  color: FG,
+                  fontFamily: MONO,
+                  fontSize: 11,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                Back to numaradio.com
+              </a>
+            </div>
+            {error.digest ? (
+              <div
+                style={{
+                  marginTop: 32,
+                  fontFamily: MONO,
+                  fontSize: 10,
+                  letterSpacing: "0.2em",
+                  color: SUBTLE,
+                }}
+              >
+                REF · {error.digest}
+              </div>
+            ) : null}
+          </div>
+        </main>
       </body>
     </html>
   );
