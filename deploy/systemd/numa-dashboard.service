@@ -2,6 +2,11 @@
 Description=Numa Radio — Operator Dashboard (Next.js)
 After=network-online.target
 Wants=network-online.target
+# Modern systemd only honours these in [Unit], not [Service].
+# Without them, a bad deploy artifact or missing env var would
+# crash-loop forever, filling the journal.
+StartLimitBurst=3
+StartLimitIntervalSec=30
 
 [Service]
 Type=simple
@@ -11,11 +16,6 @@ EnvironmentFile=/home/marku/saas/numaradio/dashboard/.env.local
 ExecStart=/usr/bin/npm run start
 Restart=on-failure
 RestartSec=5
-# Stop the loop if the dashboard fails repeatedly to start (e.g.
-# missing env var, busted build artifacts). 3 attempts in 30 s gives
-# a fresh deploy room to settle while bounding pathological loops.
-StartLimitBurst=3
-StartLimitIntervalSec=30
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=numa-dashboard

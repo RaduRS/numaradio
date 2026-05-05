@@ -1,7 +1,7 @@
 [Unit]
 Description=Numa Radio — YouTube 24/7 broadcast encoder (COLD FALLBACK; primary is Windows OBS since 2026-05-01)
-After=network-online.target numa-liquidsoap.service
-Wants=network-online.target
+After=network-online.target numa-liquidsoap.service icecast2.service
+Wants=network-online.target icecast2.service
 # Crash-loop protection — if the encoder fails 5 times in 5 minutes,
 # stop trying. An operator should investigate before letting it spin
 # (e.g. revoked stream key, network outage, broken /live page).
@@ -20,17 +20,19 @@ EnvironmentFile=/etc/numa/env
 # leftover smoke-test or unclean restart can otherwise sit forever
 # stealing Xvfb frames and CPU, which makes the real encoder choppy
 # enough that YouTube buffers minutes ahead of live.
-ExecStartPre=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true; pkill -f "[f]fmpeg.*x11grab.*-i :99" || true; rm -f /tmp/numa-encoder-smoke.flv'
+ExecStartPre=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true; pkill -f "[c]hromium-browser.*--display=:99" || true; pkill -f "[f]fmpeg.*x11grab.*-i :99" || true; rm -f /tmp/numa-encoder-smoke.flv'
 # WSL2 (WSLg) bind-mounts /tmp/.X11-unix as a read-only tmpfs, so Xvfb's
 # unix socket creation fails. Replace it with a writable, sticky-bit
 # directory on every start. `+` runs as root despite User=marku.
 ExecStartPre=+/bin/sh -c 'umount /tmp/.X11-unix 2>/dev/null; mkdir -p /tmp/.X11-unix; chmod 1777 /tmp/.X11-unix'
 ExecStart=/usr/local/bin/numa-youtube-encoder.sh
 # Belt-and-braces cleanup. systemd's default KillMode=control-group
-# already SIGTERMs every child in the cgroup, but the script does
-# `exec ffmpeg` which replaces the bash trap. Run the same kill
-# patterns as ExecStartPre so a stop leaves no stragglers.
-ExecStopPost=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true; pkill -f "[f]fmpeg.*x11grab.*-i :99" || true'
+# already SIGTERMs every child in the cgroup, and the bash EXIT trap
+# in numa-youtube-encoder.sh runs cleanup() on rc capture (since the
+# 2026-05-05 P0 fix that replaced `exec ffmpeg` with run-and-wait).
+# These kill patterns are belt-and-braces for any straggler that
+# escaped both paths.
+ExecStopPost=/bin/sh -c 'pkill -f "[X]vfb :99" || true; pkill -f "[g]oogle-chrome.*--display=:99" || true; pkill -f "[c]hromium.*--display=:99" || true; pkill -f "[c]hromium-browser.*--display=:99" || true; pkill -f "[f]fmpeg.*x11grab.*-i :99" || true'
 # ffmpeg exits with 255 on SIGTERM (clean shutdown via systemctl
 # stop) and 143 on direct SIGTERM. Without this, systemd marks the
 # unit "failed" after a stop and the dashboard sees state="failed"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Locks down /etc/numa/env so only root can read the secrets it
-# contains (ICECAST_SOURCE_PASSWORD, INTERNAL_API_SECRET, etc.). On
-# many Ubuntu setups the file lands at mode 0644 by default, which
-# means any local user (or any compromised non-root process) can
-# read the secrets.
+# Locks down env files so only the relevant service user can read
+# the secrets they contain. On many Ubuntu setups files land at
+# mode 0644 by default → any local user or compromised non-root
+# process can read INTERNAL_API_SECRET, DATABASE_URL,
+# RESEND_API_KEY, YOUTUBE_OAUTH_*, etc.
 #
 # Run on Orion as root:
 #   sudo bash deploy/secure-numa-env.sh
@@ -13,15 +13,28 @@
 
 set -euo pipefail
 
-ENV_FILE=/etc/numa/env
-
-if [ ! -f "$ENV_FILE" ]; then
-  echo "$ENV_FILE does not exist — nothing to do."
-  exit 0
+# /etc/numa/env: shared system env — root:root 0600. Read by
+# numa-liquidsoap, numa-queue-daemon, numa-song-worker, the encoder.
+ROOT_ENV=/etc/numa/env
+if [ -f "$ROOT_ENV" ]; then
+  chown root:root "$ROOT_ENV"
+  chmod 0600 "$ROOT_ENV"
+  echo "$ROOT_ENV → root:root, mode 0600"
+  ls -l "$ROOT_ENV"
+else
+  echo "$ROOT_ENV does not exist — skipping."
 fi
 
-chown root:root "$ENV_FILE"
-chmod 0600 "$ENV_FILE"
-
-echo "$ENV_FILE → root:root, mode 0600"
-ls -l "$ENV_FILE"
+# Dashboard env: read by numa-dashboard.service which runs as
+# user `marku`. Lock to marku:marku 0600 — only the dashboard
+# process can read DATABASE_URL / INTERNAL_API_SECRET /
+# RESEND_API_KEY / YOUTUBE_OAUTH_*, not other local users.
+DASH_ENV=/home/marku/saas/numaradio/dashboard/.env.local
+if [ -f "$DASH_ENV" ]; then
+  chown marku:marku "$DASH_ENV"
+  chmod 0600 "$DASH_ENV"
+  echo "$DASH_ENV → marku:marku, mode 0600"
+  ls -l "$DASH_ENV"
+else
+  echo "$DASH_ENV does not exist — skipping."
+fi
