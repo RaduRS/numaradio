@@ -317,7 +317,13 @@ export class AutoHostOrchestrator {
       let asset = await this.generateAsset(current);
       if (!asset) {
         await (this.deps.sleep ?? defaultSleep)(RETRY_DELAY_MS);
-        if (this.#currentRun !== myRun) return;
+        if (this.#currentRun !== myRun) {
+          // Run was invalidated by an external voice push (shoutout or
+          // listener-song announcement). Release the in-flight slot or
+          // the daemon stays silent until restart.
+          this.state.markFailure();
+          return;
+        }
         asset = await this.generateAsset(current);
       }
       if (!asset) {
@@ -339,7 +345,13 @@ export class AutoHostOrchestrator {
       }
 
       // Shoutout during the wait? Discard — the slot is already taken.
-      if (this.#currentRun !== myRun) return;
+      // Must release the in-flight slot here too; otherwise a voice
+      // push that lands during the pre-push sleep leaves the
+      // orchestrator permanently locked.
+      if (this.#currentRun !== myRun) {
+        this.state.markFailure();
+        return;
+      }
 
       // Push to overlay_queue.
       try {

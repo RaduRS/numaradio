@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
 import { probeDurationSeconds } from "../../lib/probe-duration.ts";
 import { profanityPrefilter } from "../../lib/moderate.ts";
@@ -80,6 +80,26 @@ async function uploadToB2(
   return b2PublicUrl(key);
 }
 
+// Best-effort cleanup of objects we uploaded before a downstream
+// failure. Used in runPipeline's catch path so a mid-pipeline crash
+// doesn't strand audio + artwork in B2 forever (no purge script
+// matches a key with no Track row).
+async function deleteB2Keys(keys: string[]): Promise<void> {
+  const bucket = process.env.B2_BUCKET_NAME;
+  if (!bucket || keys.length === 0) return;
+  await Promise.all(
+    keys.map((key) =>
+      getS3()
+        .send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
+        .catch((err) => {
+          console.warn(
+            `[song-worker] B2 cleanup failed for ${key}: ${String(err)}`,
+          );
+        }),
+    ),
+  );
+}
+
 async function pollUntilDone(taskId: string): Promise<{ audioUrl: string; durationMs: number }> {
   const started = Date.now();
   while (Date.now() - started < POLL_TIMEOUT_MS) {
@@ -122,6 +142,27 @@ async function pushToQueueDaemon(input: {
 }
 
 export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promise<void> {
+  // Track every B2 key we successfully uploaded so a downstream
+  // failure (Track.create, queue-daemon push, etc.) can release the
+  // bytes back. Without this the only cleanup path was via
+  // delete-aired-shoutout, which doesn't run for tracks that never
+  // got a Track row.
+  const uploadedB2Keys: string[] = [];
+  try {
+    await runPipelineInner(prisma, job, uploadedB2Keys);
+  } catch (err) {
+    if (uploadedB2Keys.length > 0) {
+      await deleteB2Keys(uploadedB2Keys);
+    }
+    throw err;
+  }
+}
+
+async function runPipelineInner(
+  prisma: PrismaClient,
+  job: PipelineJob,
+  uploadedB2Keys: string[],
+): Promise<void> {
   const station = await prisma.station.findUnique({
     where: { slug: STATION_SLUG },
     select: { id: true },
@@ -213,6 +254,7 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
   const audioKey = `stations/${STATION_SLUG}/tracks/${trackId}/audio/stream.mp3`;
   const artworkKey = `stations/${STATION_SLUG}/tracks/${trackId}/artwork/primary.png`;
   const audioUrl = await uploadToB2(audioKey, audioBytes, "audio/mpeg");
+  uploadedB2Keys.push(audioKey);
 
   let artworkBuf: Buffer;
   if (artworkBytesOrNull) {
@@ -222,6 +264,7 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
     artworkBuf = await loadFallbackArtwork(show);
   }
   const artworkUrl = await uploadToB2(artworkKey, artworkBuf, "image/png");
+  uploadedB2Keys.push(artworkKey);
 
   // Mine a genre from the listener's prompt so the dashboard /library
   // Genre column has something meaningful instead of a dash. Falls back
@@ -270,6 +313,10 @@ export async function runPipeline(prisma: PrismaClient, job: PipelineJob): Promi
     },
     select: { id: true },
   });
+  // From this point the B2 keys are owned by the Track row — any
+  // failure cleanup must go through the Track-aware delete path, not
+  // a blind B2 delete that would orphan the DB row instead.
+  uploadedB2Keys.length = 0;
 
   // Step 6: push to queue daemon so Lena airs it next. The `announce`
   // field triggers a Lena-voice intro over the first seconds of this

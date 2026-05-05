@@ -132,7 +132,12 @@ function stopPolling() {
 
 export function useBroadcast() {
   const [data, setData] = useState<BroadcastPayload>(cachedData);
-  const [now, setNow] = useState<number>(() => Date.now());
+  // 0 until mounted so SSR and first client render produce identical
+  // markup. Initialising from Date.now() in the useState initialiser
+  // makes the server's wall clock disagree with the client's by
+  // ~ms-to-seconds → React hydration error #418. Same pattern as
+  // useNowPlaying.
+  const [now, setNow] = useState<number>(0);
 
   useEffect(() => {
     subscribers.add(setData);
@@ -140,6 +145,7 @@ export function useBroadcast() {
     // If the shared poll already has cached data, sync this mount to it.
     setData(cachedData);
 
+    setNow(Date.now());
     const tickId = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       subscribers.delete(setData);

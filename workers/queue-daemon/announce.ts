@@ -3,6 +3,8 @@ import {
   type AnnouncementContext,
 } from "./chatter-prompts.ts";
 
+const ANNOUNCE_STASH_TTL_MS = 2 * 60 * 60 * 1000;
+
 interface StashEntry {
   url: string | null;
   script: string | null;
@@ -64,6 +66,12 @@ export class AnnouncementOrchestrator {
    * Kick off background pre-generation for a listener song's intro.
    * Safe to call multiple times with the same trackId — only the first
    * call runs the pipeline; subsequent calls are no-ops.
+   *
+   * 2-hour TTL: if the track never airs (daemon restart between push
+   * and air, queue corruption, operator skip), the stashed entry +
+   * its audio Buffer would otherwise leak forever in this long-
+   * running process. 2h is well past the longest realistic priority-
+   * queue depth, so a legit pending entry is never GC'd in flight.
    */
   schedule(trackId: string, ctx: AnnouncementContext): void {
     if (this.#stash.has(trackId)) return;
@@ -76,6 +84,10 @@ export class AnnouncementOrchestrator {
     };
     entry.ready = this.#generate(trackId, ctx, entry);
     this.#stash.set(trackId, entry);
+    setTimeout(() => {
+      // No-op if the track aired and #awaitAndPush already deleted us.
+      this.#stash.delete(trackId);
+    }, ANNOUNCE_STASH_TTL_MS).unref?.();
   }
 
   /**

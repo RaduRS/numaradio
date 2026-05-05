@@ -147,9 +147,14 @@ else
   echo "[encoder] streaming → ${YOUTUBE_RTMP_URL}/<redacted>" >&2
 fi
 
-# `exec` so ffmpeg becomes the foreground process — systemd's
-# Restart=on-failure then catches encoder crashes correctly. Cleanup
-# trap still fires on signals because trap is inherited.
+# Run ffmpeg as a child of this shell — NOT exec — so the bash EXIT
+# trap fires on a non-zero ffmpeg exit (YouTube drops the connection,
+# stream key revoked, ffmpeg crash). With `exec` the shell process is
+# replaced and the cleanup() trap never runs on normal exit, leaving
+# Xvfb + Chromium as orphans that systemd's ExecStopPost may miss
+# (the pkill regex covers chromium/google-chrome but not every binary
+# permutation). Capturing rc + exit preserves systemd's
+# Restart=on-failure semantics.
 # thread_queue_size: ffmpeg's default of 8 frames is too small once
 # x11grab is reading 1920x1080 raw frames from a software-rasterized
 # Chromium — Chrome's render loop briefly stalls when the page does
@@ -157,7 +162,7 @@ fi
 # stream stutters. 1024 video frames + 512 audio chunks gives enough
 # headroom to ride through render hiccups. Output to RTMP is unchanged;
 # YouTube sees a smoother CFR feed.
-exec ffmpeg \
+ffmpeg \
   -hide_banner -loglevel warning \
   -thread_queue_size 1024 \
   -f x11grab -draw_mouse 0 -framerate "${ENCODER_FRAMERATE}" -video_size "${WIDTH}x${HEIGHT}" -i "${DISPLAY_NUM}" \
@@ -169,4 +174,18 @@ exec ffmpeg \
   -g "${GOP}" -keyint_min "${GOP}" -sc_threshold 0 \
   -pix_fmt yuv420p -profile:v high -level 4.1 \
   -c:a aac -b:a "${ABITRATE_K}" -ar 44100 -ac 2 \
-  -f flv "${TARGET}"
+  -f flv "${TARGET}" &
+FFMPEG_PID=$!
+CHILDREN+=("$FFMPEG_PID")
+
+# `wait` blocks until ffmpeg exits. We disable -e around it so we can
+# capture the actual rc instead of bash bailing — and we want the
+# script to fall through to `exit "$rc"` so the EXIT trap (cleanup
+# function above) runs and tears down Xvfb + Chromium, even on a
+# crash. systemd's KillMode=control-group will SIGTERM ffmpeg
+# directly during a stop, and the EXIT path still fires.
+set +e
+wait "$FFMPEG_PID"
+rc=$?
+set -e
+exit "$rc"

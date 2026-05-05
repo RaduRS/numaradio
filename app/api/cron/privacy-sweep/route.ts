@@ -9,16 +9,24 @@
 // idempotent: running it twice in the same window is harmless
 // (the second run just deletes whatever the first missed).
 
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { runSweep } from "@/lib/privacy-sweep";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+function cronAuthOk(req: NextRequest): boolean {
   const expected = process.env.CRON_SECRET;
+  if (!expected) return false;
   const got = req.headers.get("authorization") ?? "";
-  if (!expected || got !== `Bearer ${expected}`) {
+  const want = `Bearer ${expected}`;
+  if (got.length !== want.length) return false;
+  return timingSafeEqual(Buffer.from(got), Buffer.from(want));
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  if (!cronAuthOk(req)) {
     // Vercel always sends a Bearer with CRON_SECRET. If it's wrong
     // or missing this is either a misconfigured deployment or an
     // unauthorised hit — refuse either way.
@@ -32,9 +40,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
     return NextResponse.json({ ok: true, counts });
   } catch (err) {
+    // Log full error server-side; opaque error to caller so Prisma /
+    // Postgres internals don't leak schema or constraint names.
     console.error("[privacy-sweep] cron threw:", err);
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
+      { ok: false, error: "sweep_failed" },
       { status: 500 },
     );
   }

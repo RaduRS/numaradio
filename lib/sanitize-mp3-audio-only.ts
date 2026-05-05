@@ -55,7 +55,13 @@ async function countStreams(input: Buffer): Promise<number> {
     probe.stderr.on("data", (c) => { stderr += c.toString("utf8"); });
     probe.on("error", (err) => reject(new Error(`ffprobe spawn failed: ${err.message}`)));
     probe.on("close", (code) => {
-      if (code !== 0 && stdout.length === 0) {
+      // Reject on non-zero exit OR empty stdout. Truncated / 0-byte
+      // MP3s sometimes give ffprobe exit 0 with no [STREAM] blocks; the
+      // old `code !== 0 && stdout.length === 0` treated that as "0
+      // streams" → the caller's `streamCount <= 1` branch returned the
+      // corrupt buffer unchanged. Now we surface it as an error so the
+      // ingest path can fail-loud instead of admitting bad data.
+      if (code !== 0 || stdout.length === 0) {
         reject(new Error(`ffprobe exit ${code}: ${stderr.slice(0, 200)}`));
         return;
       }

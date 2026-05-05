@@ -1,10 +1,22 @@
 import { NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
+import { internalAuthOk } from "@/lib/internal-auth";
 import { generateShoutout, ShoutoutError } from "@/lib/shoutout";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request): Promise<NextResponse> {
+  // Older "agent" surface — predates internal/shoutout but reaches the
+  // same TTS + B2 + queue-push pipeline. Lock down with the same
+  // x-internal-secret guard so only NanoClaw / Liquidsoap callers (who
+  // already have the secret in /workspace/group/.auth or /etc/numa/env)
+  // can put text on air.
+  if (!internalAuthOk(req)) {
+    return NextResponse.json(
+      { ok: false, error: "unauthorized" },
+      { status: 401 },
+    );
+  }
   let body: { text?: unknown; sender?: unknown; requestId?: unknown };
   try {
     body = (await req.json()) as typeof body;

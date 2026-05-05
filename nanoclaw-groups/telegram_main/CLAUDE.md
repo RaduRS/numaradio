@@ -124,6 +124,7 @@ When the operator says "shoutout to Robert and Eddie from dad" or
 
 ```bash
 curl -sS -X POST http://host.docker.internal:3001/api/generate/shoutout \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)" \
   -H "Content-Type: application/json" \
   -d '{"text":"<the operator's verbatim message>","sender":"telegram:<sender-name>"}'
 ```

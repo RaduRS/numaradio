@@ -1,6 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 
-export const STALE_MINUTES = 10;
+// 20 min gives real headroom over the pipeline's 6-min MiniMax poll
+// timeout + audio download + B2 uploads + DB writes. The previous 10-
+// min threshold could re-claim an in-flight job during slow MiniMax
+// runs, causing a double-upload and a UUID-collision crash on
+// Track.create.
+export const STALE_MINUTES = 20;
 
 export function buildSweepSql(): string {
   return `

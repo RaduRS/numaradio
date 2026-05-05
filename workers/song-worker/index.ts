@@ -47,14 +47,18 @@ async function main(): Promise<void> {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[song-worker] pipeline failed ${job.id}: ${msg}`);
+        // Mark failed rather than delete — the previous default of
+        // delete-on-failure silently wiped the listener's request on
+        // any transient MiniMax/B2 hiccup, leaving zero trace for
+        // debugging. The privacy-sweep cron clears stale completed +
+        // failed rows after 30 days.
         try {
-          await prisma.songRequest.delete({ where: { id: job.id } });
-        } catch (dErr) {
           await prisma.songRequest.update({
             where: { id: job.id },
             data: { status: "failed", errorMessage: msg, completedAt: new Date() },
           });
-          console.error(`[song-worker] delete failed ${job.id}: ${String(dErr)}`);
+        } catch (uErr) {
+          console.error(`[song-worker] mark-failed update threw ${job.id}: ${String(uErr)}`);
         }
       }
     } catch (err) {

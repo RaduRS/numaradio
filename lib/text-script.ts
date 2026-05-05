@@ -25,7 +25,10 @@ export function isLatinScript(text: string): boolean {
   for (const ch of stripped) {
     // Basic Latin + Latin-1 Supplement + Latin Extended-A/B (covers ASCII
     // a-z, accents like é à ñ ü, ß, etc.). Range A..ɏ ≈ U+0041..U+024F.
-    if (/[A-ɏ]/.test(ch)) latin += 1;
+    // U+1E00–U+1EFF (Latin Extended Additional) covers Vietnamese
+    // diacritics like Ắ Ẹ Ợ and many Welsh/Turkish letters; without it
+    // legitimate Vietnamese names get rejected as non-Latin.
+    if (/[A-ɏḀ-ỿ]/.test(ch)) latin += 1;
   }
   return latin / stripped.length >= 0.8;
 }

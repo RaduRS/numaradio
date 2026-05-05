@@ -88,6 +88,7 @@ Use the existing shoutout endpoint:
 
 ```bash
 curl -sS -X POST http://host.docker.internal:3001/api/generate/shoutout \
+  -H "x-internal-secret: $(cat /workspace/group/.auth)" \
   -H "Content-Type: application/json" \
   -d '{"text":"...","sender":"dashboard:<email>"}'
 ```

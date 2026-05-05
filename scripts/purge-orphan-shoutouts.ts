@@ -19,10 +19,24 @@ import { deleteAiredShoutout } from "../lib/delete-aired-shoutout";
 const DRY_RUN = process.argv.includes("--dry-run");
 
 async function main(): Promise<void> {
+  // Only target rows that are clearly orphans:
+  //   - older than 24h (an in-flight shoutout queued moments ago could
+  //     match the sourceType+airingPolicy fingerprint and we'd nuke
+  //     its B2 audio out from under Liquidsoap mid-play)
+  //   - no live QueueItem still pointing at them (planned/staged)
+  // Both filters are belt-and-braces — either alone would protect
+  // freshly-pushed shoutouts; together this is safely re-runnable.
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const candidates = await prisma.track.findMany({
     where: {
       sourceType: "external_import",
       airingPolicy: "request_only",
+      createdAt: { lt: cutoff },
+      queueItems: {
+        none: {
+          queueStatus: { in: ["planned", "staged"] },
+        },
+      },
     },
     select: { id: true, title: true, createdAt: true },
     orderBy: { createdAt: "asc" },

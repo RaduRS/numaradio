@@ -368,13 +368,32 @@ async function markFailed(queueItemId: string, reasonCode: string): Promise<void
   lastFailures.push({ at: new Date().toISOString(), reason: reasonCode, detail: queueItemId });
 }
 
-async function nextPositionIndex(sid: string): Promise<number> {
-  const top = await prisma.queueItem.findFirst({
-    where: { stationId: sid, priorityBand: "priority_request" },
-    orderBy: { positionIndex: "desc" },
-    select: { positionIndex: true },
+// Atomically allocate the next priority_request positionIndex AND
+// create the QueueItem inside one Postgres transaction, serialised by
+// a station-scoped advisory xact lock. Two concurrent pushHandler
+// calls — e.g. song-worker push + YouTube-chat shoutout dispatch —
+// would otherwise both read MAX(positionIndex) before either inserts,
+// produce identical positionIndex values, and queue order becomes
+// non-deterministic. Lock releases when the transaction commits.
+async function createQueueItemAtomically(
+  sid: string,
+  data: Omit<Parameters<typeof prisma.queueItem.create>[0]["data"], "positionIndex">,
+): Promise<{ id: string }> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${sid + ":priority_request"})::bigint)
+    `;
+    const top = await tx.queueItem.findFirst({
+      where: { stationId: sid, priorityBand: "priority_request" },
+      orderBy: { positionIndex: "desc" },
+      select: { positionIndex: true },
+    });
+    const position = (top?.positionIndex ?? 0) + 1;
+    return tx.queueItem.create({
+      data: { ...data, positionIndex: position },
+      select: { id: true },
+    });
   });
-  return (top?.positionIndex ?? 0) + 1;
 }
 
 async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
@@ -392,7 +411,6 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   const telnetQueue = kind === "shoutout" ? "overlay_queue" : "priority";
   const queueType = kind === "shoutout" ? "shoutout" : "music";
 
-  const position = await nextPositionIndex(track.stationId);
   const sourceObjectType = body.requestId ? "request" : "track";
   const sourceObjectId = body.requestId ?? body.trackId;
 
@@ -401,20 +419,16 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   // never replays them on daemon reconnect.
   const initialStatus = kind === "shoutout" ? "completed" : "staged";
 
-  const item = await prisma.queueItem.create({
-    data: {
-      stationId: track.stationId,
-      queueType,
-      sourceObjectType,
-      sourceObjectId,
-      trackId: body.trackId,
-      priorityBand: "priority_request",
-      queueStatus: initialStatus,
-      positionIndex: position,
-      insertedBy: "queue-daemon",
-      reasonCode: body.reason,
-    },
-    select: { id: true },
+  const item = await createQueueItemAtomically(track.stationId, {
+    stationId: track.stationId,
+    queueType,
+    sourceObjectType,
+    sourceObjectId,
+    trackId: body.trackId,
+    priorityBand: "priority_request",
+    queueStatus: initialStatus,
+    insertedBy: "queue-daemon",
+    reasonCode: body.reason,
   });
 
   // Fire-and-forget socket send. If offline, the row stays `staged` and the

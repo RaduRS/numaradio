@@ -177,6 +177,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       data: {
         stationId: station.id,
         artistName: normalizeName(name),
+        // trackTitle/trackGenre were validated above the same as the
+        // first-attempt create. Omitting them here landed null in the
+        // operator queue and crashed the approve route's ingestTrack
+        // call (title fell back to "Untitled — …", genre missing).
+        trackTitle: normalizeTrackTitle(trackTitle),
+        trackGenre: normalizeTrackGenre(typeof trackGenre === "string" ? trackGenre : null),
         email: normEmail,
         ipHash: ipHashOf(req),
         audioStorageKey: "",

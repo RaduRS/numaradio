@@ -79,6 +79,34 @@ daemon_url = environment.get(
   "NUMA_DAEMON_TRACK_URL"
 )
 
+# Retry helper — up to 3 attempts on transient failures (network
+# error / 5xx). The 5s http.post timeout serves as natural backoff
+# between attempts. A single Vercel cold-start otherwise drops the
+# event entirely: track-started → NowPlaying stuck; shoutout-ended
+# → orphan B2 audio + dangling QueueItem (no cleanup runs).
+def rec post_with_retry(~headers, ~data, ~attempts=3, url) =
+  try
+    r = http.post(headers=headers, data=data, timeout=5., url)
+    if r.status_code >= 500 then
+      if attempts > 1 then
+        log.important("[numa] post 5xx (" ^ string(r.status_code) ^ "), retrying — " ^ url)
+        post_with_retry(headers=headers, data=data, attempts=attempts-1, url)
+      else
+        log.severe("[numa] post 5xx after retries: " ^ string(r.status_code) ^ " " ^ url)
+      end
+    elsif r.status_code != 200 then
+      log.severe("[numa] post non-200: " ^ string(r.status_code) ^ " " ^ url)
+    end
+  catch err do
+    if attempts > 1 then
+      log.important("[numa] post err, retrying: " ^ string(err) ^ " " ^ url)
+      post_with_retry(headers=headers, data=data, attempts=attempts-1, url)
+    else
+      log.severe("[numa] post err after retries: " ^ string(err) ^ " " ^ url)
+    end
+  end
+end
+
 def notify_track_started(metadata) =
   filename = metadata["filename"]
   source_url = metadata["source_url"]
@@ -102,33 +130,20 @@ def notify_track_started(metadata) =
     if secret == "" then
       log.severe("[numa] INTERNAL_API_SECRET not set — skipping Vercel notify")
     else
-      try
-        response = http.post(
-          headers=[
-            ("Content-Type", "application/json"),
-            ("x-internal-secret", secret)
-          ],
-          data=body,
-          timeout=5.,
-          api_url
-        )
-        if response.status_code != 200 then
-          log.severe("[numa] track-started POST to Vercel failed: " ^ string(response.status_code))
-        end
-      catch err do
-        log.severe("[numa] track-started POST to Vercel error: " ^ string(err))
-      end
-    end
-    try
-      _ = http.post(
-        headers=[("Content-Type", "application/json")],
+      post_with_retry(
+        headers=[
+          ("Content-Type", "application/json"),
+          ("x-internal-secret", secret)
+        ],
         data=body,
-        timeout=5.,
-        daemon_url
+        api_url
       )
-    catch err do
-      log.severe("[numa] track-started POST to daemon error: " ^ string(err))
     end
+    post_with_retry(
+      headers=[("Content-Type", "application/json")],
+      data=body,
+      daemon_url
+    )
   end
 end
 
@@ -148,22 +163,14 @@ def notify_shoutout_started(metadata) =
   secret = environment.get(default="", "INTERNAL_API_SECRET")
   if secret != "" then
     body = json.stringify({sourceUrl=src, title=title, artist=artist})
-    try
-      r = http.post(
-        headers=[
-          ("Content-Type", "application/json"),
-          ("x-internal-secret", secret)
-        ],
-        data=body,
-        timeout=5.,
-        shoutout_started_url
-      )
-      if r.status_code != 200 then
-        log.severe("[numa] shoutout-started POST failed: " ^ string(r.status_code))
-      end
-    catch err do
-      log.severe("[numa] shoutout-started POST error: " ^ string(err))
-    end
+    post_with_retry(
+      headers=[
+        ("Content-Type", "application/json"),
+        ("x-internal-secret", secret)
+      ],
+      data=body,
+      shoutout_started_url
+    )
   end
 end
 
@@ -183,22 +190,14 @@ def notify_shoutout_ended(metadata) =
     # cleanup runs from the body either time, instead of relying on
     # state that the first fire already cleared.
     body = json.stringify({sourceUrl=src})
-    try
-      r = http.post(
-        headers=[
-          ("Content-Type", "application/json"),
-          ("x-internal-secret", secret)
-        ],
-        data=body,
-        timeout=5.,
-        shoutout_ended_url
-      )
-      if r.status_code != 200 then
-        log.severe("[numa] shoutout-ended POST failed: " ^ string(r.status_code))
-      end
-    catch err do
-      log.severe("[numa] shoutout-ended POST error: " ^ string(err))
-    end
+    post_with_retry(
+      headers=[
+        ("Content-Type", "application/json"),
+        ("x-internal-secret", secret)
+      ],
+      data=body,
+      shoutout_ended_url
+    )
   end
 end
 
