@@ -15,6 +15,7 @@ import {
 // reassurance that a person has it in hand.
 const PENDING_LINES: readonly string[] = [
   "In the studio — your song's coming up.",
+  "Usually four or five minutes.",
   "Lena's giving it a listen.",
   "Almost ready for air.",
 ];
