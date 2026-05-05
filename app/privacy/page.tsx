@@ -153,13 +153,13 @@ export default function PrivacyPage() {
           By sending a shoutout you also agree that your typed message and
           the name (or handle) you supplied{" "}
           <strong style={{ color: "var(--fg)" }}>
-            may appear in short promotional clips on the station&apos;s social
+            may appear in promotional clips on the station&apos;s social
             media accounts
           </strong>{" "}
-          (TikTok, Instagram Reels, YouTube Shorts) — the same words that
-          aired on the live broadcast, framed for a 15–30 second video. If
-          you&apos;d rather your shoutout stayed on-air-only, leave the
-          name field blank or email{" "}
+          (TikTok, Instagram Reels, YouTube Shorts, and X / Twitter) — the
+          same words that aired on the live broadcast. If you&apos;d rather
+          your shoutout stayed on-air-only, leave the name field blank or
+          email{" "}
           <a href="mailto:hello@numaradio.com" style={{ color: "var(--accent)" }}>
             hello@numaradio.com
           </a>{" "}
@@ -359,15 +359,15 @@ export default function PrivacyPage() {
                 <li>
                   You authorise Numa Radio to use{" "}
                   <strong style={{ color: "var(--fg)" }}>
-                    short promotional clips
+                    promotional clips
                   </strong>{" "}
-                  of the track (typically 8–15 seconds) on the station&apos;s
-                  social media accounts — TikTok, Instagram Reels, YouTube
-                  Shorts and equivalent — to promote the broadcast. Your
-                  artist name, track title, and (where the post is built
-                  around your track specifically) cover artwork may appear
-                  on screen. We don&apos;t use any other personal
-                  information of yours in those clips.
+                  of the track on the station&apos;s social media accounts —
+                  TikTok, Instagram Reels, YouTube Shorts, and X (Twitter) —
+                  to promote the broadcast. Your artist name, track title,
+                  and (where the post is built around your track
+                  specifically) cover artwork may appear on screen. We
+                  don&apos;t use any other personal information of yours in
+                  those clips.
                 </li>
                 <li>
                   You&apos;re solely responsible for the rights status of
