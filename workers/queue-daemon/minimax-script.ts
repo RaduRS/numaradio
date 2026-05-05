@@ -75,7 +75,13 @@ export async function generateChatterScript(
     // windows occasionally produce socket-accept-but-no-response)
     // blocks runChatter's #inFlight forever — Lena permanently
     // silenced until daemon restart.
-    signal: AbortSignal.timeout(30_000),
+    //
+    // 90s ceiling: MiniMax-M2.7 is a reasoning model; the `thinking`
+    // block routinely runs 20-60s before the final text emits.
+    // 30s was too tight (cut off ~half of legit auto-chatter +
+    // context-line calls in 2026-05-05 prod). 90s still bounds the
+    // worst-case wedge to ~1.5 min, which auto-host's retry covers.
+    signal: AbortSignal.timeout(90_000),
   });
 
   if (!res.ok) throw new Error(`minimax http ${res.status}`);
