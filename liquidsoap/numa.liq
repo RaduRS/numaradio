@@ -84,13 +84,17 @@ daemon_url = environment.get(
 # between attempts. A single Vercel cold-start otherwise drops the
 # event entirely: track-started → NowPlaying stuck; shoutout-ended
 # → orphan B2 audio + dangling QueueItem (no cleanup runs).
-def rec post_with_retry(~headers, ~data, ~attempts=3, url) =
+#
+# Liquidsoap's `def rec` requires the recursive call to use an
+# identical signature, so `attempts` is a required positional in the
+# inner function and the public wrapper hardcodes the initial 3.
+def rec post_with_retry_inner(~headers, ~data, ~attempts, url) =
   try
     r = http.post(headers=headers, data=data, timeout=5., url)
     if r.status_code >= 500 then
       if attempts > 1 then
         log.important("[numa] post 5xx (" ^ string(r.status_code) ^ "), retrying — " ^ url)
-        post_with_retry(headers=headers, data=data, attempts=attempts-1, url)
+        post_with_retry_inner(headers=headers, data=data, attempts=attempts-1, url)
       else
         log.severe("[numa] post 5xx after retries: " ^ string(r.status_code) ^ " " ^ url)
       end
@@ -100,11 +104,15 @@ def rec post_with_retry(~headers, ~data, ~attempts=3, url) =
   catch err do
     if attempts > 1 then
       log.important("[numa] post err, retrying: " ^ string(err) ^ " " ^ url)
-      post_with_retry(headers=headers, data=data, attempts=attempts-1, url)
+      post_with_retry_inner(headers=headers, data=data, attempts=attempts-1, url)
     else
       log.severe("[numa] post err after retries: " ^ string(err) ^ " " ^ url)
     end
   end
+end
+
+def post_with_retry(~headers, ~data, url) =
+  post_with_retry_inner(headers=headers, data=data, attempts=3, url)
 end
 
 def notify_track_started(metadata) =
