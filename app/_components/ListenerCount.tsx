@@ -13,14 +13,69 @@ type Payload = {
   isLive: boolean;
 };
 
-async function fetchListeners(signal: AbortSignal): Promise<Payload | null> {
-  try {
-    const r = await fetch("/api/station/listeners", { signal, cache: "no-store" });
-    if (!r.ok) return null;
-    return (await r.json()) as Payload;
-  } catch {
-    return null;
+// Module-level singleton. Multiple <ListenerCount> instances on the same
+// page (Hero, Footer, ExpandedPlayerMobile, About, BroadcastStage) used
+// to each spin up their own poller + AbortController. Now they all
+// subscribe to one shared poller; it starts when the first subscriber
+// mounts and stops when the last unmounts.
+let cached: Payload | null = null;
+const subscribers = new Set<(value: number | null) => void>();
+let pollerInterval: ReturnType<typeof setInterval> | null = null;
+let pollerCtrl: AbortController | null = null;
+
+async function pollOnce(): Promise<void> {
+  if (!pollerCtrl) return;
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+    return;
   }
+  try {
+    const r = await fetch("/api/station/listeners", {
+      signal: pollerCtrl.signal,
+      cache: "no-store",
+    });
+    if (!r.ok) return;
+    const data = (await r.json()) as Payload;
+    cached = data;
+    for (const cb of subscribers) cb(data.withFloor);
+  } catch {
+    /* offline / aborted — try again next tick */
+  }
+}
+
+function onVisibilityChange(): void {
+  if (document.visibilityState === "visible") void pollOnce();
+}
+
+function startPoller(): void {
+  if (pollerInterval !== null) return;
+  pollerCtrl = new AbortController();
+  void pollOnce();
+  pollerInterval = setInterval(() => void pollOnce(), POLL_MS);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+}
+
+function stopPoller(): void {
+  if (pollerInterval !== null) {
+    clearInterval(pollerInterval);
+    pollerInterval = null;
+  }
+  pollerCtrl?.abort();
+  pollerCtrl = null;
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+  }
+}
+
+function subscribe(cb: (value: number | null) => void): () => void {
+  subscribers.add(cb);
+  // Hand the new subscriber the most recent value immediately so a late
+  // mount (e.g. ExpandedPlayerMobile after Hero) doesn't flash skeleton.
+  if (cached !== null) cb(cached.withFloor);
+  startPoller();
+  return () => {
+    subscribers.delete(cb);
+    if (subscribers.size === 0) stopPoller();
+  };
 }
 
 export function ListenerCount({
@@ -30,32 +85,13 @@ export function ListenerCount({
   suffix?: string;
   className?: string;
 }) {
-  // Render 0 on first SSR/CSR paint to avoid hydration mismatch; the floor
-  // takes over after the first poll lands.
-  const [n, setN] = useState<number | null>(null);
+  // Initial state pulls from the singleton cache when present so a second
+  // instance mounting on the same page doesn't re-show the skeleton.
+  // First-load is always null on both server and client (cache is empty
+  // at module init), so hydration matches.
+  const [n, setN] = useState<number | null>(cached?.withFloor ?? null);
 
-  useEffect(() => {
-    const ctrl = new AbortController();
-
-    async function poll() {
-      // Skip while tab is hidden — listener below re-fires on focus.
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      const data = await fetchListeners(ctrl.signal);
-      if (data) setN(data.withFloor);
-    }
-
-    poll();
-    const id = setInterval(poll, POLL_MS);
-    const onVis = () => {
-      if (document.visibilityState === "visible") poll();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-      ctrl.abort();
-    };
-  }, []);
+  useEffect(() => subscribe(setN), []);
 
   // Skeleton on first paint reserves a fixed inline width matching the
   // typical 3-digit count so the surrounding text doesn't reflow when
