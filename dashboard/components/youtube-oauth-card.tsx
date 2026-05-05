@@ -118,6 +118,15 @@ export function YoutubeOauthCard() {
   const [copied, setCopied] = useState<string | null>(null);
 
   const meta = poll.data;
+
+  // Auto-expand the recovery steps when the token is in trouble. We
+  // don't force-close on the way back down — operator may want to keep
+  // them visible after refreshing to confirm the new countdown.
+  useEffect(() => {
+    if (meta?.status === "expired" || meta?.status === "urgent") {
+      setStepsOpen(true);
+    }
+  }, [meta?.status]);
   // Recompute msUntilExpiry against the local clock so the card ages
   // smoothly between server polls.
   const liveMsUntilExpiry =
