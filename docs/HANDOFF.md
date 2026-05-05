@@ -1,6 +1,34 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-05-03
+Last updated: 2026-05-05
+
+---
+
+## 2026-05-05 — Deep-dive audit (P0 + P1) + prod incident
+
+**Read these first if you're picking up cold:**
+- `docs/superpowers/specs/2026-05-05-audit-findings.md` — full P0 / P1 / P2 list with what shipped, what's deferred, how to safely re-introduce the schema work
+- `docs/superpowers/specs/2026-05-05-incident-postmortem.md` — mid-session prod data wipe (recovered via Neon PITR) + my P1 schema mistake (reverted)
+
+**TL;DR of the day:**
+- 7-agent code-review audit produced ~74 findings (14 P0, ~22 P1, ~30 P2).
+- P0: all 14 shipped (`fa186b5` + `caf2ea0` hotfix).
+- P1: 14 shipped (`3b73f90`, `4347381`); schema enum + index migration **REVERTED** (`e2a30e5`) after Vercel rebuilt the Prisma client against the new schema while the DB was still on the old column type → `/api/station/shoutouts/recent` 500'd.
+- Mid-audit, an unidentified actor wiped every data table on prod. Neon PITR restored. Root cause UNKNOWN — symptoms match `prisma db push --force-reset` but no source identified in our code, bash history, Vercel build, or operator action.
+- Live state: stream up, public site green, daemon green. Dashboard still on P0 code only; P1 dashboard fixes (openrouter timeout, humanize timeout, SubmissionsPanel visibility-gate) committed but not deployed — `cd dashboard && npm run deploy` whenever you want them.
+
+**What's deferred for next time:**
+- Re-introduce the `DeliveryStatus` enum + 5 hot-path indexes — needs `_prisma_migrations` baseline first (the prod tracking table doesn't reflect the schema's actual lineage). Index-only migration is the safest re-entry. See audit-findings doc for the safe path.
+- `dashboard/app/api/chat/confirm/[confirmId]/route.ts:148` HTTP-loopback → direct import refactor.
+- `app/api/booth/song` moderation into `after()` (already in old backlog below, still valid).
+- `lib/derive-genre.ts` regex false-positives on plain English.
+- ~30 P2 items listed in audit-findings doc — duplicated profanity/timeOfDay code, missing HSTS, `submissions/[id]/audio` full-buffer, etc.
+
+**Operator-side state after today's session:**
+- Services restarted with latest code (queue-daemon, song-worker, liquidsoap, dashboard).
+- Systemd unit hardening installed (`StartLimit*` moved to `[Unit]` on dashboard; `After=icecast2.service` on encoder).
+- `secure-numa-env.sh` ran — `/etc/numa/env` is root:root 0600, `dashboard/.env.local` is marku:marku 0600.
+- `INTERNAL_API_SECRET` in `~/saas/numaradio/.env.local` does NOT match Vercel/`/etc/numa/env`. Local scripts that hit `/api/internal/*` will get 401. Worth aligning when you have a moment.
 
 ---
 
@@ -12,15 +40,19 @@ Pick up only if Vercel CPU runs hot again or these start hurting.
   + `/api/station/broadcast` edge cache 5s → 10s. Cuts homepage
   poll cost ~5×, ~5s flip lag during normal play.
 - booth/song moderation into `after()` (same #4 pattern; needs a
-  "moderating" status the song-worker skips).
-- `@@index([fingerprintHash])` on Shoutout — yt-chat does findFirst
-  on it for idempotency, sequential scan today.
+  "moderating" status the song-worker skips). **Now also a P1
+  finding from 2026-05-05 audit.**
+- ~~`@@index([fingerprintHash])` on Shoutout~~ — promoted to P1 in
+  2026-05-05 audit, deferred again pending `_prisma_migrations`
+  baseline.
 - Heartbeat sweep dampening (`presence/heartbeat`) — gate the
   `deleteMany` on 1-in-60 or move to daily privacy-sweep cron.
+  **Note:** 2026-05-05 audit shipped per-IP rate-limit on the
+  endpoint, but the deleteMany cadence question is unchanged.
 - World-aside circuit-breaker on Brave outage — N consecutive
   failures → skip world_aside slots 30 min.
-- Timing-safe token compare in `cron/privacy-sweep` — match
-  `lib/internal-auth.ts` pattern.
+- ~~Timing-safe token compare in `cron/privacy-sweep`~~ — shipped
+  2026-05-05 (`fa186b5`).
 - `/api/station/listeners` (dashboard) still calls
   `fetchYoutubeSnapshot` to compose `effective = icecast +
   (live ? viewers - 1 : 0)` for the /shoutouts auto-chatter
