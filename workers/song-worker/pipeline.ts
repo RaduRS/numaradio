@@ -100,6 +100,34 @@ async function deleteB2Keys(keys: string[]): Promise<void> {
   );
 }
 
+// Cloudflare returns 522 on cold-cache fetches when its connection to
+// the B2 origin stalls. Liquidsoap retries 3-4 times then drops the
+// request — listener's song silently never airs. We HEAD the URL up to
+// 3 times before pushing so CF edge cache is populated by the time
+// Liquidsoap fetches. Failures here are non-fatal: if CF still 522s
+// after our retries we push anyway (best-effort).
+async function warmCdnUrl(url: string): Promise<void> {
+  const ATTEMPTS = 3;
+  const GAP_MS = 1500;
+  for (let i = 0; i < ATTEMPTS; i++) {
+    try {
+      const res = await fetch(url, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (res.ok) return;
+      console.warn(
+        `[song-worker] cdn warm ${url} attempt ${i + 1}/${ATTEMPTS}: HTTP ${res.status}`,
+      );
+    } catch (err) {
+      console.warn(
+        `[song-worker] cdn warm ${url} attempt ${i + 1}/${ATTEMPTS}: ${String(err)}`,
+      );
+    }
+    if (i < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, GAP_MS));
+  }
+}
+
 async function pollUntilDone(taskId: string): Promise<{ audioUrl: string; durationMs: number }> {
   const started = Date.now();
   while (Date.now() - started < POLL_TIMEOUT_MS) {
@@ -317,6 +345,13 @@ async function runPipelineInner(
   // failure cleanup must go through the Track-aware delete path, not
   // a blind B2 delete that would orphan the DB row instead.
   uploadedB2Keys.length = 0;
+
+  // Pre-warm the Cloudflare edge cache before pushing. Without this,
+  // Liquidsoap is the first client to hit a brand-new URL — on cache
+  // miss CF tries to pull from B2, sometimes returns 522 (origin
+  // stall) and Liquidsoap drops the request after a few retries.
+  // Listener's song never airs. See incident 2026-05-05 (Veggie Prism).
+  await warmCdnUrl(audioUrl);
 
   // Step 6: push to queue daemon so Lena airs it next. The `announce`
   // field triggers a Lena-voice intro over the first seconds of this
