@@ -64,6 +64,11 @@ export async function GET(): Promise<NextResponse> {
     fetchTunnelHealth(metricsUrl),
     fetchSiteVisitors(),
     fetchNowPlayingFromDb(),
+    // REFACTOR: this route only needs `state === "live"` to subtract the
+    // encoder from listener count. /api/youtube/health already returns the
+    // full snapshot to the browser. The browser could do the subtraction
+    // client-side and this YT fetch could go away. Shared 360s cache in
+    // dashboard/lib/youtube.ts makes the duplication cheap, not free.
     fetchYoutubeSnapshot().catch(() => null),
   ]);
 

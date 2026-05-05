@@ -21,6 +21,15 @@ Pick up only if Vercel CPU runs hot again or these start hurting.
   failures → skip world_aside slots 30 min.
 - Timing-safe token compare in `cron/privacy-sweep` — match
   `lib/internal-auth.ts` pattern.
+- `/api/status` and `/api/youtube/health` both call
+  `fetchYoutubeSnapshot()` — same data, two routes. The status
+  route only uses `state` for encoder-listener subtraction; move
+  that math client-side and drop the YT call from `/api/status`.
+  The shared 360s cache in `dashboard/lib/youtube.ts` makes this
+  cheap today, but the duplication is still architectural smell —
+  was the source of the 2026-05-04 quota cap (cache was 30s and
+  status polls every 5s). See breadcrumb at
+  `dashboard/app/api/status/route.ts:67`.
 
 ---
 
