@@ -11,7 +11,6 @@ type AutoHostMode = "auto" | "forced_on" | "forced_off";
 
 interface Body {
   enabled?: unknown;
-  operator?: unknown;
 }
 
 // Legacy tool shape for the NanoClaw agent. Translates `enabled` booleans
@@ -61,8 +60,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  const operator =
-    typeof body.operator === "string" ? body.operator : "chat:unknown";
+  // Hardcoded — see service-restart for why.
+  const operator = "nanoclaw";
   const nextMode: AutoHostMode = body.enabled ? "forced_on" : "forced_off";
   const forcedUntil = new Date(Date.now() + FORCE_WINDOW_MS);
   const pool = getDbPool();

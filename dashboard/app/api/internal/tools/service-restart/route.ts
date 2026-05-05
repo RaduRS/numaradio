@@ -21,7 +21,6 @@ const ALLOWED_SERVICES = new Set<string>([
 
 interface Body {
   service?: unknown;
-  operator?: unknown;
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
@@ -35,8 +34,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "invalid json" }, { status: 400 });
   }
   const service = typeof body.service === "string" ? body.service : "";
-  const operator =
-    typeof body.operator === "string" ? body.operator : "chat:unknown";
+  // Hardcoded — body.operator was a prompt-injection vector. NanoClaw is
+  // the only caller of this route; the value is just an audit-log label,
+  // not authz, so we ignore whatever the agent put in the body.
+  const operator = "nanoclaw";
   if (!ALLOWED_SERVICES.has(service)) {
     return NextResponse.json(
       {

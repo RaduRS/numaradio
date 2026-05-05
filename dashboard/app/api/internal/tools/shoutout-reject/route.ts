@@ -7,7 +7,6 @@ export const dynamic = "force-dynamic";
 
 interface RejectBody {
   id?: unknown;
-  operator?: unknown;
   reason?: unknown;
 }
 
@@ -22,8 +21,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "invalid json" }, { status: 400 });
   }
   const id = typeof body.id === "string" ? body.id : "";
-  const operator =
-    typeof body.operator === "string" ? body.operator : "chat:unknown";
+  // Hardcoded — see service-restart for why.
+  const operator = "nanoclaw";
   const reasonHint = typeof body.reason === "string" ? body.reason : undefined;
   if (!id) {
     return NextResponse.json(

@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 
 interface ApproveBody {
   id?: unknown;
-  operator?: unknown;
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
@@ -22,8 +21,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "invalid json" }, { status: 400 });
   }
   const id = typeof body.id === "string" ? body.id : "";
-  const operator =
-    typeof body.operator === "string" ? body.operator : "chat:unknown";
+  // Hardcoded — see service-restart for why.
+  const operator = "nanoclaw";
   if (!id) {
     return NextResponse.json(
       { ok: false, error: "id required" },

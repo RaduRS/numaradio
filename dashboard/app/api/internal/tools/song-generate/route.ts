@@ -16,17 +16,16 @@ interface Body {
   prompt?: unknown;
   artistName?: unknown;
   isInstrumental?: unknown;
-  operator?: unknown;
 }
 
 /**
- * Operator-initiated song request. Bypasses the listener rate limit
- * (CF Access already gates the dashboard) and the booth moderator
- * (operator trust is established). Inserts a SongRequest row with
- * `ipHash = "operator:<email>"` so the worker's per-IP limit never
- * sees it, and the audit log can trace which operator asked. The
- * song-worker polls every 3s — on success the track airs on the
- * stream within 1–4 min, same pipeline as listener songs.
+ * NanoClaw-initiated song request via the dashboard chat tool.
+ * Bypasses the listener rate limit (CF Access already gates the
+ * dashboard) and the booth moderator (operator trust is established).
+ * Inserts a SongRequest row with `ipHash = "operator:nanoclaw"` so the
+ * worker's per-IP limit never sees it. The song-worker polls every 3s
+ * — on success the track airs on the stream within 1–4 min, same
+ * pipeline as listener songs.
  */
 export async function POST(req: Request): Promise<NextResponse> {
   if (!internalAuthOk(req)) {
@@ -46,8 +45,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   const artistName =
     typeof body.artistName === "string" ? body.artistName.trim() : "";
   const isInstrumental = body.isInstrumental === true;
-  const operator =
-    typeof body.operator === "string" ? body.operator : "chat:unknown";
+  // Hardcoded — see service-restart for why. The "operator:" prefix on
+  // ipHash is the load-bearing signal to the worker (skip rate limits),
+  // not the value itself.
+  const operator = "nanoclaw";
 
   if (prompt.length < PROMPT_MIN || prompt.length > PROMPT_MAX) {
     return NextResponse.json(
