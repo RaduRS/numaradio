@@ -15,14 +15,16 @@ Last updated: 2026-05-05
 - P0: all 14 shipped (`fa186b5` + `caf2ea0` hotfix).
 - P1: 14 shipped (`3b73f90`, `4347381`); schema enum + index migration **REVERTED** (`e2a30e5`) after Vercel rebuilt the Prisma client against the new schema while the DB was still on the old column type → `/api/station/shoutouts/recent` 500'd.
 - Mid-audit, an unidentified actor wiped every data table on prod. Neon PITR restored. Root cause UNKNOWN — symptoms match `prisma db push --force-reset` but no source identified in our code, bash history, Vercel build, or operator action.
-- Live state: stream up, public site green, daemon green. Dashboard still on P0 code only; P1 dashboard fixes (openrouter timeout, humanize timeout, SubmissionsPanel visibility-gate) committed but not deployed — `cd dashboard && npm run deploy` whenever you want them.
+- **Evening pickup:** P1 dashboard redeploy done (operator). 4 P2 items shipped on top: HSTS (`2600008`), derive-genre tightening (`1fa7a7b`), operator hardcode (`4f1b14e`), audio-sig 4h ceiling (`3c413c8`). All four are pure code, no schema. Public site auto-deploys on push; **dashboard needs a redeploy** for HSTS + operator hardcode to land — `cd dashboard && npm run deploy`.
+- Live state: stream up, public site green, daemon green. PITR also restored `_prisma_migrations` to 18/18 applied — schema baseline is no longer a blocker for the deferred index migration.
 
 **What's deferred for next time:**
-- Re-introduce the `DeliveryStatus` enum + 5 hot-path indexes — needs `_prisma_migrations` baseline first (the prod tracking table doesn't reflect the schema's actual lineage). Index-only migration is the safest re-entry. See audit-findings doc for the safe path.
+- **Index-only migration** (5 hot-path indexes — Shoutout(ipHash,createdAt), Shoutout(fingerprintHash), PlayHistory(trackId), QueueItem(trackId), Track(stationId,title)). Now safe to ship: `_prisma_migrations` is back at 18/18. Build a fresh migration with raw `CREATE INDEX CONCURRENTLY`, push, operator runs `prisma migrate deploy`. Pure additive.
+- `DeliveryStatus` enum — still risky as a single commit; needs a 2-deploy cutover (migration first, then code). Skip unless typo'd statuses are causing operator pain.
 - `dashboard/app/api/chat/confirm/[confirmId]/route.ts:148` HTTP-loopback → direct import refactor.
-- `app/api/booth/song` moderation into `after()` (already in old backlog below, still valid).
-- `lib/derive-genre.ts` regex false-positives on plain English.
-- ~30 P2 items listed in audit-findings doc — duplicated profanity/timeOfDay code, missing HSTS, `submissions/[id]/audio` full-buffer, etc.
+- `app/api/booth/song` moderation into `after()` (mirror the shoutout pattern).
+- `lib/moderate.ts` + `dashboard/lib/humanize.ts` profanity-pattern drift — extracting to a shared module needs cross-package import strategy; saved.
+- Remaining P2 items (~26) in audit-findings doc — `submissions/[id]/audio` full-buffer, time-of-day duplication, etc.
 
 **Operator-side state after today's session:**
 - Services restarted with latest code (queue-daemon, song-worker, liquidsoap, dashboard).

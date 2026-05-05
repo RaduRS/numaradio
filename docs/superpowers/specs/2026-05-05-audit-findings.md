@@ -12,7 +12,7 @@ This doc is the canonical list. The post-mortem doc covers the deploy incident s
 |---|---|---|---|
 | P0 | 14 | 14 | 0 |
 | P1 | ~22 | 14 | 8 (incl. schema migration **reverted**) |
-| P2 | ~30 | 0 | 30 |
+| P2 | ~30 | 4 | ~26 |
 
 Shipped commits:
 - `fa186b5` — P0 sweep
@@ -21,6 +21,11 @@ Shipped commits:
 - `4347381` — P1 ops hardening
 - `e2a30e5` — revert of schema enum + index migration (see post-mortem)
 - `db4b842` — post-mortem doc
+- `8252db2` — MiniMax fetch timeout 30s → 90s (P1 follow-up)
+- `2600008` — HSTS on both next.config.ts (P2)
+- `1fa7a7b` — derive-genre regex tightened on ambiguous English words (P1 deferred → done)
+- `4f1b14e` — hardcode operator=\"nanoclaw\" in internal-tool routes (P2)
+- `3c413c8` — verify-audio-sig 4h ceiling on exp (P2)
 
 ---
 
@@ -75,8 +80,7 @@ The confirm-then-execute path does `fetch(internalUrl(req, route))` with `INTERN
 **2. `app/api/booth/song/route.ts:115` — moderation still synchronous.**
 HANDOFF backlog item from before. The shoutout submit was moved into `after()` in 2026-05-03 audit; song submit wasn't. Each song request burns 2-15s of Vercel CPU on `moderateSongPrompt()` in the foreground. Pattern to follow: `dashboard/app/api/booth/shoutout/[id]/status/route.ts` + the `numa.shoutout.last` recovery flow.
 
-**3. `lib/derive-genre.ts:28` — `\b(house|soul|country|folk|blues)\b` false-positives.**
-"chill house warming vibes" → genre "House"; "lost my soul" → "Soul". These coarse word boundaries trip on common English. Need a stoplist or context check (require adjacency to "music" / "track" / a corroborating genre word).
+**3. `lib/derive-genre.ts:28` — `\b(house|soul|country|folk|blues)\b` false-positives.** ✅ **SHIPPED `1fa7a7b`** — split into `STRICT_PATTERNS` and `AMBIGUOUS_PATTERNS`; the five overloaded English words now require a music-context noun (music/track/song/tune/beat/album/genre/playlist) before matching. +2 tests.
 
 **4. `liquidsoap/numa.liq:42` — `overlay_queue` has no length cap.**
 Liquidsoap 2.2.4's `request.queue` doesn't expose a `length` parameter. Per-source rate limits already prevent realistic runaway. If this ever becomes a problem, the right place is daemon-side: a pre-push depth check via the telnet `overlay_queue.queue` introspection. Documented in numa.liq.
@@ -105,7 +109,7 @@ Lower priority. Group by theme:
 - `lib/schedule.ts:73-86` and `dashboard/lib/humanize.ts:58-70` — `timeOfDayFor` / `formatLocalTime` duplicated. At minimum add a co-located test in `dashboard/lib` that pins outputs to match. Better: a shared package.
 
 ### Security headers
-- `next.config.ts` and `dashboard/next.config.ts` both missing `Strict-Transport-Security`. Add `max-age=63072000; includeSubDomains`.
+- ~~`next.config.ts` and `dashboard/next.config.ts` both missing `Strict-Transport-Security`.~~ ✅ **SHIPPED `2600008`** — `max-age=63072000; includeSubDomains`, no `preload`.
 
 ### Performance / memory
 - `app/api/submissions/[id]/audio/route.ts:43` — buffers the full MP3 in Vercel function memory before streaming. Range requests still pull the whole file. Switch to a presigned redirect or Range-forwarding stream.
@@ -118,7 +122,7 @@ Lower priority. Group by theme:
 - `NowPlaying`, `NowSpeaking` reference `trackId` as plain `String` (no FK). A track delete leaves stale pointers. The `shoutout-ended` callback should null-out `NowSpeaking` regardless.
 
 ### Operator surface
-- `dashboard/app/api/internal/tools/*` accept `body.operator` verbatim — NanoClaw could be prompt-injected to send any string. Hardcode `"nanoclaw"` rather than trusting the body field. Audit-trail integrity issue, not exploitation.
+- ~~`dashboard/app/api/internal/tools/*` accept `body.operator` verbatim~~ ✅ **SHIPPED `4f1b14e`** — all 6 routes (service-restart, library-push, shoutout-approve, shoutout-reject, autochatter-toggle, song-generate) now hardcode `operator = "nanoclaw"` and ignore the body field. Body interfaces no longer accept `operator`.
 - `dashboard/app/api/library/track/[id]/artwork/route.ts:80` — no `stationId` check on artwork regen. Single-tenant deploy makes this harmless today but it's a cross-station write surface for future.
 
 ### Frontend UX
@@ -134,7 +138,7 @@ Lower priority. Group by theme:
 
 ### Logic
 - `lib/probe-duration.ts:54` — `Readable.fromWeb(res.body as never)` cast suppresses a Node 18-vs-20 compatibility gap. Pin Node ≥20 in `engines` or replace cast with `as ReadableStream<Uint8Array>`.
-- `lib/verify-audio-sig.ts` — no upper bound on `exp`. A token minted with `exp = Date.now()` (vs `Date.now()/1000`, a units bug) would never expire. Add a 4h ceiling.
+- ~~`lib/verify-audio-sig.ts` — no upper bound on `exp`.~~ ✅ **SHIPPED `3c413c8`** — `MAX_TTL_SECONDS = 4 * 60 * 60`. Rejects exp > now + 4h. Catches the millis-instead-of-seconds units bug. +3 tests.
 
 ---
 
