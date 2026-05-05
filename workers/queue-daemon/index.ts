@@ -519,7 +519,11 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
   });
 
   // Promote the oldest staged priority item for this track to playing.
-  const staged = await prisma.queueItem.findFirst({
+  // Any other staged items for the same track are duplicates (e.g. a
+  // manual repush after a silent CDN fetch failure) — mark them
+  // completed so they don't linger as ghost Up Next entries on the
+  // public site after the real one airs.
+  const stagedAll = await prisma.queueItem.findMany({
     where: {
       stationId: sid,
       priorityBand: "priority_request",
@@ -529,15 +533,22 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
     orderBy: { positionIndex: "asc" },
     select: { id: true, sourceObjectType: true, sourceObjectId: true },
   });
-  if (!staged) return; // came from rotation, nothing to transition
+  if (stagedAll.length === 0) return; // came from rotation, nothing to transition
 
+  const [primary, ...duplicates] = stagedAll;
   await prisma.queueItem.update({
-    where: { id: staged.id },
+    where: { id: primary.id },
     data: { queueStatus: "playing" },
   });
-  if (staged.sourceObjectType === "request") {
+  if (duplicates.length > 0) {
+    await prisma.queueItem.updateMany({
+      where: { id: { in: duplicates.map((d) => d.id) } },
+      data: { queueStatus: "completed" },
+    });
+  }
+  if (primary.sourceObjectType === "request") {
     await prisma.request.update({
-      where: { id: staged.sourceObjectId },
+      where: { id: primary.sourceObjectId },
       data: { requestStatus: "aired" },
     });
   }
