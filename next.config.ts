@@ -39,6 +39,14 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
   },
+  // Two years; includeSubDomains covers api.numaradio.com (Icecast).
+  // No `preload` — that's a one-way ticket to the HSTS preload list and
+  // we may yet need a non-HTTPS subdomain (local dev tunnel, status
+  // page, etc.) at some point.
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains",
+  },
   { key: "Content-Security-Policy-Report-Only", value: csp },
 ];
 

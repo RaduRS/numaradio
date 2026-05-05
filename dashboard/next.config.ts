@@ -26,6 +26,11 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
   },
+  // Mirrors the public-site header. No `preload` (irreversible).
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains",
+  },
   { key: "Content-Security-Policy-Report-Only", value: csp },
 ];
 
