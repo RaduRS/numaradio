@@ -1,16 +1,25 @@
 "use client";
 import type { StatusSnapshot } from "@/lib/types";
+import type { YoutubeBroadcastSnapshot } from "@/lib/youtube";
 import { VoiceProviderTile } from "@/components/voice-provider-tile";
 import { ReshuffleButton } from "@/components/reshuffle-button";
 
 interface Props {
   data: StatusSnapshot | null;
   isStale: boolean;
+  youtube: YoutubeBroadcastSnapshot | null;
 }
 
-export function StatusPills({ data, isStale }: Props) {
+export function StatusPills({ data, isStale, youtube }: Props) {
   const live = data?.stream.reachable ?? false;
-  const listeners = data?.stream.listeners ?? null;
+  // Subtract the encoder's icecast pull (1) when YT is live, so the
+  // 'Listening now' pill reflects real audio listeners only. Done here
+  // instead of in /api/status so the 5s status poll doesn't have to
+  // hit the YouTube API on every tick.
+  const rawListeners = data?.stream.listeners ?? null;
+  const ytLive = youtube?.state === "live";
+  const listeners =
+    rawListeners === null ? null : Math.max(0, rawListeners - (ytLive ? 1 : 0));
   const peak = data?.stream.listenerPeak ?? null;
   const visitors = data?.site?.visitors ?? null;
   const np = data?.stream.nowPlaying;

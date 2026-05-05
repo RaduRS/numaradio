@@ -55,7 +55,7 @@ export default function OperatorDashboard() {
         </span>
       </header>
 
-      <StatusPills data={data} isStale={isStale} />
+      <StatusPills data={data} isStale={isStale} youtube={youtubePoll.data ?? null} />
       <BandwidthPill data={bandwidthData} isStale={bandwidthPoll.isStale} />
       <YoutubeCard data={youtubePoll.data} isStale={youtubePoll.isStale} />
       <HeldShoutoutsCard

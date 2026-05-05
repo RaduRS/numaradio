@@ -5,7 +5,6 @@ import {
   type ServiceState,
 } from "@/lib/systemd";
 import { fetchIcecastStatus } from "@/lib/icecast";
-import { fetchYoutubeSnapshot } from "@/lib/youtube";
 import { fetchTunnelHealth, type TunnelHealth } from "@/lib/cloudflared";
 import { checkNeon, checkB2, type HealthPing } from "@/lib/health";
 import { fetchSiteVisitors } from "@/lib/presence";
@@ -53,7 +52,7 @@ export async function GET(): Promise<NextResponse> {
   const icecastUrl = process.env.ICECAST_STATUS_URL ?? "http://localhost:8000/status-json.xsl";
   const metricsUrl = process.env.CLOUDFLARED_METRICS_URL ?? "http://127.0.0.1:20241/metrics";
 
-  const [icecastResult, servicesResult, neon, b2, tunnel, visitors, dbNowPlaying, youtubeSnap] = await Promise.all([
+  const [icecastResult, servicesResult, neon, b2, tunnel, visitors, dbNowPlaying] = await Promise.all([
     fetchIcecastStatus(icecastUrl, "/stream").then(
       (v) => ({ ok: true as const, v }),
       (e) => ({ ok: false as const, e }),
@@ -64,15 +63,9 @@ export async function GET(): Promise<NextResponse> {
     fetchTunnelHealth(metricsUrl),
     fetchSiteVisitors(),
     fetchNowPlayingFromDb(),
-    // REFACTOR: this route only needs `state === "live"` to subtract the
-    // encoder from listener count. /api/youtube/health already returns the
-    // full snapshot to the browser. The browser could do the subtraction
-    // client-side and this YT fetch could go away. Shared 360s cache in
-    // dashboard/lib/youtube.ts makes the duplication cheap, not free.
-    fetchYoutubeSnapshot().catch(() => null),
   ]);
 
-  const stream = buildStreamSnapshot(publicUrl, icecastResult, tunnel, dbNowPlaying, youtubeSnap);
+  const stream = buildStreamSnapshot(publicUrl, icecastResult, tunnel, dbNowPlaying);
 
   return NextResponse.json(
     {
@@ -93,7 +86,6 @@ function buildStreamSnapshot(
     | { ok: false; e: unknown },
   tunnel: TunnelHealth,
   dbNowPlaying: { artist: string | null; title: string } | null,
-  youtubeSnap: Awaited<ReturnType<typeof fetchYoutubeSnapshot>> | null,
 ): StreamSnapshot {
   if (!icecast.ok) {
     return {
@@ -113,20 +105,17 @@ function buildStreamSnapshot(
   // the tunnel is up. We do NOT probe the public /stream URL from here because
   // Icecast would count every poll as a listener and inflate the count.
   const sourceConnected = s.mount === "/stream";
-  // Subtract the encoder's icecast pull when broadcasting so the
-  // dashboard 'Listening now' pill reflects real audio listeners only.
-  const rawListeners = s.listeners ?? 0;
-  const listeners = Math.max(
-    0,
-    rawListeners - (youtubeSnap?.state === "live" ? 1 : 0),
-  );
+  // Listener count is the raw Icecast number. The dashboard browser
+  // subtracts the encoder pull (1) client-side using its own
+  // /api/youtube/health poll — so we don't burn a YouTube API call
+  // every time the 5s status poll fires.
   // Prefer the DB now-playing (always fresh, fed by track-started). Fall
   // back to whatever Icecast last reported only if the DB query failed,
   // so the dashboard never shows worse data than before.
   return {
     publicUrl,
     reachable: sourceConnected && tunnel.ok,
-    listeners,
+    listeners: s.listeners ?? 0,
     listenerPeak: s.listenerPeak,
     bitrate: s.bitrate,
     nowPlaying: dbNowPlaying ?? s.nowPlaying,
