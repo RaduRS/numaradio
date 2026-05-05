@@ -74,6 +74,16 @@ interface AfterDarkClip {
   artworkFile: string | null;
 }
 
+interface BedTrack {
+  trackId: string;
+  title: string;
+  artistDisplay: string;
+  genre: string | null;
+  show: string | null;
+  durationSeconds: number | null;
+  audioFile: string; // relative to src/assets, e.g. "data/beds/cross-and-loop.mp3"
+}
+
 interface CountsBlock {
   totalTracks: number;
   airedShoutouts: number;
@@ -90,6 +100,7 @@ interface Snapshot {
   promptedSong: PromptedSongClip | null;
   currentShow: ShowSnapshot;
   afterDark: AfterDarkClip | null;
+  beds: BedTrack[];
 }
 
 async function ensureDir(p: string): Promise<void> {
@@ -379,6 +390,67 @@ async function exportAfterDark(): Promise<AfterDarkClip | null> {
   return null;
 }
 
+// ----------------- recent Russell Ross beds -----------------
+
+// Pulls the last 7 days of Russell Ross tracks (sourceType=suno_manual,
+// Numa-owned via Suno Pro commercial license — safe on TikTok / Reels /
+// Shorts). Downloads the audio so the v2 social batch can use a fresh
+// Numa catalogue track as the music bed for each shoutout/stat video.
+async function exportRussellBeds(): Promise<BedTrack[]> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const tracks = await prisma.track.findMany({
+    where: {
+      artistDisplay: "Russell Ross",
+      sourceType: "suno_manual",
+      createdAt: { gte: since },
+      airingPolicy: { in: ["library", "request_only"] },
+      assets: { some: { assetType: "audio_stream" } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      title: true,
+      artistDisplay: true,
+      genre: true,
+      show: true,
+      durationSeconds: true,
+      assets: {
+        where: { assetType: "audio_stream" },
+        select: { publicUrl: true },
+        take: 1,
+      },
+    },
+  });
+
+  const slug = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 40);
+
+  const out: BedTrack[] = [];
+  for (const t of tracks) {
+    const audioUrl = t.assets[0]?.publicUrl;
+    if (!audioUrl) continue;
+    const file = `beds/${slug(t.title)}.mp3`;
+    const got = await downloadIfMissing(audioUrl, file);
+    if (!got) continue;
+    out.push({
+      trackId: t.id,
+      title: t.title,
+      artistDisplay: t.artistDisplay ?? "Russell Ross",
+      genre: t.genre,
+      show: t.show,
+      durationSeconds: t.durationSeconds,
+      audioFile: got,
+    });
+  }
+  console.log(`[export]  ✓ russell ross beds: ${out.length}`);
+  return out;
+}
+
 // ----------------- counts -----------------
 
 async function exportCounts(): Promise<CountsBlock> {
@@ -412,12 +484,13 @@ async function exportCounts(): Promise<CountsBlock> {
   await ensureDir(DATA_DIR);
   await ensureDir(dirname(SNAPSHOT_PATH));
 
-  const [counts, shoutouts, promptedSong, currentShow, afterDark] = await Promise.all([
+  const [counts, shoutouts, promptedSong, currentShow, afterDark, beds] = await Promise.all([
     exportCounts(),
     exportShoutouts(),
     exportPromptedSong(),
     exportCurrentShow(),
     exportAfterDark(),
+    exportRussellBeds(),
   ]);
 
   const snapshot: Snapshot = {
@@ -427,6 +500,7 @@ async function exportCounts(): Promise<CountsBlock> {
     promptedSong,
     currentShow,
     afterDark,
+    beds,
   };
   await writeFile(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
   console.log(`[export] wrote ${SNAPSHOT_PATH}`);
