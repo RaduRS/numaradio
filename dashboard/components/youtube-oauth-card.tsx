@@ -154,7 +154,9 @@ export function YoutubeOauthCard() {
     }
   };
 
-  const sedCommand = `sudo sed -i 's|^YOUTUBE_OAUTH_REFRESH_TOKEN=.*|YOUTUBE_OAUTH_REFRESH_TOKEN=<NEW_TOKEN>|' /etc/numa/env && sudo systemctl restart numa-queue-daemon`;
+  const nowIso = new Date().toISOString();
+  const dashboardSed = `sed -i 's|^YOUTUBE_OAUTH_REFRESH_TOKEN=.*|YOUTUBE_OAUTH_REFRESH_TOKEN=<NEW_TOKEN>|; s|^YOUTUBE_OAUTH_MINTED_AT=.*|YOUTUBE_OAUTH_MINTED_AT=${nowIso}|' ~/saas/numaradio/dashboard/.env.local && cd ~/saas/numaradio/dashboard && npm run deploy`;
+  const daemonSed = `sudo sed -i 's|^YOUTUBE_OAUTH_REFRESH_TOKEN=.*|YOUTUBE_OAUTH_REFRESH_TOKEN=<NEW_TOKEN>|' /etc/numa/env && sudo systemctl restart numa-queue-daemon`;
   const scopeUrl = "https://www.googleapis.com/auth/youtube.force-ssl";
 
   return (
@@ -220,9 +222,10 @@ export function YoutubeOauthCard() {
 
         {meta?.status === "unset" && (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 font-mono text-[11px] text-amber-300">
-            Set <span className="text-fg">YOUTUBE_OAUTH_MINTED_AT</span> in Vercel
-            env (ISO 8601 UTC, e.g. <span className="text-fg">2026-05-05T18:50:00Z</span>) to
-            enable the countdown.
+            Set <span className="text-fg">YOUTUBE_OAUTH_MINTED_AT</span> in
+            Orion <span className="text-fg">dashboard/.env.local</span> (ISO 8601
+            UTC, e.g. <span className="text-fg">2026-05-05T10:00:00Z</span>)
+            then redeploy the dashboard to enable the countdown.
           </div>
         )}
 
@@ -277,37 +280,58 @@ export function YoutubeOauthCard() {
             </div>
 
             <div>
-              <div className="mb-1 text-fg">2. Update Vercel env (both projects)</div>
+              <div className="mb-1 text-fg">
+                2. Update Vercel — <span className="text-fg-dim">numaradio</span> project (public-site live banner)
+              </div>
               <ol className="list-decimal pl-5 marker:text-fg-mute">
                 <li>
-                  Vercel → numaradio + dashboard projects → Settings → Environment
-                  Variables
+                  Vercel → <span className="text-fg">numaradio</span> → Settings →
+                  Environment Variables
                 </li>
                 <li>
                   Edit <span className="text-fg">YOUTUBE_OAUTH_REFRESH_TOKEN</span> →
-                  paste the new value
+                  paste the new value, save, trigger redeploy
                 </li>
-                <li>
-                  Update <span className="text-fg">YOUTUBE_OAUTH_MINTED_AT</span> to
-                  the current UTC time (
-                  <span className="text-fg">{new Date().toISOString()}</span>)
-                </li>
-                <li>Save → trigger a redeploy</li>
               </ol>
             </div>
 
             <div>
-              <div className="mb-1 text-fg">3. Update Orion (/etc/numa/env)</div>
+              <div className="mb-1 text-fg">
+                3. Update Orion — <span className="text-fg-dim">dashboard/.env.local</span> (this card + dashboard health)
+              </div>
               <div className="flex items-start gap-2">
                 <code className="block flex-1 break-all rounded bg-bg-1 px-2 py-1 text-fg">
-                  {sedCommand}
+                  {dashboardSed}
                 </code>
                 <button
                   type="button"
-                  onClick={() => copy("sed", sedCommand)}
+                  onClick={() => copy("dashboard-sed", dashboardSed)}
                   className="shrink-0 rounded border border-line px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-fg-dim hover:border-accent/50 hover:text-accent"
                 >
-                  {copied === "sed" ? "Copied" : "Copy"}
+                  {copied === "dashboard-sed" ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <div className="mt-1 text-fg-mute">
+                Replace <span className="text-fg-dim">&lt;NEW_TOKEN&gt;</span>{" "}
+                before running. <span className="text-fg-dim">MINTED_AT</span> is
+                pinned to now ({nowIso}).
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-1 text-fg">
+                4. Update Orion — <span className="text-fg-dim">/etc/numa/env</span> (queue-daemon chat poller)
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="block flex-1 break-all rounded bg-bg-1 px-2 py-1 text-fg">
+                  {daemonSed}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copy("daemon-sed", daemonSed)}
+                  className="shrink-0 rounded border border-line px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-fg-dim hover:border-accent/50 hover:text-accent"
+                >
+                  {copied === "daemon-sed" ? "Copied" : "Copy"}
                 </button>
               </div>
               <div className="mt-1 text-fg-mute">
