@@ -5,8 +5,14 @@ import { usePolling } from "@/hooks/use-polling";
 
 // Google revokes refresh tokens for OAuth projects in Testing mode after
 // ~7 days. We can't push the consent screen to production for free
-// (youtube.readonly is a sensitive scope, would need verification), so
-// the operator re-mints weekly via the OAuth Playground.
+// (youtube.force-ssl is a restricted scope, would need verification),
+// so the operator re-mints weekly via the OAuth Playground.
+//
+// Scope is youtube.force-ssl, not youtube.readonly. force-ssl covers
+// the dashboard's read calls AND the write calls scripts/youtube-go-
+// live.ts needs (liveBroadcasts.insert / bind / transition). One
+// scope = one refresh token across the whole system; re-minting with
+// a different scope supersedes the prior token, so don't mix.
 //
 // This card surfaces the countdown so the operator doesn't get caught
 // out — and bundles the recovery steps inline so a tired operator at
@@ -149,7 +155,7 @@ export function YoutubeOauthCard() {
   };
 
   const sedCommand = `sudo sed -i 's|^YOUTUBE_OAUTH_REFRESH_TOKEN=.*|YOUTUBE_OAUTH_REFRESH_TOKEN=<NEW_TOKEN>|' /etc/numa/env && sudo systemctl restart numa-queue-daemon`;
-  const scopeUrl = "https://www.googleapis.com/auth/youtube.readonly";
+  const scopeUrl = "https://www.googleapis.com/auth/youtube.force-ssl";
 
   return (
     <Card className="border-line bg-bg-1">
