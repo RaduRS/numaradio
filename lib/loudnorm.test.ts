@@ -7,7 +7,7 @@ const PASS1 = readFileSync(new URL("./test-fixtures/loudnorm-pass1.txt", import.
 const PASS2 = readFileSync(new URL("./test-fixtures/loudnorm-pass2.txt", import.meta.url), "utf8");
 
 describe("parseLoudnormStderr", () => {
-  test("parses pass 1 stderr — input_i / input_tp / input_lra / input_thresh / target_offset", () => {
+  test("parses analysis JSON — input_i / input_tp / input_lra / input_thresh / target_offset", () => {
     const r = parseLoudnormStderr(PASS1);
     assert.notEqual(r, null);
     if (!r) return;
@@ -18,10 +18,13 @@ describe("parseLoudnormStderr", () => {
     assert.equal(typeof r.target_offset, "number");
   });
 
-  test("parses pass 2 stderr — output_i / output_tp", () => {
+  test("parses output JSON — output_i / output_tp", () => {
     const r = parseLoudnormStderr(PASS2);
     assert.notEqual(r, null);
     if (!r) return;
+    if (!("output_i" in r)) {
+      assert.fail("expected output_i in parsed result");
+    }
     assert.equal(typeof r.output_i, "number");
     assert.equal(typeof r.output_tp, "number");
   });
@@ -40,5 +43,17 @@ describe("parseLoudnormStderr", () => {
     assert.notEqual(r, null);
     if (!r) return;
     assert.equal(r.input_i, -20.0);
+  });
+
+  test("returns null on empty input", () => {
+    assert.equal(parseLoudnormStderr(""), null);
+  });
+
+  test("returns null when stderr ends with brace garbage after the JSON block", () => {
+    // Defensive: a future ffmpeg release that appends `[mp3 @ 0x...] }`
+    // after the JSON close shouldn't hard-crash the parser. Returning
+    // null lets the caller fall back to raw audio.
+    const garbageAfter = '{"input_i": -23.0, "input_tp": -2.0, "input_lra": 7.0, "input_thresh": -34.0, "target_offset": 0.0}\n[mp3 @ 0x55555] }';
+    assert.equal(parseLoudnormStderr(garbageAfter), null);
   });
 });

@@ -31,7 +31,7 @@ export interface LoudnormJsonPass2 {
   target_offset: number;
 }
 
-export type LoudnormJson = LoudnormJsonPass1 | Partial<LoudnormJsonPass2>;
+export type LoudnormJson = LoudnormJsonPass1 | LoudnormJsonPass2;
 
 /**
  * Extract the LAST JSON object from ffmpeg loudnorm stderr. Returns
