@@ -1,0 +1,31 @@
+Input #0, mp3, from 'lib/test-fixtures/pink-noise-5s.mp3':
+  Metadata:
+    encoder         : Lavf60.16.100
+  Duration: 00:00:05.04, start: 0.025057, bitrate: 193 kb/s
+  Stream #0:0: Audio: mp3, 44100 Hz, stereo, fltp, 192 kb/s
+    Metadata:
+      encoder         : Lavc60.31
+Stream mapping:
+  Stream #0:0 -> #0:0 (mp3 (mp3float) -> mp3 (libmp3lame))
+Press [q] to stop, [?] for help
+Output #0, mp3, to '/dev/null':
+  Metadata:
+    TSSE            : Lavf60.16.100
+  Stream #0:0: Audio: mp3, 48000 Hz, stereo, fltp, 192 kb/s
+    Metadata:
+      encoder         : Lavc60.31.102 libmp3lame
+size=       1kB time=00:00:00.00 bitrate=5074.6kbits/s speed=0.0415x    [out#0/mp3 @ 0x652ae2da0b40] video:0kB audio:118kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.513393%
+size=     119kB time=00:00:04.99 bitrate= 194.8kbits/s speed=25.2x    
+[Parsed_loudnorm_0 @ 0x652ae2dc6940] 
+{
+	"input_i" : "-15.17",
+	"input_tp" : "-4.32",
+	"input_lra" : "0.00",
+	"input_thresh" : "-25.17",
+	"output_i" : "-13.97",
+	"output_tp" : "-3.13",
+	"output_lra" : "0.10",
+	"output_thresh" : "-23.97",
+	"normalization_type" : "dynamic",
+	"target_offset" : "-0.03"
+}
