@@ -42,6 +42,15 @@ export type IngestInput = {
    * and the poller picks it up later.
    */
   loudness?: { inputI: number; outputI: number; outputTp: number };
+  /**
+   * Pre-normalisation audio bytes to preserve at
+   * `tracks-original/<trackId>.mp3` after Track row is created. Best-
+   * effort upload — log on failure, never throw. Skip when omitted
+   * (Vercel approve route doesn't have a pre-norm version) or when
+   * loudness is unset (canonical IS the original — no second copy
+   * needed).
+   */
+  originalAudioBuffer?: Buffer;
 };
 
 export type IngestResult =
@@ -195,6 +204,21 @@ export async function _ingestTrackImpl(deps: IngestDeps): Promise<IngestResult> 
         },
       });
     });
+
+    // Preserve the original (pre-loudnorm) bytes. Best-effort — log on
+    // failure but don't undo the now-committed Track row. Skipped when
+    // caller didn't supply a pre-norm buffer (Vercel approve route) or
+    // when loudness is unset (canonical IS the original — no second copy
+    // needed). Keyed by trackId to match song-worker pipeline and
+    // loudnormaliseExistingTrack helpers.
+    if (input.originalAudioBuffer && input.loudness) {
+      const originalKey = `tracks-original/${trackId}.mp3`;
+      try {
+        await putObject(originalKey, input.originalAudioBuffer, "audio/mpeg", cacheControl);
+      } catch (err) {
+        console.warn(`[ingest] original preserve failed for ${trackId}: ${String(err)}`);
+      }
+    }
 
     return { status: "ingested", trackId };
   } catch (err) {

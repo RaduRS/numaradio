@@ -9,7 +9,6 @@ import { ingestTrack } from "../lib/ingest.ts";
 import { loudnormalise } from "../lib/loudnorm.ts";
 import { probeDurationSeconds } from "../lib/probe-duration.ts";
 import { sanitizeMp3AudioOnly } from "../lib/sanitize-mp3-audio-only.ts";
-import { putObject } from "../lib/storage/index.ts";
 import { resolveShowFromHashtagOrSidecar } from "./ingest-seed-helpers.ts";
 
 const SEED_DIR = join(process.cwd(), "seed");
@@ -115,21 +114,6 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
     );
   }
 
-  // Preserve the original (pre-loudnorm) bytes — only when loudnorm
-  // succeeded. Best-effort: a B2 hiccup here mustn't block ingest.
-  // Keyed on filename basename so re-ingesting the same Suno drop
-  // overwrites the same object.
-  if (loudness) {
-    const originalKey = `tracks-original/${basename(fileName, extname(fileName))}.mp3`;
-    try {
-      await putObject(originalKey, rawBuffer, "audio/mpeg", "public, max-age=31536000, immutable");
-    } catch (err) {
-      console.warn(
-        `[ingest-seed] original preserve failed for ${fileName}: ${String(err)}`,
-      );
-    }
-  }
-
   const title = tags.title?.trim() ?? basename(fileName, extname(fileName));
   const artist = normalizeArtist(tags.artist);
   const commentText = tags.comment?.[0]?.text ?? tags.comment?.[0]?.toString() ?? "";
@@ -180,6 +164,7 @@ async function ingestFile(stationId: string, filePath: string): Promise<IngestRe
     sourceType: "suno_manual",
     model: sunoModel as "v5" | "v5.5" | undefined,
     loudness: loudness ?? undefined,
+    originalAudioBuffer: rawBuffer,
   });
 
   if (result.status === "skipped") {
