@@ -6,6 +6,7 @@ import { profanityPrefilter } from "../../lib/moderate.ts";
 import { deriveGenreFromText } from "../../lib/derive-genre.ts";
 import { showSlugFor, type ShowSlug } from "../../lib/show-slug.ts";
 import { loadFallbackArtwork } from "../../lib/fallback-artwork.ts";
+import { loudnormalise } from "../../lib/loudnorm.ts";
 import {
   startMusicGeneration,
   pollMusicGeneration,
@@ -260,7 +261,25 @@ async function runPipelineInner(
     signal: AbortSignal.timeout(30_000),
   });
   if (!audioRes.ok) throw new Error(`minimax audio download ${audioRes.status}`);
-  const audioBytes = Buffer.from(await audioRes.arrayBuffer());
+  const rawAudioBytes = Buffer.from(await audioRes.arrayBuffer());
+
+  // Loudness-normalise to -14 LUFS at ingest. Falls back to raw audio
+  // on any ffmpeg / parse failure — Track.loudnessLufs stays NULL and
+  // the queue-daemon poller picks it up later. Listener never blocked.
+  let audioBytes = rawAudioBytes;
+  let loudness: { inputI: number; outputI: number; outputTp: number } | null = null;
+  try {
+    const ln = await loudnormalise(rawAudioBytes);
+    audioBytes = ln.buffer;
+    loudness = {
+      inputI: ln.measurement.inputI,
+      outputI: ln.measurement.outputI,
+      outputTp: ln.measurement.outputTp,
+    };
+    console.log(`[song-worker] loudnorm ${job.id}: ${ln.measurement.inputI.toFixed(1)} → ${ln.measurement.outputI.toFixed(1)} LUFS`);
+  } catch (err) {
+    console.warn(`[song-worker] loudnorm failed for ${job.id}, using raw audio: ${String(err)}`);
+  }
 
   // Frame-accurate probe via lib/probe-duration.ts — runs music-metadata
   // with `{ duration: true }` so it counts every audio frame instead of
@@ -281,6 +300,19 @@ async function runPipelineInner(
   const show = showEnumFor(new Date());
   const audioKey = `stations/${STATION_SLUG}/tracks/${trackId}/audio/stream.mp3`;
   const artworkKey = `stations/${STATION_SLUG}/tracks/${trackId}/artwork/primary.png`;
+
+  // Preserve the original (pre-loudnorm) bytes. Best-effort — log on
+  // failure but don't block the canonical ingest. Skipped if we
+  // fell back to raw above (loudness === null).
+  if (loudness) {
+    const originalKey = `tracks-original/${trackId}.mp3`;
+    try {
+      await uploadToB2(originalKey, rawAudioBytes, "audio/mpeg");
+    } catch (err) {
+      console.warn(`[song-worker] original preserve failed for ${trackId}: ${String(err)}`);
+    }
+  }
+
   const audioUrl = await uploadToB2(audioKey, audioBytes, "audio/mpeg");
   uploadedB2Keys.push(audioKey);
 
@@ -317,6 +349,9 @@ async function runPipelineInner(
       genre: derivedGenre,
       trackStatus: "ready",
       durationSeconds,
+      loudnessLufs: loudness?.outputI ?? null,
+      loudnessTruePeakDbtp: loudness?.outputTp ?? null,
+      loudnessSourceLufs: loudness?.inputI ?? null,
       assets: {
         create: [
           {
