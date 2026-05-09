@@ -278,6 +278,19 @@ source = smooth_add(
   special=voice
 )
 
+# ─── Master safety net (post-ingest-loudnorm backstop) ─────────────
+# Every music track is normalised to -14 LUFS at ingest via
+# lib/loudnorm.ts. This is the backstop for outliers (a track that
+# slipped past the ingest path, voice content that doesn't go through
+# loudnorm, a future audio source). Gain envelope is intentionally
+# tight (max +6 / min -12 dB) so we don't pump on already-normalised
+# content — only catch real outliers.
+source = normalize(target=-14., window=1., gain_max=6., gain_min=-12., source)
+
+# Brick-wall to prevent any clipping reaching Icecast. Voice already
+# has its own limit() at line 267; this is the master.
+source = limit(threshold=-1., source)
+
 log.important(
   "[numa] pipeline ready: api=" ^ api_url ^
   " shoutout_start=" ^ shoutout_started_url ^
