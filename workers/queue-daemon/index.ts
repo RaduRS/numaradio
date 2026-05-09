@@ -27,6 +27,7 @@ import {
   type YoutubeChatLoop,
 } from "./youtube-chat-loop.ts";
 import { recordYoutubeQuota } from "../../lib/youtube-quota.ts";
+import { startLoudnormPoller } from "./loudnorm-poller.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -686,8 +687,18 @@ async function main() {
     );
   }
 
+  // Loudness backfill poller — picks one Track WHERE loudnessLufs IS
+  // NULL every 60s and runs the shared loudnormaliseExistingTrack
+  // helper on it. Catches artist-submission approvals (Vercel can't
+  // run ffmpeg, so it inserts rows with loudnessLufs=NULL) plus any
+  // track the inline ingest path failed on. Idempotent: voice content
+  // is excluded at the SQL layer.
+  const loudnormPoller = startLoudnormPoller(prisma);
+  console.log("[queue-daemon] loudnorm poller started (60s cadence)");
+
   const shutdown = () => {
     console.log("[queue-daemon] shutting down");
+    loudnormPoller.stop();
     sock.stop();
     server.close();
     prisma.$disconnect().finally(() => process.exit(0));
