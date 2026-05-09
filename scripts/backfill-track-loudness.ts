@@ -81,21 +81,26 @@ async function main() {
   const startedAt = Date.now();
 
   for (const t of candidates) {
-    const result = await loudnormaliseExistingTrack(prisma, t.id);
-    if ("ok" in result) {
-      processed++;
-      const m = result.measurement;
-      const delta = m.outputI - m.inputI;
-      const sign = delta >= 0 ? "+" : "";
-      console.log(
-        `[backfill] ${t.id} "${t.title}" ${m.inputI.toFixed(1)} → ${m.outputI.toFixed(1)} LUFS (delta ${sign}${delta.toFixed(1)})`,
-      );
-    } else if ("skipped" in result) {
-      skipped++;
-      console.log(`[backfill skip:${result.skipped}] ${t.id}`);
-    } else {
+    try {
+      const result = await loudnormaliseExistingTrack(prisma, t.id);
+      if ("ok" in result) {
+        processed++;
+        const m = result.measurement;
+        const delta = m.outputI - m.inputI;
+        const sign = delta >= 0 ? "+" : "";
+        console.log(
+          `[backfill] ${t.id} "${t.title}" ${m.inputI.toFixed(1)} → ${m.outputI.toFixed(1)} LUFS (delta ${sign}${delta.toFixed(1)})`,
+        );
+      } else if ("skipped" in result) {
+        skipped++;
+        console.log(`[backfill skip:${result.skipped}] ${t.id}`);
+      } else {
+        failed++;
+        console.warn(`[backfill fail] ${t.id} "${t.title}": ${result.error}`);
+      }
+    } catch (err) {
       failed++;
-      console.warn(`[backfill fail] ${t.id} "${t.title}": ${result.error}`);
+      console.warn(`[backfill throw] ${t.id} "${t.title}": ${String(err instanceof Error ? err.message : err)}`);
     }
   }
 
@@ -104,7 +109,7 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(`[backfill] fatal: ${String(err)}`);
   process.exit(1);
 });
