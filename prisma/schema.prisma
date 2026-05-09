@@ -249,6 +249,13 @@ model Track {
   primaryAudioAssetId String?
   primaryArtAssetId   String?
   requestId           String?
+  // Loudness measurements set by lib/loudnorm.ts at ingest time, or
+  // backfilled by scripts/backfill-track-loudness.ts /
+  // workers/queue-daemon/loudnorm-poller.ts. NULL = not yet
+  // normalised (the implicit pending signal for the daemon poller).
+  loudnessLufs            Float?
+  loudnessTruePeakDbtp    Float?
+  loudnessSourceLufs      Float?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
