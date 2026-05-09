@@ -14,7 +14,7 @@
 // Estimated cost: ~5s of CPU per track. ~130 tracks ≈ 11 minutes.
 
 import "../lib/load-env.ts";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { loudnormaliseExistingTrack } from "../lib/loudnormalise-existing-track.ts";
 
 interface Args {
@@ -47,7 +47,7 @@ async function main() {
   const prisma = new PrismaClient();
 
   // Pre-filter the same way the daemon poller does — exclude voice.
-  const where = {
+  const where: Prisma.TrackWhereInput = {
     loudnessLufs: null,
     NOT: {
       AND: [
@@ -56,7 +56,7 @@ async function main() {
         { title: { startsWith: "Shoutout" } },
       ],
     },
-  } as const;
+  };
 
   const candidates = await prisma.track.findMany({
     where,
