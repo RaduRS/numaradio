@@ -34,6 +34,14 @@ export type IngestInput = {
   genre?: string;
   mood?: string;
   airingPolicy?: "library" | "request_only" | "priority_request" | "hold";
+  /**
+   * Optional loudness measurement from a successful ffmpeg loudnorm
+   * pass. When supplied, persists onto the Track row so the queue-
+   * daemon poller doesn't need to re-measure. When omitted (e.g.
+   * Vercel approve route — no ffmpeg), Track.loudnessLufs stays NULL
+   * and the poller picks it up later.
+   */
+  loudness?: { inputI: number; outputI: number; outputTp: number };
 };
 
 export type IngestResult =
@@ -145,6 +153,9 @@ export async function _ingestTrackImpl(deps: IngestDeps): Promise<IngestResult> 
           airingPolicy: input.airingPolicy ?? "library",
           safetyStatus: "approved",
           trackStatus: "processing",
+          loudnessLufs: input.loudness?.outputI ?? null,
+          loudnessTruePeakDbtp: input.loudness?.outputTp ?? null,
+          loudnessSourceLufs: input.loudness?.inputI ?? null,
         },
       });
 
