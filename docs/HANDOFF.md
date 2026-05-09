@@ -1,6 +1,67 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-05-05
+Last updated: 2026-05-09
+
+---
+
+## 2026-05-09 — Catalogue loudness normalisation — CODE READY, NEEDS DEPLOY
+
+Every music track now normalises to -14 LUFS at ingest (matches Spotify
+/ YouTube Music / TikTok). Two-pass ffmpeg loudnorm in
+`lib/loudnorm.ts`. Wedged into `workers/song-worker/pipeline.ts` (live
+listener songs) and `scripts/ingest-seed.ts` → `lib/ingest.ts` (operator
+manual drops + the Vercel approve route, with `originalAudioBuffer`
+preserved at `tracks-original/<trackId>.mp3`). Vercel-side approvals
+have no ffmpeg available — Track row created with `loudnessLufs=NULL`,
+new 60s queue-daemon poller (`workers/queue-daemon/loudnorm-poller.ts`)
+runs `loudnormaliseExistingTrack` against `WHERE loudnessLufs IS NULL`
+to backfill within the minute. Originals preserved at
+`tracks-original/<id>.mp3` in B2 — keyed on trackId across all three
+ingest paths so the helper's HEAD-then-PUT is idempotent.
+
+**Liquidsoap master safety net:** `normalize(target=-14, gain_max=6,
+gain_min=-12)` + `limit(-1.)` after the smooth_add catches any
+outliers (tight envelope so it doesn't pump on already-normalised
+content). Voice content (Lena chatter, shoutouts) is intentionally
+NOT ingest-normalised — it runs on Vercel, no ffmpeg available; the
+master limiter catches it.
+
+**Spec:** `docs/superpowers/specs/2026-05-09-loudness-normalisation-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-09-loudness-normalisation.md`
+
+### Operator deploy steps
+
+1. Pull on Orion: `cd ~/saas/numaradio && git pull` (branch
+   `feat/loudness-normalisation` once merged to `main`)
+2. Apply schema migration: `npx prisma migrate deploy`
+   (adds `Track.loudnessLufs`, `loudnessTruePeakDbtp`, `loudnessSourceLufs`)
+3. (Optional) Add CF cache-purge creds to `/etc/numa/env`:
+   ```
+   CF_API_TOKEN=<token with Zone.Cache Purge>
+   CF_ZONE_ID=<numaradio.com zone>
+   ```
+   Skip → catalogue updates without immediate CF purge (eventually
+   consistent via CF TTL — fine for non-urgent backfill).
+4. Restart song-worker (inline loudnorm): `sudo systemctl restart
+   numa-song-worker` (needs password — not in passwordless sudoers).
+5. Restart queue-daemon (60s poller): `sudo systemctl restart
+   numa-queue-daemon` (passwordless).
+6. Restart Liquidsoap (master safety net): `sudo systemctl restart
+   numa-liquidsoap` (passwordless).
+7. Verify: approve a submission. Watch `journalctl --user -u
+   numa-queue-daemon -f | grep loudnorm`. Within 60s:
+   `[loudnorm-poller] processed <id> ...`.
+
+**Existing 130-track catalogue:** the daemon poller will normalise the
+backlog at 1/min (≈2.2 hr to clear). Or run the one-shot off-peak:
+
+```
+cd ~/saas/numaradio
+nice -n 19 npx tsx scripts/backfill-track-loudness.ts --dry-run
+nice -n 19 npx tsx scripts/backfill-track-loudness.ts --apply
+```
+
+~5s/track × 130 ≈ 11 min.
 
 ---
 
