@@ -155,14 +155,22 @@ export async function runRefresh(
     const asset = t.assets[0];
     return asset?.publicUrl ? [{ id: t.id, url: asset.publicUrl, title: t.title }] : [];
   });
+  const libraryIds = library.map((t) => t.id);
 
   // Read enough history to detect a cycle wrap (one full library + slack).
   const historyTake = Math.max(library.length * 2, 8);
 
   const readState = async (): Promise<{ cyclePlayed: Set<string>; nowPlayingId: string | null }> => {
     const [recent, nowPlaying] = await Promise.all([
+      // Filter PlayHistory to library tracks only. Without this, voice
+      // chatter / shoutouts / song-request airings consume slots in
+      // cycleExclude (which is sized to library.length via cyclePlayedFrom),
+      // displacing real library plays and stopping the wrap from firing
+      // when every library track has actually played.
       prisma.playHistory.findMany({
-        where: { stationId: station.id, trackId: { not: null } },
+        where: libraryIds.length > 0
+          ? { stationId: station.id, trackId: { in: libraryIds } }
+          : { stationId: station.id, trackId: { not: null } },
         orderBy: { startedAt: "desc" },
         take: historyTake,
         select: { trackId: true },
