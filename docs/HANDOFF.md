@@ -40,8 +40,11 @@ master limiter catches it.
    CF_API_TOKEN=<token with Zone.Cache Purge>
    CF_ZONE_ID=<numaradio.com zone>
    ```
-   Skip → catalogue updates without immediate CF purge (eventually
-   consistent via CF TTL — fine for non-urgent backfill).
+   Skip → catalogue updates without immediate CF purge. Tracks
+   already cached at Cloudflare keep serving the pre-normalised
+   bytes until the cache entry expires (`Cache-Control: immutable,
+   max-age=1y`). Add CF creds if listener-audible loudness
+   consistency matters during the backfill window.
 4. Restart song-worker (inline loudnorm): `sudo systemctl restart
    numa-song-worker` (needs password — not in passwordless sudoers).
 5. Restart queue-daemon (60s poller): `sudo systemctl restart

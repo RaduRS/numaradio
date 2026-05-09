@@ -72,4 +72,47 @@ describe("runLoudnormTick", () => {
     assert.equal(capturedWhere.loudnessLufs, null);
     assert.ok(Array.isArray(capturedWhere.NOT) || typeof capturedWhere.NOT === "object", "expected a NOT clause excluding voice");
   });
+
+  test("adds failed track to skipIds so it isn't re-picked", async () => {
+    const skipIds = new Set<string>();
+    let queryCount = 0;
+    const prisma: FakePrisma = {
+      track: {
+        findFirst: async () => {
+          queryCount++;
+          // First call returns the broken track; subsequent calls would return
+          // the same track if it weren't excluded.
+          return { id: "broken1", title: "Broken Track" };
+        },
+      },
+    };
+    const r1 = await runLoudnormTick(prisma as unknown as never, {
+      skipIds,
+      processImpl: async () => ({ error: "audio fetch HTTP 404" }),
+    });
+    assert.equal(r1, "failed");
+    assert.equal(skipIds.has("broken1"), true);
+    assert.equal(skipIds.size, 1);
+  });
+
+  test("skipIds is passed into the WHERE clause as id.notIn when non-empty", async () => {
+    const skipIds = new Set<string>(["bad1", "bad2"]);
+    let capturedWhere: Record<string, unknown> | null = null;
+    const prisma: FakePrisma = {
+      track: {
+        findFirst: async (args) => {
+          capturedWhere = (args as { where?: Record<string, unknown> }).where ?? null;
+          return null;
+        },
+      },
+    };
+    await runLoudnormTick(prisma as unknown as never, {
+      skipIds,
+      processImpl: async () => ({ skipped: "voice" }),
+    });
+    assert.notEqual(capturedWhere, null);
+    if (!capturedWhere) return;
+    const idClause = capturedWhere.id as { notIn?: string[] } | undefined;
+    assert.deepEqual(idClause?.notIn?.sort(), ["bad1", "bad2"]);
+  });
 });

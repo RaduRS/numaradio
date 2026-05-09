@@ -34,13 +34,15 @@ export type TickResult = "idle" | "processed" | "skipped" | "failed";
  */
 export async function runLoudnormTick(
   prisma: PrismaClient,
-  opts: LoudnormPollerOpts = {},
+  opts: LoudnormPollerOpts & { skipIds?: Set<string> } = {},
 ): Promise<TickResult> {
   const process = opts.processImpl ?? loudnormaliseExistingTrack;
+  const skipIds = opts.skipIds ?? new Set<string>();
 
   const candidate = await prisma.track.findFirst({
     where: {
       loudnessLufs: null,
+      ...(skipIds.size > 0 ? { id: { notIn: Array.from(skipIds) } } : {}),
       // Exclude voice content — the helper would skip it anyway, but
       // pre-filtering in SQL avoids loading a row just to discard it.
       NOT: {
@@ -70,6 +72,7 @@ export async function runLoudnormTick(
     return "skipped";
   }
   console.warn(`[loudnorm-poller] failed ${candidate.id}: ${result.error}`);
+  skipIds.add(candidate.id);
   return "failed";
 }
 
@@ -81,13 +84,14 @@ export function startLoudnormPoller(
   opts: LoudnormPollerOpts = {},
 ): { stop: () => void } {
   const intervalMs = opts.intervalMs ?? 60_000;
+  const skipIds = new Set<string>();
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
 
   const tick = async () => {
     if (stopped) return;
     try {
-      await runLoudnormTick(prisma, opts);
+      await runLoudnormTick(prisma, { ...opts, skipIds });
     } catch (err) {
       // Defensive: runLoudnormTick swallows helper errors, so a throw
       // here would mean a bug in the poller itself. Log and continue —
