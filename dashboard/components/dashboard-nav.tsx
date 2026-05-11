@@ -10,13 +10,13 @@ interface Tab {
 
 const TABS: Tab[] = [
   { href: "/", label: "Dashboard", match: (p) => p === "/" },
-  { href: "/chat", label: "Talkback", match: (p) => p.startsWith("/chat") },
-  { href: "/library", label: "Library", match: (p) => p.startsWith("/library") },
   {
     href: "/shoutouts",
     label: "Shoutouts",
     match: (p) => p.startsWith("/shoutouts"),
   },
+  { href: "/library", label: "Library", match: (p) => p.startsWith("/library") },
+  { href: "/chat", label: "Talkback", match: (p) => p.startsWith("/chat") },
 ];
 
 /**
