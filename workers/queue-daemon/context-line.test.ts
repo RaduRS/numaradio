@@ -256,11 +256,12 @@ test("shiftStart: anchors to shift boundary at 0 minutes", () => {
 interface SpyLog {
   successes: string[];
   failures: { reason: string; detail?: string }[];
+  retries: { reason: string; detail?: string }[];
   persisted: string[];
 }
 
 function makeSpy(): SpyLog {
-  return { successes: [], failures: [], persisted: [] };
+  return { successes: [], failures: [], retries: [], persisted: [] };
 }
 
 function makeDeps(
@@ -279,6 +280,10 @@ function makeDeps(
     logFailure: (reason, detail) => {
       spy.failures.push({ reason, detail });
     },
+    logRetry: (reason, detail) => {
+      spy.retries.push({ reason, detail });
+    },
+    retryDelayMs: 0,
     ...overrides,
   };
 }
@@ -360,4 +365,70 @@ test("orchestrator: persist failure logs + does not log success", async () => {
   await orch.runOnce();
   assert.equal(spy.successes.length, 0);
   assert.equal(spy.failures[0].reason, "persist_failed");
+});
+
+test("orchestrator: recovers on retry after transient generate failure", async () => {
+  // Models the common case from prod: LLM call aborts on timeout once,
+  // succeeds on the second attempt. logFailure must NOT fire (the
+  // dashboard's failure feed only shows actual final failures).
+  const spy = makeSpy();
+  let calls = 0;
+  const orch = new ContextLineOrchestrator(
+    makeDeps(spy, {
+      generateLine: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("The operation was aborted due to timeout");
+        return "The wall has a shape tonight.";
+      },
+    }),
+  );
+  await orch.runOnce();
+  assert.equal(calls, 2);
+  assert.equal(spy.successes.length, 1);
+  assert.equal(spy.failures.length, 0);
+  assert.equal(spy.persisted.length, 1);
+  assert.equal(spy.retries.length, 1);
+  assert.equal(spy.retries[0].reason, "generate_failed");
+  assert.match(spy.retries[0].detail ?? "", /timeout/);
+});
+
+test("orchestrator: caps at one retry then logs final failure once", async () => {
+  const spy = makeSpy();
+  let calls = 0;
+  const orch = new ContextLineOrchestrator(
+    makeDeps(spy, {
+      generateLine: async () => {
+        calls += 1;
+        throw new Error("aborted due to timeout");
+      },
+    }),
+  );
+  await orch.runOnce();
+  assert.equal(calls, 2);
+  assert.equal(spy.successes.length, 0);
+  assert.equal(spy.failures.length, 1);
+  assert.equal(spy.failures[0].reason, "generate_failed");
+  assert.equal(spy.retries.length, 1);
+});
+
+test("orchestrator: retries on validation failure (LLM stochasticity)", async () => {
+  // Validation failures (track_count_crutch, numerical_claim_unsupported)
+  // are non-deterministic — a second roll often passes. Verify the
+  // retry path covers them, not just thrown errors.
+  const spy = makeSpy();
+  let calls = 0;
+  const orch = new ContextLineOrchestrator(
+    makeDeps(spy, {
+      generateLine: async () => {
+        calls += 1;
+        if (calls === 1) return "Forty-seven songs since midnight here.";
+        return "The wall has a shape tonight.";
+      },
+    }),
+  );
+  await orch.runOnce();
+  assert.equal(spy.successes.length, 1);
+  assert.equal(spy.failures.length, 0);
+  assert.equal(spy.retries.length, 1);
+  assert.equal(spy.retries[0].reason, "validation_failed");
 });

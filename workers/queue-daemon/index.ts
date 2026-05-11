@@ -332,6 +332,9 @@ const contextLine = new ContextLineOrchestrator({
     lastFailures.push({ at: new Date().toISOString(), reason: prefixed, detail });
     console.warn(`[context-line] fail ${reason}: ${detail ?? ""}`);
   },
+  logRetry: (reason, detail) => {
+    console.warn(`[context-line] retry after ${reason}: ${detail ?? ""}`);
+  },
 });
 
 async function resolveAssetUrl(trackId: string): Promise<string | null> {

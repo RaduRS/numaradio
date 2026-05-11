@@ -329,7 +329,21 @@ export interface ContextLineDeps {
   persistLine: (script: string) => Promise<void>;
   logSuccess: (script: string) => void;
   logFailure: (reason: string, detail?: string) => void;
+  /** Called when an attempt fails and a retry will follow. Use for
+   *  telemetry — separates "recovered on retry" from "actually
+   *  failed". logFailure is reserved for the FINAL outcome so the
+   *  dashboard's failure feed doesn't double-count. */
+  logRetry?: (reason: string, detail?: string) => void;
+  /** Backoff between attempts (ms). Default 800. Tests set 0. */
+  retryDelayMs?: number;
 }
+
+type AttemptResult =
+  | { ok: true }
+  | { ok: false; reason: string; detail: string };
+
+const DEFAULT_RETRY_DELAY_MS = 800;
+const MAX_ATTEMPTS = 2;
 
 export class ContextLineOrchestrator {
   private deps: ContextLineDeps;
@@ -339,12 +353,30 @@ export class ContextLineOrchestrator {
   }
 
   async runOnce(): Promise<void> {
+    const backoffMs = this.deps.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
+    let lastFailure: { reason: string; detail: string } | null = null;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (attempt > 1 && lastFailure) {
+        this.deps.logRetry?.(lastFailure.reason, lastFailure.detail);
+        if (backoffMs > 0) await sleep(backoffMs);
+      }
+      const result = await this.attemptOnce();
+      if (result.ok) return;
+      lastFailure = { reason: result.reason, detail: result.detail };
+    }
+
+    if (lastFailure) {
+      this.deps.logFailure(lastFailure.reason, lastFailure.detail);
+    }
+  }
+
+  private async attemptOnce(): Promise<AttemptResult> {
     let state: StationState;
     try {
       state = await this.deps.fetchStationState();
     } catch (err) {
-      this.deps.logFailure("fetch_state_failed", errMessage(err));
-      return;
+      return { ok: false, reason: "fetch_state_failed", detail: errMessage(err) };
     }
 
     const prompts = buildPrompt(state);
@@ -352,25 +384,31 @@ export class ContextLineOrchestrator {
     try {
       raw = await this.deps.generateLine(prompts);
     } catch (err) {
-      this.deps.logFailure("generate_failed", errMessage(err));
-      return;
+      return { ok: false, reason: "generate_failed", detail: errMessage(err) };
     }
 
     const script = raw.trim().replace(/^["'`](.+)["'`]$/, "$1").trim();
     const result = validateContextLine(script, state);
     if (!result.ok) {
-      this.deps.logFailure("validation_failed", `${result.reason} :: ${script.slice(0, 80)}`);
-      return;
+      return {
+        ok: false,
+        reason: "validation_failed",
+        detail: `${result.reason} :: ${script.slice(0, 80)}`,
+      };
     }
 
     try {
       await this.deps.persistLine(script);
     } catch (err) {
-      this.deps.logFailure("persist_failed", errMessage(err));
-      return;
+      return { ok: false, reason: "persist_failed", detail: errMessage(err) };
     }
     this.deps.logSuccess(script);
+    return { ok: true };
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function errMessage(err: unknown): string {
