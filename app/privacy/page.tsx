@@ -51,7 +51,7 @@ export default function PrivacyPage() {
             className="lead"
             style={{ marginTop: 16, fontSize: 14, color: "var(--fg-mute)" }}
           >
-            Last updated: 2026-05-04. Run by Numa Radio · contact{" "}
+            Last updated: 2026-05-12. Run by Numa Radio · contact{" "}
             <a href="mailto:hello@numaradio.com" style={{ color: "var(--accent)" }}>
               hello@numaradio.com
             </a>
@@ -231,6 +231,22 @@ export default function PrivacyPage() {
             (US). Receives generic topic queries the host uses for context
             (e.g. &ldquo;weather Tokyo today&rdquo;). Never receives your
             content.
+          </li>
+          <li>
+            <strong style={{ color: "var(--fg)" }}>
+              <a
+                href="https://getsongbpm.com"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "var(--accent)" }}
+              >
+                GetSongBPM
+              </a>
+            </strong>{" "}
+            (US). Used by our internal music-curation tool to look up the
+            tempo and musical key of currently-charting songs (title +
+            artist only, both already public chart data). Never receives
+            listener data, IPs, or anything you submit.
           </li>
           <li>
             <strong style={{ color: "var(--fg)" }}>OpenRouter</strong> (US).
