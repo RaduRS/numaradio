@@ -93,11 +93,18 @@ interface CountsBlock {
   fetchedAt: string;
 }
 
+interface FreshCounts {
+  airedShoutoutsThisMonth: number;
+  tracksGeneratedToday: number;
+}
+
 interface Snapshot {
   fetchedAt: string;
   counts: CountsBlock;
   shoutouts: ShoutoutClip[];
   promptedSong: PromptedSongClip | null;
+  promptedSongs: PromptedSongClip[];
+  freshCounts: FreshCounts;
   currentShow: ShowSnapshot;
   afterDark: AfterDarkClip | null;
   beds: BedTrack[];
@@ -234,20 +241,25 @@ async function exportShoutouts(): Promise<ShoutoutClip[]> {
 
 // ----------------- listener-prompted song -----------------
 
-async function exportPromptedSong(): Promise<PromptedSongClip | null> {
-  // Find a recent SongRequest with an actual generated track + audio asset.
+async function exportPromptedSongs(): Promise<PromptedSongClip[]> {
+  // Find recent SongRequests with an actual generated track + audio asset.
   // Skip operator-bypass requests (ipHash starts with "operator:") because
   // those weren't real listener prompts.
   // SongRequest.status ends in "done" once the song-worker pipeline ships
   // the track to B2 + queues it. There's no "played" status; once it's in
   // the queue it'll air on its own rotation.
-  const req = await prisma.songRequest.findFirst({
+  //
+  // Overfetch (take: 6) so we can filter by prompt length (20-180 chars,
+  // so it fits the on-screen card without truncation) and still have a
+  // good chance of two usable records.
+  const reqs = await prisma.songRequest.findMany({
     where: {
       status: "done",
       trackId: { not: null },
       NOT: { ipHash: { startsWith: "operator:" } },
     },
     orderBy: { completedAt: "desc" },
+    take: 6,
     select: {
       id: true,
       prompt: true,
@@ -268,33 +280,50 @@ async function exportPromptedSong(): Promise<PromptedSongClip | null> {
       },
     },
   });
-  if (!req?.track) {
-    console.warn("[export]  ! no listener-prompted song with track found");
-    return null;
+
+  const usable = reqs.filter((r) => {
+    const p = r.prompt ?? "";
+    return p.length >= 20 && p.length <= 180 && r.track;
+  });
+
+  if (usable.length === 0) {
+    console.warn("[export]  ! no listener-prompted songs with usable prompt + track found");
+    return [];
   }
-  const audioAsset = req.track.assets.find((a) => a.assetType === "audio_stream");
-  const artAsset = req.track.assets.find((a) => a.assetType === "artwork");
-  if (!audioAsset) {
-    console.warn("[export]  ! prompted song has no audio_stream asset");
-    return null;
+
+  const out: PromptedSongClip[] = [];
+  for (const req of usable) {
+    if (out.length >= 2) break;
+    if (!req.track) continue;
+    const audioAsset = req.track.assets.find((a) => a.assetType === "audio_stream");
+    const artAsset = req.track.assets.find((a) => a.assetType === "artwork");
+    if (!audioAsset) {
+      console.warn(`[export]  ! prompted song ${req.track.id} has no audio_stream asset, skipping`);
+      continue;
+    }
+    const audioFile = await downloadIfMissing(
+      audioAsset.publicUrl,
+      `songs/${req.track.id}.mp3`,
+    );
+    if (!audioFile) continue;
+    const artworkFile = artAsset
+      ? await downloadIfMissing(artAsset.publicUrl, `songs/${req.track.id}.png`)
+      : null;
+    console.log(`[export]  ✓ prompted song: ${req.track.title} (prompt ${req.prompt.length} chars)`);
+    out.push({
+      trackId: req.track.id,
+      prompt: req.prompt,
+      artistName: req.artistName,
+      title: req.track.title,
+      genre: req.track.genre,
+      audioFile,
+      artworkFile,
+      durationSeconds: req.track.durationSeconds,
+      airedAt: req.completedAt?.toISOString() ?? null,
+    });
   }
-  const audioFile = await downloadIfMissing(audioAsset.publicUrl, `songs/prompted.mp3`);
-  if (!audioFile) return null;
-  const artworkFile = artAsset
-    ? await downloadIfMissing(artAsset.publicUrl, `songs/prompted-art.png`)
-    : null;
-  console.log(`[export]  ✓ prompted song: ${req.track.title}`);
-  return {
-    trackId: req.track.id,
-    prompt: req.prompt,
-    artistName: req.artistName,
-    title: req.track.title,
-    genre: req.track.genre,
-    audioFile,
-    artworkFile,
-    durationSeconds: req.track.durationSeconds,
-    airedAt: req.completedAt?.toISOString() ?? null,
-  };
+  console.log(`[export]  ✓ prompted songs ready: ${out.length}`);
+  return out;
 }
 
 // ----------------- current show / now playing -----------------
@@ -477,6 +506,38 @@ async function exportCounts(): Promise<CountsBlock> {
   return counts;
 }
 
+// ----------------- fresh counts (per-period for launch-10 stat hooks) -----------------
+
+// Distinct from `counts` (which is lifetime/24h totals). `freshCounts`
+// drives the StatHook variants in the launch-10 batch — "N shoutouts
+// aired this month" and "N tracks generated today" — so the rendered
+// numbers track real cadence rather than lifetime drift.
+async function exportFreshCounts(): Promise<FreshCounts> {
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+
+  const dayStart = new Date();
+  dayStart.setUTCHours(0, 0, 0, 0);
+
+  // Track.sourceType="minimax_request" is the listener-prompted song
+  // pipeline (workers/song-worker via MiniMax music-2.6). suno_manual
+  // is operator manual drops; external_import is artist submissions.
+  const [airedShoutoutsThisMonth, tracksGeneratedToday] = await Promise.all([
+    prisma.shoutout.count({
+      where: { deliveryStatus: "aired", createdAt: { gte: monthStart } },
+    }),
+    prisma.track.count({
+      where: { sourceType: "minimax_request", createdAt: { gte: dayStart } },
+    }),
+  ]);
+
+  console.log(
+    `[export]  ✓ freshCounts: shoutoutsThisMonth=${airedShoutoutsThisMonth} tracksToday=${tracksGeneratedToday}`,
+  );
+  return { airedShoutoutsThisMonth, tracksGeneratedToday };
+}
+
 // ----------------- main -----------------
 
 (async () => {
@@ -484,20 +545,29 @@ async function exportCounts(): Promise<CountsBlock> {
   await ensureDir(DATA_DIR);
   await ensureDir(dirname(SNAPSHOT_PATH));
 
-  const [counts, shoutouts, promptedSong, currentShow, afterDark, beds] = await Promise.all([
-    exportCounts(),
-    exportShoutouts(),
-    exportPromptedSong(),
-    exportCurrentShow(),
-    exportAfterDark(),
-    exportRussellBeds(),
-  ]);
+  const [counts, shoutouts, promptedSongs, freshCounts, currentShow, afterDark, beds] =
+    await Promise.all([
+      exportCounts(),
+      exportShoutouts(),
+      exportPromptedSongs(),
+      exportFreshCounts(),
+      exportCurrentShow(),
+      exportAfterDark(),
+      exportRussellBeds(),
+    ]);
+
+  // Keep `promptedSong` (singular) populated identically to before for
+  // backwards-compat with render-social-v2-batch.ts. First record of
+  // the plural array is the same record the old code would have picked.
+  const promptedSong: PromptedSongClip | null = promptedSongs[0] ?? null;
 
   const snapshot: Snapshot = {
     fetchedAt: new Date().toISOString(),
     counts,
     shoutouts,
     promptedSong,
+    promptedSongs,
+    freshCounts,
     currentShow,
     afterDark,
     beds,
