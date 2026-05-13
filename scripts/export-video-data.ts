@@ -212,10 +212,15 @@ async function exportShoutouts(): Promise<ShoutoutClip[]> {
   for (const row of rows) {
     if (!row.broadcastText) continue;
     i += 1;
-    const filename = `shoutouts/${String(i).padStart(2, "0")}.mp3`;
+    // Key the cached audio by Shoutout.id, NOT by position index, so a
+    // newer shoutout becoming row #1 in a later run can't re-use the
+    // previous row #1's audio file. The old position-keyed cache had a
+    // subtle bug: the on-screen typed text and Lena's voice would drift
+    // apart whenever the DB row order changed between exporter runs.
+    const filename = `shoutouts/${row.id}.mp3`;
     const abs = join(DATA_DIR, filename);
     if (!(await fileExists(abs))) {
-      console.log(`[export]  · synth shoutout ${i}/${rows.length} (${row.broadcastText.length} chars)`);
+      console.log(`[export]  · synth shoutout ${i}/${rows.length} ${row.id.slice(0, 8)} (${row.broadcastText.length} chars)`);
       try {
         const buf = await synthesizeLikeProduction(row.broadcastText);
         await writeBuffer(filename, buf);
