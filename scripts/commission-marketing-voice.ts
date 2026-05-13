@@ -31,6 +31,14 @@ const CLIPS: VoiceClip[] = [
     slug: "magic-loop-payoff",
     text: "You type. I read. The radio responds.",
   },
+  {
+    slug: "song-intro-late-night-drive",
+    text: "A listener typed: late night drive home alone. Watch what Numa made.",
+  },
+  {
+    slug: "song-intro-first-win",
+    text: "First win after a long week. Here's what came back.",
+  },
 ];
 
 async function commission(clip: VoiceClip): Promise<void> {
