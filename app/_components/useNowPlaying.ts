@@ -74,6 +74,21 @@ export function seedNowPlayingCache(data: NowPlaying): void {
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let abortCtrl: AbortController | null = null;
 let transitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
+// When audio is actually playing, poll regardless of visibilityState. iOS
+// Safari + Android Chrome flip the tab to "hidden" the moment the screen
+// locks, so a visibility-gated poller leaves the lock-screen / CarPlay
+// MediaSession tile frozen on whatever was airing at lock time. Edge cache
+// (s-maxage=15) absorbs the extra polls — see PlayerProvider for where this
+// gets flipped.
+let playbackActive = false;
+
+export function setNowPlayingPlaybackActive(active: boolean): void {
+  if (playbackActive === active) return;
+  playbackActive = active;
+  // Going active while hidden: poll immediately so MediaSession metadata
+  // catches up without waiting POLL_MS for the next interval.
+  if (active && intervalId !== null) void poll();
+}
 
 function clearTransitionRefetch() {
   if (transitionTimeoutId !== null) {
@@ -100,11 +115,12 @@ function scheduleTransitionRefetch(data: NowPlaying) {
 
 async function poll() {
   if (!abortCtrl) return;
-  // Pause polling while the tab is hidden — saves Vercel function fires
-  // for every backgrounded tab the user has open. The visibilitychange
-  // listener below re-fires poll() the moment the tab becomes visible,
-  // so the first thing the user sees on tab focus is fresh data.
-  if (!BROADCAST_MODE && typeof document !== "undefined" && document.visibilityState !== "visible") return;
+  // Pause polling while the tab is hidden AND audio isn't playing — saves
+  // Vercel fires for backgrounded idle tabs. Playing tabs keep polling
+  // through screen-off so the lock-screen / CarPlay metadata updates at
+  // track changes. The visibilitychange listener below re-fires poll() the
+  // moment the tab becomes visible again either way.
+  if (!BROADCAST_MODE && !playbackActive && typeof document !== "undefined" && document.visibilityState !== "visible") return;
   try {
     const url = BROADCAST_MODE
       ? `/api/station/now-playing?t=${Date.now()}`

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNowPlaying } from "./useNowPlaying";
+import { setNowPlayingPlaybackActive, useNowPlaying } from "./useNowPlaying";
 
 const STREAM_URL = "https://api.numaradio.com/stream";
 const VOLUME_STORAGE_KEY = "numa.volume";
@@ -373,6 +373,14 @@ function MediaSessionSync() {
       return;
     }
     navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
+
+  // Tell the now-playing poller to keep firing through screen-off while
+  // audio is actually playing — otherwise the lock-screen / CarPlay tile
+  // shows the track that was airing at lock time forever. See useNowPlaying.
+  useEffect(() => {
+    setNowPlayingPlaybackActive(isPlaying);
+    return () => setNowPlayingPlaybackActive(false);
   }, [isPlaying]);
 
   return null;
