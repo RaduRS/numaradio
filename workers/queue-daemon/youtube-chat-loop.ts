@@ -48,11 +48,11 @@ const MAX_TEXT = 240;
  *  but "calendar" doesn't trigger by accident. */
 const DEFAULT_TRIGGER = /@lena\b/i;
 
-// Latin-script guard lives in lib/text-script.ts so the booth endpoints
-// can apply the same policy. Re-exported for any caller that imports
-// this module directly.
-export { isLatinScript } from "../../lib/text-script.ts";
-import { isLatinScript } from "../../lib/text-script.ts";
+// English-only language guards live in lib/text-script.ts so the booth
+// endpoints can apply the same policy. Re-exported for any caller that
+// imports this module directly.
+export { isLatinScript, isEnglish } from "../../lib/text-script.ts";
+import { isLatinScript, isEnglish } from "../../lib/text-script.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -301,10 +301,12 @@ export function createYoutubeChatLoop(
         result.skippedLength += 1;
         continue;
       }
-      // Filter 3b: script. Deepgram aura-2-helena-en is English-only and
-      // garbles non-Latin script on air. Drop early so we don't waste a
-      // moderation API call + TTS attempt on something that can't be read out.
-      if (!isLatinScript(trimmed)) {
+      // Filter 3b: language. Numa Radio is an English-only station —
+      // drop non-Latin scripts (would garble on air) AND Latin-script
+      // non-English (German / French / Spanish / Italian etc., all
+      // clearly audible as wrong on an English-language station). Skips
+      // the moderation API + TTS for content that can't go on air.
+      if (!isLatinScript(trimmed) || !isEnglish(trimmed)) {
         result.skippedNonLatin += 1;
         continue;
       }

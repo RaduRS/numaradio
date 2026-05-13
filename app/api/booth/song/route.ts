@@ -11,7 +11,7 @@ import {
   SONG_LIMITS,
 } from "@/lib/rate-limit";
 import { moderateSongPrompt, profanityPrefilter } from "@/lib/moderate";
-import { isLatinScript } from "@/lib/text-script";
+import { isLatinScript, isEnglish } from "@/lib/text-script";
 import {
   createSongRequest,
   queuePositionFor,
@@ -67,11 +67,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  // Lena's TTS (and Suno's title generator) handle English best — non-Latin
-  // script in either field garbles when announced on air.
-  if (!isLatinScript(prompt)) {
+  // Numa Radio is an English-only station. Reject non-Latin scripts
+  // (would garble on air) AND Latin-script non-English (German /
+  // French / Spanish / Italian etc.) AND prompts that ask for content
+  // in a non-English language ("in German please", "auf Deutsch").
+  if (!isLatinScript(prompt) || !isEnglish(prompt)) {
     return NextResponse.json(
-      { ok: false, error: "english_only_prompt", detail: "Song prompts are English-only right now — sorry about that." },
+      { ok: false, error: "english_only_prompt", detail: "Numa Radio is an English-only station. Please write your song prompt in English (and don't ask for lyrics in another language)." },
       { status: 400 },
     );
   }

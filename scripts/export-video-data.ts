@@ -25,6 +25,7 @@ import { dirname, resolve, join } from "node:path";
 import { prisma } from "../lib/db/index.ts";
 import { synthesizeChatter } from "../workers/queue-daemon/deepgram-tts.ts";
 import { synthesizeVertex } from "../workers/queue-daemon/vertex-tts.ts";
+import { isLatinScript, isEnglish } from "../lib/text-script.ts";
 
 // Vertex Leda lives behind GOOGLE_CLOUD_PROJECT — that env var is in
 // dashboard/.env.local on Orion (where the dashboard runs), NOT in this
@@ -249,9 +250,11 @@ async function exportPromptedSongs(): Promise<PromptedSongClip[]> {
   // the track to B2 + queues it. There's no "played" status; once it's in
   // the queue it'll air on its own rotation.
   //
-  // Overfetch (take: 6) so we can filter by prompt length (20-180 chars,
-  // so it fits the on-screen card without truncation) and still have a
-  // good chance of two usable records.
+  // Overfetch (take: 20) so we can filter by prompt length (20-180 chars,
+  // so it fits the on-screen card without truncation) AND by English-
+  // language (recent submission history included German-language
+  // prompts that produced German songs — those can't be used as
+  // English-station marketing material).
   const reqs = await prisma.songRequest.findMany({
     where: {
       status: "done",
@@ -259,7 +262,7 @@ async function exportPromptedSongs(): Promise<PromptedSongClip[]> {
       NOT: { ipHash: { startsWith: "operator:" } },
     },
     orderBy: { completedAt: "desc" },
-    take: 6,
+    take: 20,
     select: {
       id: true,
       prompt: true,
@@ -283,7 +286,12 @@ async function exportPromptedSongs(): Promise<PromptedSongClip[]> {
 
   const usable = reqs.filter((r) => {
     const p = r.prompt ?? "";
-    return p.length >= 20 && p.length <= 180 && r.track;
+    if (p.length < 20 || p.length > 180) return false;
+    if (!r.track) return false;
+    // English-only marketing — even though we now enforce English at
+    // booth submission, historical rows may contain non-English prompts.
+    if (!isLatinScript(p) || !isEnglish(p)) return false;
+    return true;
   });
 
   if (usable.length === 0) {

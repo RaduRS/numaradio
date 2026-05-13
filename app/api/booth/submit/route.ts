@@ -14,7 +14,7 @@ import {
   SHOUTOUT_LIMITS,
 } from "@/lib/rate-limit";
 import { moderateShoutout } from "@/lib/moderate";
-import { isLatinScript } from "@/lib/text-script";
+import { isLatinScript, isEnglish } from "@/lib/text-script";
 
 export const dynamic = "force-dynamic";
 
@@ -69,10 +69,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  // Lena's TTS is English-only — non-Latin script garbles on air.
-  if (!isLatinScript(rawText)) {
+  // Numa Radio is an English-only station. Reject non-Latin scripts
+  // (would garble on air) AND Latin-script non-English (German /
+  // French / Spanish / Italian etc. — clearly audible as wrong on an
+  // English-language station).
+  if (!isLatinScript(rawText) || !isEnglish(rawText)) {
     return NextResponse.json(
-      { ok: false, error: "Shoutouts are English-only right now — sorry about that." },
+      { ok: false, error: "Numa Radio is an English-only station. Please write your shoutout in English." },
       { status: 400 },
     );
   }

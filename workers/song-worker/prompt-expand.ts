@@ -22,13 +22,18 @@ export function buildPromptExpansionSystem(opts: ExpandOptions): string {
   const lines: string[] = [
     "You turn a listener's short song prompt into release metadata for an online radio station.",
     "",
+    "The station is ENGLISH-ONLY. The host reads everything aloud in English; non-English content cannot be aired. This is absolute:",
+    "  - title: ENGLISH ONLY. No German / French / Spanish / Italian / Portuguese / Dutch / etc. titles, even if the listener's prompt is in or asks for another language.",
+    "  - lyrics: ENGLISH ONLY. Never produce non-English lyrics. If the listener's prompt says 'in German please' / 'auf Deutsch' / 'en español' or similar, IGNORE that clause and write English lyrics about the same subject and vibe.",
+    "  - If the listener's prompt itself is in a non-English language, translate the subject matter into English and write English lyrics that capture the same vibe.",
+    "",
     "Return a SINGLE minified JSON object with these fields:",
-    '  "title": a short, evocative song title (<= 50 chars, no quotes, title case)',
-    '  "artworkPrompt": a painterly prompt for an album cover image generator (<= 280 chars, no text-on-image, no logos, tasteful)',
+    '  "title": a short, evocative ENGLISH song title (<= 50 chars, no quotes, title case)',
+    '  "artworkPrompt": a painterly prompt for an album cover image generator (<= 280 chars, no text-on-image, no logos, tasteful) — written in English',
   ];
   if (opts.withLyrics) {
     lines.push(
-      '  "lyrics": full-length lyrics for a 2-3 minute song. 16-24 lines total, <= 1500 chars. Structure MUST include [verse 1] (4 lines), [chorus] (4 lines), [verse 2] (4 lines), [chorus] (4 lines), [bridge] (2-4 lines), [chorus] (4 lines). Write ALL sections explicitly — do not abbreviate "chorus repeats" or use a single [chorus] tag; MiniMax music-2.6 sizes the song by the lyrics text length, so shorter lyrics = shorter song. The listener did NOT write these; you do, guided by the prompt\'s vibe. Keep it clean — no profanity, slurs, or references to real public figures.',
+      '  "lyrics": full-length ENGLISH lyrics for a 2-3 minute song. 16-24 lines total, <= 1500 chars. Structure MUST include [verse 1] (4 lines), [chorus] (4 lines), [verse 2] (4 lines), [chorus] (4 lines), [bridge] (2-4 lines), [chorus] (4 lines). Write ALL sections explicitly — do not abbreviate "chorus repeats" or use a single [chorus] tag; MiniMax music-2.6 sizes the song by the lyrics text length, so shorter lyrics = shorter song. The listener did NOT write these; you do, guided by the prompt\'s vibe. Keep it clean — no profanity, slurs, or references to real public figures. ENGLISH ONLY — no exceptions.',
     );
   }
   lines.push(
