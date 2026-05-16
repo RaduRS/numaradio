@@ -117,7 +117,7 @@ export interface ReplyResult {
 const NAME_SAFE = /^[\p{L}\p{N} .'-]{1,40}$/u;
 const NAME_BAD_TOKENS = /^(anon|anonymous|n\/a|none|null|undefined|user\d+)$/i;
 
-function sanitiseName(raw: string | null | undefined): string | null {
+export function sanitiseName(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;

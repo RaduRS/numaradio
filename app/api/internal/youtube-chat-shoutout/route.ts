@@ -16,7 +16,7 @@ import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { moderateShoutout } from "@/lib/moderate";
 import { classifyShoutoutIntent } from "@/lib/classify-shoutout-intent";
-import { generateLenaReply } from "@/lib/lena-reply";
+import { generateLenaReply, sanitiseName } from "@/lib/lena-reply";
 import { internalAuthOk } from "@/lib/internal-auth";
 import { lenaSpeakChat } from "@/lib/lena-producer-chat";
 import { isProducerReplyEnabled, isRequestAutonomyEnabled } from "@/lib/lena-producer-chat/feature-flag";
@@ -220,128 +220,29 @@ async function runYoutubeChatPipeline(args: {
 }): Promise<void> {
   const { shoutoutId, stationId, rawText, displayName, requesterName, isReply, isRequest, requestIntent, secret } = args;
 
-  let moderation: Awaited<ReturnType<typeof moderateShoutout>>;
-  try {
-    moderation = await moderateShoutout(rawText);
-  } catch (e) {
-    await prisma.shoutout
-      .update({
-        where: { id: shoutoutId },
-        data: { deliveryStatus: "failed", moderationReason: "moderation_threw" },
-      })
-      .catch(() => {});
-    console.warn(
-      `yt-chat-shoutout: moderation threw for ${shoutoutId}: ${
-        e instanceof Error ? e.message : "unknown"
-      }`,
-    );
-    return;
-  }
-
-  const moderationDb = (
-    {
-      allowed: "allowed",
-      rewritten: "rewritten",
-      held: "held",
-      blocked: "blocked",
-    } as const
-  )[moderation.decision];
-
-  if (moderation.decision === "blocked") {
-    await prisma.shoutout.update({
-      where: { id: shoutoutId },
-      data: {
-        moderationStatus: moderationDb,
-        moderationReason: moderation.reason,
-        deliveryStatus: "blocked",
-      },
-    });
-    return;
-  }
-
-  if (moderation.decision === "held") {
-    await prisma.shoutout.update({
-      where: { id: shoutoutId },
-      data: {
-        moderationStatus: moderationDb,
-        moderationReason: moderation.reason,
-        deliveryStatus: "held",
-      },
-    });
-    if (!secret) return;
-    try {
-      const res = await fetch(INTERNAL_HELD_NOTIFY_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-internal-secret": secret,
-        },
-        body: JSON.stringify({
-          id: shoutoutId,
-          rawText,
-          cleanText: undefined,
-          requesterName,
-          moderationReason: moderation.reason ?? undefined,
-        }),
-      });
-      if (!res.ok) {
-        console.warn(
-          `yt-chat-shoutout: held-notify returned ${res.status} for ${shoutoutId}`,
-        );
-      }
-    } catch (e) {
-      console.warn(
-        `yt-chat-shoutout: held-notify failed for ${shoutoutId}: ${
-          e instanceof Error ? e.message : "unknown"
-        }`,
-      );
-    }
-    return;
-  }
-
-  // allowed | rewritten — set moderation result + flip to "pending",
-  // then either generate Lena's reply (for "reply" intent) or dispatch
-  // straight to the host-rewrite pipeline (for "shoutout" intent).
-  await prisma.shoutout.update({
-    where: { id: shoutoutId },
-    data: {
-      moderationStatus: moderationDb,
-      moderationReason: moderation.reason,
-      cleanText: moderation.decision === "rewritten" ? moderation.text : null,
-      deliveryStatus: "pending",
-    },
-  });
-
-  if (!secret) {
-    await prisma.shoutout.update({
-      where: { id: shoutoutId },
-      data: {
-        deliveryStatus: "failed",
-        moderationReason: "internal_secret_missing",
-      },
-    });
-    return;
-  }
-
-  let textToAir = moderation.text;
+  // Phase 5b: listener `@lena play X` requests. Runs BEFORE moderation
+  // because moderator can't distinguish "play X by Y" from "shoutout to Y"
+  // and HELDs ambiguous requests. Lena's response is LLM-generated from
+  // controlled templates — the listener's verbatim text never airs, so
+  // the shoutout moderator's "must look like a shoutout" rule doesn't apply.
+  // Handle is sanitized via NAME_SAFE regex before injection.
+  let textToAir = rawText;
   let skipHumanize = false;
+  let phase5bHandled = false;
 
-  // Phase 5b: listener `@lena play X` requests. Gated by
-  // LENA_REQUEST_AUTONOMY. Falls through to default shoutout handling
-  // on any failure (Lena reads the listener's message as a shoutout —
-  // unchanged from pre-Phase-5b behaviour).
   if (isRequest && requestIntent && isRequestAutonomyEnabled(process.env)) {
     try {
+      const safeHandle = sanitiseName(displayName) ?? "anonymous";
       const candidates = await lookupCatalogCandidates({
         prisma,
         stationId,
-        requestText: moderation.text,
+        requestText: rawText,
       });
       const r = await lenaSpeakChat({
         trigger: {
           source: "youtube_chat_mention",
-          handle: displayName ?? "anonymous",
-          text: moderation.text,
+          handle: safeHandle,
+          text: rawText,
           intent: requestIntent,
         },
         prisma,
@@ -351,73 +252,198 @@ async function runYoutubeChatPipeline(args: {
         catalogCandidates: candidates,
       });
       if (r) {
+        // Phase 5b handled it — skip moderation entirely, persist as allowed
+        await prisma.shoutout.update({
+          where: { id: shoutoutId },
+          data: {
+            moderationStatus: "allowed",
+            deliveryStatus: "pending",
+            cleanText: r.text,
+          },
+        });
         textToAir = r.text;
         skipHumanize = true;
-        // Persist Lena's spoken line so the dashboard Recent feed shows
-        // her response (not the listener's "play X" message).
-        await prisma.shoutout
-          .update({ where: { id: shoutoutId }, data: { cleanText: textToAir } })
-          .catch(() => {});
+        phase5bHandled = true;
         console.log(
-          `[lena-request] mode=${r.mode} queued=${r.queuedTrackId ?? "none"} for ${shoutoutId}`,
+          `[lena-request] mode=${r.mode} queued=${r.queuedTrackId ?? "none"} handle=${safeHandle} for ${shoutoutId}`,
         );
       }
     } catch (err) {
       console.warn(
-        `[lena-request] failed for ${shoutoutId}, falling through to shoutout:`,
+        `[lena-request] failed for ${shoutoutId}, falling through to moderation:`,
         err,
       );
     }
   }
 
-  if (isReply) {
-    let producerResult: { text: string; mode: string } | null = null;
-
-    if (isProducerReplyEnabled(process.env)) {
-      try {
-        const stationRow = await prisma.station.findUnique({ where: { slug: process.env.STATION_SLUG ?? "numaradio" }, select: { id: true } });
-        if (stationRow) {
-          producerResult = await lenaSpeakChat({
-            trigger: { source: "youtube_chat_mention", handle: displayName ?? "anonymous", text: moderation.text },
-            prisma,
-            stationId: stationRow.id,
-            nowMs: Date.now(),
-            llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
-          });
-        }
-      } catch (err) {
-        console.warn("[lena-producer-chat] failed, falling back to legacy reply:", err);
-      }
-    }
-
-    if (producerResult) {
-      textToAir = producerResult.text;
-      skipHumanize = true;
-    } else {
-      // Legacy fallback (also runs when flag is off)
-      const reply = await generateLenaReply(moderation.text, { displayName });
-      if (!reply.text) {
-        await prisma.shoutout.update({
+  // If Phase 5b didn't handle it, run the normal moderation flow.
+  if (!phase5bHandled) {
+    let moderation: Awaited<ReturnType<typeof moderateShoutout>>;
+    try {
+      moderation = await moderateShoutout(rawText);
+    } catch (e) {
+      await prisma.shoutout
+        .update({
           where: { id: shoutoutId },
-          data: {
-            deliveryStatus: "failed",
-            moderationReason: `reply_gen_${reply.reason}`,
-          },
-        });
-        console.warn(
-          `yt-chat-shoutout: reply generation failed for ${shoutoutId} (${reply.reason})`,
-        );
-        return;
-      }
-      textToAir = reply.text;
-      skipHumanize = true;
+          data: { deliveryStatus: "failed", moderationReason: "moderation_threw" },
+        })
+        .catch(() => {});
+      console.warn(
+        `yt-chat-shoutout: moderation threw for ${shoutoutId}: ${
+          e instanceof Error ? e.message : "unknown"
+        }`,
+      );
+      return;
     }
-    // Persist what Lena will actually say so the dashboard's Recent
-    // feed shows the reply, not the listener's question.
+
+    const moderationDb = (
+      {
+        allowed: "allowed",
+        rewritten: "rewritten",
+        held: "held",
+        blocked: "blocked",
+      } as const
+    )[moderation.decision];
+
+    if (moderation.decision === "blocked") {
+      await prisma.shoutout.update({
+        where: { id: shoutoutId },
+        data: {
+          moderationStatus: moderationDb,
+          moderationReason: moderation.reason,
+          deliveryStatus: "blocked",
+        },
+      });
+      return;
+    }
+
+    if (moderation.decision === "held") {
+      await prisma.shoutout.update({
+        where: { id: shoutoutId },
+        data: {
+          moderationStatus: moderationDb,
+          moderationReason: moderation.reason,
+          deliveryStatus: "held",
+        },
+      });
+      if (!secret) return;
+      try {
+        const res = await fetch(INTERNAL_HELD_NOTIFY_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": secret,
+          },
+          body: JSON.stringify({
+            id: shoutoutId,
+            rawText,
+            cleanText: undefined,
+            requesterName,
+            moderationReason: moderation.reason ?? undefined,
+          }),
+        });
+        if (!res.ok) {
+          console.warn(
+            `yt-chat-shoutout: held-notify returned ${res.status} for ${shoutoutId}`,
+          );
+        }
+      } catch (e) {
+        console.warn(
+          `yt-chat-shoutout: held-notify failed for ${shoutoutId}: ${
+            e instanceof Error ? e.message : "unknown"
+          }`,
+        );
+      }
+      return;
+    }
+
+    // allowed | rewritten — set moderation result + flip to "pending",
+    // then either generate Lena's reply (for "reply" intent) or dispatch
+    // straight to the host-rewrite pipeline (for "shoutout" intent).
     await prisma.shoutout.update({
       where: { id: shoutoutId },
-      data: { cleanText: textToAir },
+      data: {
+        moderationStatus: moderationDb,
+        moderationReason: moderation.reason,
+        cleanText: moderation.decision === "rewritten" ? moderation.text : null,
+        deliveryStatus: "pending",
+      },
     });
+
+    if (!secret) {
+      await prisma.shoutout.update({
+        where: { id: shoutoutId },
+        data: {
+          deliveryStatus: "failed",
+          moderationReason: "internal_secret_missing",
+        },
+      });
+      return;
+    }
+
+    textToAir = moderation.text;
+
+    if (isReply) {
+      let producerResult: { text: string; mode: string } | null = null;
+
+      if (isProducerReplyEnabled(process.env)) {
+        try {
+          const stationRow = await prisma.station.findUnique({ where: { slug: process.env.STATION_SLUG ?? "numaradio" }, select: { id: true } });
+          if (stationRow) {
+            producerResult = await lenaSpeakChat({
+              trigger: { source: "youtube_chat_mention", handle: displayName ?? "anonymous", text: moderation.text },
+              prisma,
+              stationId: stationRow.id,
+              nowMs: Date.now(),
+              llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+            });
+          }
+        } catch (err) {
+          console.warn("[lena-producer-chat] failed, falling back to legacy reply:", err);
+        }
+      }
+
+      if (producerResult) {
+        textToAir = producerResult.text;
+        skipHumanize = true;
+      } else {
+        // Legacy fallback (also runs when flag is off)
+        const reply = await generateLenaReply(moderation.text, { displayName });
+        if (!reply.text) {
+          await prisma.shoutout.update({
+            where: { id: shoutoutId },
+            data: {
+              deliveryStatus: "failed",
+              moderationReason: `reply_gen_${reply.reason}`,
+            },
+          });
+          console.warn(
+            `yt-chat-shoutout: reply generation failed for ${shoutoutId} (${reply.reason})`,
+          );
+          return;
+        }
+        textToAir = reply.text;
+        skipHumanize = true;
+      }
+      // Persist what Lena will actually say so the dashboard's Recent
+      // feed shows the reply, not the listener's question.
+      await prisma.shoutout.update({
+        where: { id: shoutoutId },
+        data: { cleanText: textToAir },
+      });
+    }
+  }
+
+  // Both paths (Phase 5b + moderation) converge here at the TTS dispatch.
+  if (!secret) {
+    await prisma.shoutout.update({
+      where: { id: shoutoutId },
+      data: {
+        deliveryStatus: "failed",
+        moderationReason: "internal_secret_missing",
+      },
+    });
+    return;
   }
 
   try {
