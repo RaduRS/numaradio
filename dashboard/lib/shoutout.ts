@@ -6,6 +6,9 @@ import { stripMarkdown } from "@/lib/strip-markdown";
 import { radioHostTransform } from "@/lib/radio-host";
 import { humanizeScript } from "@/lib/humanize";
 import { synthesizeVertex } from "@/lib/vertex-tts";
+import { lenaSpeakShoutout } from "./lena-producer-shoutout/index.ts";
+import { isProducerShoutoutEnabled } from "./lena-producer-shoutout/feature-flag.ts";
+import { callMiniMaxJson } from "./lena-producer-shoutout/minimax-llm.ts";
 
 const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
 // Helena — the canonical Lena voice used across the station (auto-chatter,
@@ -195,7 +198,38 @@ export async function generateShoutout(
     } else {
       const requesterName =
         input.source.kind === "booth" ? input.source.requesterName : undefined;
-      const humanized = await humanizeScript(plain, { requesterName });
+
+      let producerText: string | null = null;
+      if (isProducerShoutoutEnabled(process.env)) {
+        try {
+          const stationRow = await prisma.station.findUnique({
+            where: { slug: process.env.STATION_SLUG ?? "numaradio" },
+            select: { id: true },
+          });
+          if (stationRow) {
+            const handle =
+              input.source.kind === "agent"
+                ? input.source.sender ?? "anonymous"
+                : input.source.requesterName ?? "anonymous";
+            const r = await lenaSpeakShoutout({
+              trigger: {
+                source: input.source.kind === "agent" ? "agent_shoutout" : "booth_shoutout",
+                handle,
+                text: plain,
+              },
+              prisma,
+              stationId: stationRow.id,
+              nowMs: Date.now(),
+              llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+            });
+            if (r) producerText = r.text;
+          }
+        } catch (err) {
+          console.warn("[lena-producer-shoutout] failed, falling back to humanize:", err);
+        }
+      }
+
+      const humanized = producerText ?? await humanizeScript(plain, { requesterName });
       radioText = radioHostTransform(humanized);
     }
     mp3 = await synthesizeMp3(radioText, voiceProvider);
