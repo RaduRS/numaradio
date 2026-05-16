@@ -15,7 +15,15 @@ function wordCount(text: string): number {
 
 function ensureTerminal(text: string): string {
   const t = text.trimEnd();
-  return /[.!?]$/.test(t) ? t : `${t}.`;
+  if (!t) return "";
+  // Content-empty (just quote chars / whitespace) → drop it.
+  if (/^["'\s]+$/.test(t)) return "";
+  // Already terminal, with or without a trailing close-quote.
+  if (/[.!?]["']?$/.test(t)) return t;
+  // Ends with a close-quote but no prior terminal → tuck the period
+  // INSIDE the quote so we don't produce `".` in aired audio.
+  if (/["']$/.test(t)) return `${t.slice(0, -1)}.${t.slice(-1)}`;
+  return `${t}.`;
 }
 
 function normalizeForSpeech(text: string): string {
@@ -112,7 +120,10 @@ function addRadioCadence(line: string): string {
       .replace(/\bright now\b/gi, "Right now.")
       .replace(/\bstay tuned\b/gi, "Stay tuned.")
       .replace(/\byou are listening to\b/gi, "You're listening to")
-      .replace(/\bnuma radio\b/gi, '"Numa Radio"')
+      // Avoid double-wrapping when the listener (or upstream prompt)
+      // already quoted "Numa Radio" — lookarounds skip wrap if a
+      // quote already hugs the phrase.
+      .replace(/(?<!["'])\bnuma radio\b(?!["'])/gi, '"Numa Radio"')
       // Clean up double periods from replacements
       .replace(/\.\./g, ".")
       .replace(/\.\,/g, ".")
@@ -135,17 +146,19 @@ export function radioHostTransform(text: string): string {
   // re-splitting.
   const preLined = cleaned.includes("\n");
 
+  const isContentful = (s: string) => Boolean(s) && !/^["'\s]+$/.test(s);
+
   const units = preLined
     ? cleaned
         .split(/\n+/)
         .map((s) => s.trim())
-        .filter(Boolean)
+        .filter(isContentful)
     : cleaned
         .match(/[^.!?]+[.!?]?/g)
         ?.map((s) => s.trim())
-        .filter(Boolean) ?? [];
+        .filter(isContentful) ?? [];
 
-  const lines = units.flatMap(splitToPhrases).map(addRadioCadence);
+  const lines = units.flatMap(splitToPhrases).filter(Boolean).map(addRadioCadence);
 
   return lines.join("\n");
 }
