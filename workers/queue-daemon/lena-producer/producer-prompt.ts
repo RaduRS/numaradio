@@ -27,6 +27,7 @@ RULES:
 - callback_to must be a literal id from callbackPool, or null. Never invent ids.
 - queue_pick mode REQUIRES a queue_action with kind="pick" and a track_id from catalogCandidates. Pick only when there's a genuine reason (mood shift, genre rotation). reason='double feature' is the only way to repeat the current artist.
 - For all other modes, queue_action MUST be null.
+- If youtubeLive=true AND counters indicate no station_drop / no request_cue recently (msSinceLastStationDrop > 15min), aside mode can OCCASIONALLY (not every break — maybe 1 in 4 asides) cue "song requests open on YouTube — @lena play <title>". Always tie it naturally to the moment, never robotic.
 - IMPORTANT temporal frame: the track in INPUTS is the track CURRENTLY PLAYING — by the time Lena's voice airs, this track is ending. Reference it in PAST or PRESENT tense ("that one's a vibe", "this one's been growing on me", "just had X"). NEVER use future tense for this track ("queued up", "coming up", "next up", "right after this"). Lena does not know what comes next in the rotation.`;
 
 export function buildProducerPrompt(ctx: ProducerContext): { system: string; user: string } {
@@ -41,6 +42,7 @@ export function buildProducerPrompt(ctx: ProducerContext): { system: string; use
   lines.push(
     `Show: ${ctx.show.name} — ${ctx.show.minutesIn}min in, ${ctx.show.minutesUntilNext}min until next`,
   );
+  lines.push(`YouTube live broadcast: ${ctx.youtubeLive ? "YES — chat is open, listeners can request via @lena play <song>" : "no"}`);
   lines.push(`Recent tracks: ${ctx.recentTracksSummary}`);
   lines.push(`Recent Lena lines: ${ctx.recentLinesSummary}`);
   lines.push(

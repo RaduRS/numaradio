@@ -15,6 +15,7 @@ const ctx: ProducerContext = {
   counters: { msSinceLastLine: Infinity, msSinceLastWeatherMention: Infinity, msSinceLastStationDrop: Infinity, tracksSinceLastShoutout: 0 },
   mood: { currentRun: { genre: null, count: 0 }, tempoTrend: "steady", avgBpmLast5: null, topGenreThisHour: null },
   catalogCandidates: [{ id: "c1", title: "Switch", artist: "Bea", genre: "ambient", bpm: 88 }],
+  youtubeLive: false,
 };
 
 test("runWriter mode=opinion uses opinion prompt and returns the LLM's trimmed text", async () => {

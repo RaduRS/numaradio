@@ -18,6 +18,7 @@ function ctx(opts: { catalogCandidates?: ProducerContext["catalogCandidates"] } 
     counters: { msSinceLastLine: Infinity, msSinceLastWeatherMention: Infinity, msSinceLastStationDrop: Infinity, tracksSinceLastShoutout: 0 },
     mood: { currentRun: { genre: null, count: 0 }, tempoTrend: "steady", avgBpmLast5: null, topGenreThisHour: null },
     catalogCandidates: opts.catalogCandidates ?? [],
+    youtubeLive: false,
   };
 }
 

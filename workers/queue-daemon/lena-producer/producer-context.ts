@@ -43,6 +43,9 @@ export interface ProducerContext {
   };
   /** Phase 5: tracks the Producer can pick from when emitting queue_pick. Empty array if queue autonomy is off. */
   catalogCandidates: Array<{ id: string; title: string; artist: string | null; genre: string | null; bpm: number | null }>;
+  /** True when YouTube broadcast is live (chat is receiving messages).
+   *  When true, aside mode can occasionally cue listeners to request via @lena play X. */
+  youtubeLive: boolean;
 }
 
 function bucketFor(hour: number): string {
@@ -97,6 +100,7 @@ export function buildProducerContext(deps: {
   trigger: AutoTrackBoundaryTrigger;
   nowMs: number;
   catalogCandidates?: ProducerContext["catalogCandidates"];
+  youtubeLive?: boolean;
 }): ProducerContext {
   const now = new Date(deps.nowMs);
   return {
@@ -130,5 +134,6 @@ export function buildProducerContext(deps: {
       topGenreThisHour: deps.memoryView.mood.topGenreThisHour,
     },
     catalogCandidates: deps.catalogCandidates ?? [],
+    youtubeLive: deps.youtubeLive ?? false,
   };
 }

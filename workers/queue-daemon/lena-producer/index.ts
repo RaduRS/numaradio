@@ -26,6 +26,9 @@ export interface LenaSpeakArgs {
   catalogCandidates?: { id: string; title: string; artist: string | null; genre: string | null; bpm: number | null }[];
   /** Phase 5: validates + commits a queue insert. Returns true if inserted. */
   queueDirector?: (action: { trackId: string; reason: string }) => Promise<boolean>;
+  /** True when YouTube broadcast is live. Producer + aside writer use this to occasionally cue
+   *  listeners to request via @lena play X. Defaults to false. */
+  youtubeLive?: boolean;
 }
 
 /**
@@ -40,6 +43,7 @@ export async function lenaSpeak(args: LenaSpeakArgs): Promise<LenaResult | null>
     trigger: args.trigger,
     nowMs: args.nowMs,
     catalogCandidates: args.catalogCandidates ?? [],
+    youtubeLive: args.youtubeLive ?? false,
   });
 
   const decision = await runProducer(ctx, { llm: args.llm });

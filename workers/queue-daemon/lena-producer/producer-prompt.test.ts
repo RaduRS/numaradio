@@ -18,6 +18,7 @@ function ctx(): ProducerContext {
     counters: { msSinceLastLine: 240_000, msSinceLastWeatherMention: Infinity, msSinceLastStationDrop: 1800_000, tracksSinceLastShoutout: 2 },
     mood: { currentRun: { genre: "synth", count: 3 }, tempoTrend: "falling", avgBpmLast5: 115, topGenreThisHour: "synth" },
     catalogCandidates: [],
+    youtubeLive: false,
   };
 }
 
@@ -53,4 +54,11 @@ test("buildProducerPrompt user message contains trigger + show + tracks + mood",
   assert.match(p.user, /23:15/);
   assert.match(p.user, /synth/);
   assert.match(p.user, /Anna shouted out/);
+});
+
+test("buildProducerPrompt includes youtube_live flag when true", () => {
+  const c = ctx();
+  c.youtubeLive = true;
+  const p = buildProducerPrompt(c);
+  assert.match(p.user, /YouTube live broadcast: YES/);
 });

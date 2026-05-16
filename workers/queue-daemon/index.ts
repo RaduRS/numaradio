@@ -369,6 +369,14 @@ const autoHost = new AutoHostOrchestrator({
       };
     }
 
+    let youtubeLive = false;
+    try {
+      const ya = await fetchYoutubeAudience({ url: DASHBOARD_YOUTUBE_HEALTH_URL });
+      youtubeLive = ya?.state === "live";
+    } catch {
+      // ignore — youtubeLive defaults false
+    }
+
     return runLenaSpeak({
       trigger,
       memory: shiftMemory,
@@ -377,6 +385,7 @@ const autoHost = new AutoHostOrchestrator({
         generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
       catalogCandidates,
       queueDirector,
+      youtubeLive,
     });
   },
 });

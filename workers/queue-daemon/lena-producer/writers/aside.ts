@@ -14,6 +14,7 @@ RULES:
 - Do not use any 4+ word substring from recently_aired_lines.
 - BANNED phrases: "let it ride", "we'll let it ride", "we'll take that one", "hope this reaches them", "going out to".
 - If the bucket is "late night" and target_focus is generic, prefer something a 2am DJ would actually notice.
+- If the producer indicates youtubeLive=true AND this is an aside about station vibe, you MAY weave a brief song-request CTA naturally: "we're taking requests on YouTube — drop @lena play [your favourite] in chat and I'll spin it up." Use sparingly, never robotically.
 
 OUTPUT: one line. No quotes. No stage directions.`;
 
@@ -29,6 +30,7 @@ export function buildAsidePrompt(
   lines.push(`show: ${ctx.show.name}`);
   lines.push(`tone: ${decision.tone}`);
   lines.push(`length: ${w.min}-${w.max} words`);
+  lines.push(`youtube_live: ${ctx.youtubeLive}`);
   if (recentAiredLines.length > 0) {
     lines.push(`recently_aired_lines (DO NOT echo):`);
     for (const l of recentAiredLines) lines.push(`  - ${l}`);

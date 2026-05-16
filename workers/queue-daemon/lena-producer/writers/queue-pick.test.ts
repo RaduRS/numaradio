@@ -15,6 +15,7 @@ const ctx: ProducerContext = {
   counters: { msSinceLastLine: Infinity, msSinceLastWeatherMention: Infinity, msSinceLastStationDrop: Infinity, tracksSinceLastShoutout: 0 },
   mood: { currentRun: { genre: null, count: 0 }, tempoTrend: "steady" as const, avgBpmLast5: null, topGenreThisHour: null },
   catalogCandidates: [{ id: "c1", title: "Dusk", artist: "Anna", genre: "synth", bpm: 112 }],
+  youtubeLive: false,
 };
 
 test("buildQueuePickPrompt includes picked track title/artist", () => {
