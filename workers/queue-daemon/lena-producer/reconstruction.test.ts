@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { reconstructEvents } from "./reconstruction.ts";
+import { reconstructEvents, pollSince } from "./reconstruction.ts";
 
 const T0 = 1_700_000_000_000;
 
@@ -77,4 +77,31 @@ test("reconstructEvents tags producerVersion!=null Chatter rows with their mode,
   const c2 = events.find((e) => e.id === "c2") as { type: "lena_line_aired"; mode: string };
   assert.equal(c1.mode, "opinion");
   assert.equal(c2.mode, "legacy");
+});
+
+test("pollSince returns only rows with createdAt/airedAt > the watermark", async () => {
+  const fakePrisma = {
+    playHistory: {
+      findMany: async (args: { where: { startedAt: { gt: Date } } }) => {
+        const since = args.where.startedAt.gt.getTime();
+        return [
+          { id: "p_old", trackId: "x", titleSnapshot: "old", startedAt: new Date(since - 1), track: null },
+          { id: "p_new", trackId: "y", titleSnapshot: "new", startedAt: new Date(since + 1), track: null },
+        ].filter((p) => p.startedAt.getTime() > since);
+      },
+    },
+    chatter: { findMany: async () => [] },
+    shoutout: { findMany: async () => [] },
+  };
+
+  const events = await pollSince({
+    prisma: fakePrisma as never,
+    stationId: "s1",
+    sincePlayHistoryAt: T0 - 10_000,
+    sinceChatterAt: T0,
+    sinceShoutoutAt: T0,
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].id, "p_new");
 });
