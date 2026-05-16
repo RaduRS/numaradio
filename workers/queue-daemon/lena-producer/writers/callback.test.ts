@@ -29,3 +29,10 @@ test("buildCallbackPrompt resolves callbackTo='s1' from the pool", () => {
   const p = buildCallbackPrompt(decision, ctx, []);
   assert.match(p.user, /Anna/);
 });
+
+test("buildCallbackPrompt enforces track-currency rule against 'rolling right now' hallucinations", () => {
+  const p = buildCallbackPrompt(decision, ctx, []);
+  assert.match(p.system, /TRACK-CURRENCY RULE/, "system prompt must include the track-currency rule header");
+  assert.match(p.system, /rolling right now/, "system prompt must explicitly ban 'rolling right now' for non-current tracks");
+  assert.match(p.system, /still earning it/, "system prompt must explicitly ban 'still earning it'");
+});

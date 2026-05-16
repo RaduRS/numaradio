@@ -9,7 +9,8 @@ RULES:
 - Contractions. Spoken English. No poetry.
 - Acknowledge the new listener AND naturally reference the earlier shoutout.
 - Don't say "earlier"; just weave it: "Anna — bob was just shouting out Berlin too…"
-- BANNED phrases: "let it ride", "we'll let it ride", "we'll take that one", "hope this reaches them", "going out to".
+- **TRACK-CURRENCY RULE:** if the callback_to mentions a specific track title or artist, DO NOT claim that track is currently playing, just landed, or is "rolling right now". You don't have live now-playing context in this surface. Frame any track-mention in past tense ("we got that for them earlier", "spun that one a while back") or skip the track reference entirely.
+- BANNED phrases: "let it ride", "we'll let it ride", "we'll take that one", "hope this reaches them", "going out to", "rolling right now", "still earning it", "just hit the speakers".
 
 OUTPUT: one line. No quotes. No stage directions.`;
 

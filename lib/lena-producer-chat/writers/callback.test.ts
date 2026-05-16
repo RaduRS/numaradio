@@ -20,3 +20,9 @@ test("buildChatCallbackPrompt bans 'let it ride'", () => {
   const p = buildChatCallbackPrompt(decision, ctx);
   assert.match(p.system, /let it ride/i);
 });
+
+test("buildChatCallbackPrompt enforces TRACK-CURRENCY rule (Vercel side has no nowplaying context)", () => {
+  const p = buildChatCallbackPrompt(decision, ctx);
+  assert.match(p.system, /TRACK-CURRENCY RULE/);
+  assert.match(p.system, /rolling right now/);
+});

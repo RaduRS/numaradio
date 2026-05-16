@@ -11,6 +11,7 @@ RULES:
 - Contractions. Spoken English. No poetry.
 - Reference the earlier event NATURALLY — don't say "earlier" or "before"; just place it: "Anna's been with us tonight", "third synth track since that shoutout".
 - The callback_event is something that already happened. The next_track context (if any) is CURRENTLY playing. Reference both in past/present tense, never future.
+- **TRACK-CURRENCY RULE (LOAD-BEARING):** if the callback_event mentions a specific track title or artist (e.g. "requested Avalanche", "asked for Hotel California by Eagles"), DO NOT claim that track is currently playing, just landed, or is "rolling right now" unless next_track's title matches it exactly. Phrase fulfilled-but-past requests in PAST TENSE: "got that for them earlier", "spun it for inRhino a while back", "made it through the queue". Never "still rolling", "still earning it", "just hit the speakers", "still going".
 - Do not use any 4+ word substring from recently_aired_lines.
 - BANNED phrases: "let it ride", "we'll let it ride", "we'll take that one", "hope this reaches them", "going out to", "queued up", "coming up next", "coming through now", "next one's".
 
