@@ -281,7 +281,13 @@ export async function generateShoutout(
               nowMs: Date.now(),
               llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
             });
-            if (r) producerText = r.text;
+            if (r) {
+              producerText = r.text;
+            } else {
+              console.warn(
+                `[lena-producer-shoutout] returned null (no throw) — falling back to humanize. source=${input.source.kind} text=${JSON.stringify(plain.slice(0, 100))}`,
+              );
+            }
           }
         } catch (err) {
           console.warn("[lena-producer-shoutout] failed, falling back to humanize:", err);

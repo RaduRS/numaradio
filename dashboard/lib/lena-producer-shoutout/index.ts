@@ -20,12 +20,21 @@ export async function lenaSpeakShoutout(args: LenaSpeakShoutoutArgs): Promise<Le
   let ctx;
   try {
     ctx = await fetchShoutoutContext({ prisma: args.prisma, stationId: args.stationId, trigger: args.trigger, nowMs: args.nowMs });
-  } catch { return null; }
+  } catch (err) {
+    console.warn(`[lena-producer-shoutout] fetchShoutoutContext threw: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
   const decision = await runShoutoutProducer(ctx, { llm: args.llm });
   const recentAired = ctx.recentLenaLines.slice(0, 3).map((l) => l.text);
   try {
     const text = await runShoutoutWriter(decision, ctx, recentAired, { llm: args.llm });
-    if (!text) return null;
+    if (!text) {
+      console.warn(`[lena-producer-shoutout] writer returned empty text (mode=${decision.mode})`);
+      return null;
+    }
     return { text, mode: decision.mode };
-  } catch { return null; }
+  } catch (err) {
+    console.warn(`[lena-producer-shoutout] writer threw (mode=${decision.mode}): ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
 }
