@@ -1,7 +1,8 @@
 /**
- * Three-way classifier for YouTube live chat messages: should this be
- * aired as a shoutout, replied to conversationally by Lena, or skipped
- * as noise?
+ * Five-way classifier for YouTube live chat messages: should this be
+ * aired as a shoutout, replied to conversationally by Lena, treated as
+ * a song request, treated as a shoutout combined with a song request,
+ * or skipped as noise?
  *
  * Used only for messages coming in via the YouTube live chat poller
  * (workers/queue-daemon/youtube-chat-loop.ts) — booth submissions on
@@ -9,15 +10,17 @@
  * itself self-selects for that intent.
  *
  * Returns { category, worthy, reason }:
- *   - "shoutout" → message dedicates / shouts out to someone or shares
- *     a listening context (verbatim-worthy text the host should narrate)
- *   - "reply"    → message is addressed TO Lena (thanks, hello, comment
- *     about the show, simple question) — generate a fresh 1-2 sentence
- *     response from Lena rather than reading the listener's words
- *   - "noise"    → low-effort, skip
+ *   - "shoutout"              → dedicates to someone else, Lena reads on air
+ *   - "reply"                 → addressed to Lena, generate a fresh response
+ *   - "request"               → asks Lena to play a specific song (Phase 5
+ *     QueueDirector will route this to a queue insert; until then it
+ *     falls through to the shoutout path)
+ *   - "shoutout_with_request" → combines a personal message with a song
+ *     request (Phase 5 routes through Producer; until then, shoutout)
+ *   - "noise"                 → low-effort, skip
  *
- * `worthy` is provided as a back-compat boolean (true for shoutout|reply,
- * false for noise) so older callers that only branched on worthy keep
+ * `worthy` is provided as a back-compat boolean (true for everything
+ * except noise) so older callers that only branched on worthy keep
  * working unchanged.
  *
  * Fail-open: if MiniMax is unreachable we return shoutout to keep the
