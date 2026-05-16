@@ -392,7 +392,22 @@ export default function PrivacyPage() {
                   be yours to share — including any YouTube Content ID
                   claims.
                 </li>
+                <li>
+                  The artist-name and track-title fields are for credit
+                  only. Any URL pasted into those fields (Suno, Bandcamp,
+                  Spotify, etc.) is automatically stripped before the
+                  track goes to air or shows up in our library. The
+                  station doesn&apos;t link out from on-air credits.
+                </li>
               </ul>
+
+              <p style={{ marginTop: 8 }}>
+                <strong style={{ color: "var(--fg)" }}>Default lane.</strong>{" "}
+                The submission form defaults to <em>Permanent rotation</em>
+                {" "}— you can switch to <em>One-off airing</em> before sending
+                if you&apos;d rather we air the track once and not add it to
+                the library.
+              </p>
 
               <p style={{ marginTop: 8 }}>
                 <strong style={{ color: "var(--fg)" }}>Withdrawing your track.</strong>{" "}

@@ -79,7 +79,7 @@ export function SubmitForm() {
   const [audio, setAudio] = useState<File | null>(null);
   const [artwork, setArtwork] = useState<File | null>(null);
   const [airingPreference, setAiringPreference] =
-    useState<"one_off" | "permanent">("one_off");
+    useState<"one_off" | "permanent">("permanent");
   const [vouched, setVouched] = useState(false);
   const [state, setState] = useState<State>({ kind: "input" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -480,18 +480,6 @@ export function SubmitForm() {
           <button
             type="button"
             role="radio"
-            aria-checked={airingPreference === "one_off"}
-            className={`submit-airing-card ${airingPreference === "one_off" ? "is-selected" : ""}`}
-            onClick={() => setAiringPreference("one_off")}
-          >
-            <span className="label">One-off airing</span>
-            <span className="desc">
-              We air this once. After that it&apos;s not in rotation.
-            </span>
-          </button>
-          <button
-            type="button"
-            role="radio"
             aria-checked={airingPreference === "permanent"}
             className={`submit-airing-card ${airingPreference === "permanent" ? "is-selected" : ""}`}
             onClick={() => setAiringPreference("permanent")}
@@ -499,6 +487,18 @@ export function SubmitForm() {
             <span className="label">Permanent rotation</span>
             <span className="desc">
               We add this to our regular library. Plays on rotation indefinitely.
+            </span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={airingPreference === "one_off"}
+            className={`submit-airing-card ${airingPreference === "one_off" ? "is-selected" : ""}`}
+            onClick={() => setAiringPreference("one_off")}
+          >
+            <span className="label">One-off airing</span>
+            <span className="desc">
+              We air this once. After that it&apos;s not in rotation.
             </span>
           </button>
         </div>
