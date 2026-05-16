@@ -250,6 +250,36 @@ async function runYoutubeChatPipeline(args: {
         nowMs: Date.now(),
         llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
         catalogCandidates: candidates,
+        // CRITICAL: route the queue insert through the daemon's pushHandler
+        // (which writes QueueItem AND telnets to Liquidsoap AND status-
+        // transitions the row). Writing the row directly here would
+        // bypass the telnet push and the reconciler would re-fire the
+        // track every ~3 min (2026-05-16 prod bug — same track played
+        // 4 times in a row).
+        pushTrackToQueue: async (a) => {
+          try {
+            const res = await fetch(
+              process.env.INTERNAL_LENA_QUEUE_URL ?? "https://api.numaradio.com/api/internal/lena-queue",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-internal-secret": process.env.INTERNAL_API_SECRET ?? "",
+                },
+                body: JSON.stringify({ trackId: a.trackId, reason: a.reason }),
+              },
+            );
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 80)}` };
+            }
+            const j = (await res.json()) as { ok?: boolean; queueItemId?: string; error?: string };
+            if (!j.ok || !j.queueItemId) return { ok: false, error: j.error ?? "missing queueItemId" };
+            return { ok: true, queueItemId: j.queueItemId };
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : "fetch failed" };
+          }
+        },
       });
       if (r) {
         // Phase 5b handled it — skip moderation entirely, persist as allowed

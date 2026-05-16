@@ -11,9 +11,6 @@ function baseFakePrisma() {
     playHistory: { findMany: async () => [] },
     queueItem: { findMany: async () => [] },
     track: { findMany: async () => [] },
-    $transaction: async (_fn: unknown) => {
-      throw new Error("$transaction not stubbed in this test");
-    },
   };
 }
 
@@ -57,29 +54,14 @@ test("lenaSpeakChat returns null when fetchChatContext throws", async () => {
   assert.equal(r, null);
 });
 
-test("lenaSpeakChat accept_request: inserts into queue + returns queuedTrackId", async () => {
-  let insertCalled = false;
-  let insertedData: { trackId?: string; insertedBy?: string; reasonCode?: string } | null = null;
-  const fakePrisma = {
-    shoutout: { findMany: async () => [] },
-    chatter: { findMany: async () => [] },
-    playHistory: { findMany: async () => [] },
-    queueItem: { findMany: async () => [] },
-    track: { findMany: async () => [] },
-    $transaction: async (fn: (tx: unknown) => unknown) => {
-      const tx = {
-        $executeRaw: async () => 0,
-        queueItem: {
-          findFirst: async () => null,
-          create: async ({ data }: { data: typeof insertedData }) => {
-            insertCalled = true;
-            insertedData = data;
-            return { id: "qi1" };
-          },
-        },
-      };
-      return fn(tx);
-    },
+test("lenaSpeakChat accept_request: calls pushTrackToQueue + returns queuedTrackId", async () => {
+  const fakePrisma = baseFakePrisma();
+  let pushCalled = false;
+  let pushArgs: { trackId: string; reason: string } | null = null;
+  const pushTrackToQueue = async (a: { trackId: string; reason: string }) => {
+    pushCalled = true;
+    pushArgs = a;
+    return { ok: true as const, queueItemId: "qi1" };
   };
   const llm = async (p: { system: string }) => {
     if (p.system.includes("producer for Lena, deciding how she handles")) {
@@ -102,27 +84,19 @@ test("lenaSpeakChat accept_request: inserts into queue + returns queuedTrackId",
     nowMs: T0,
     llm,
     catalogCandidates: [{ id: "t1", title: "X", artist: "Y", genre: "rock", bpm: 120 }],
+    pushTrackToQueue,
   });
   assert.ok(r);
   assert.equal(r!.mode, "accept_request");
   assert.equal(r!.queuedTrackId, "t1");
-  assert.equal(insertCalled, true);
-  assert.equal(insertedData!.trackId, "t1");
-  assert.equal(insertedData!.insertedBy, "lena_listener_request");
-  assert.match(insertedData!.reasonCode ?? "", /^lena_listener_request:anna$/);
+  assert.equal(pushCalled, true);
+  assert.equal(pushArgs!.trackId, "t1");
+  assert.match(pushArgs!.reason, /^lena_listener_request:anna$/);
 });
 
-test("lenaSpeakChat accept_request: queue insert failure → downgrades to decline queue_full", async () => {
-  const fakePrisma = {
-    shoutout: { findMany: async () => [] },
-    chatter: { findMany: async () => [] },
-    playHistory: { findMany: async () => [] },
-    queueItem: { findMany: async () => [] },
-    track: { findMany: async () => [] },
-    $transaction: async () => {
-      throw new Error("simulated insert failure");
-    },
-  };
+test("lenaSpeakChat accept_request: push failure → downgrades to decline queue_full", async () => {
+  const fakePrisma = baseFakePrisma();
+  const pushTrackToQueue = async () => ({ ok: false as const, error: "daemon unreachable" });
   const llm = async (p: { system: string }) => {
     if (p.system.includes("producer for Lena, deciding how she handles")) {
       return JSON.stringify({
@@ -145,6 +119,37 @@ test("lenaSpeakChat accept_request: queue insert failure → downgrades to decli
     nowMs: T0,
     llm,
     catalogCandidates: [{ id: "t1", title: "X", artist: "Y", genre: "rock", bpm: 120 }],
+    pushTrackToQueue,
+  });
+  assert.ok(r);
+  assert.equal(r!.mode, "decline_request");
+  assert.equal(r!.queuedTrackId, null);
+});
+
+test("lenaSpeakChat accept_request: missing pushTrackToQueue dep → downgrades to decline queue_full", async () => {
+  const fakePrisma = baseFakePrisma();
+  const llm = async (p: { system: string }) => {
+    if (p.system.includes("producer for Lena, deciding how she handles")) {
+      return JSON.stringify({
+        mode: "accept_request",
+        target_focus: "queue it",
+        callback_to: null,
+        length_hint: "short",
+        tone: "warm",
+        picked_track_id: "t1",
+        decline_reason: null,
+      });
+    }
+    return "queue's busy, try in a bit.";
+  };
+  const r = await lenaSpeakChat({
+    trigger: { source: "youtube_chat_mention", handle: "anna", text: "play x", intent: "request" },
+    prisma: fakePrisma as never,
+    stationId: "s1",
+    nowMs: T0,
+    llm,
+    catalogCandidates: [{ id: "t1", title: "X", artist: "Y", genre: "rock", bpm: 120 }],
+    // no pushTrackToQueue
   });
   assert.ok(r);
   assert.equal(r!.mode, "decline_request");
