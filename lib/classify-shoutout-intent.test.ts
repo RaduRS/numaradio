@@ -162,3 +162,23 @@ test("classifyShoutoutIntent fails open on network error", async (t) => {
   assert.equal(r.worthy, true);
   assert.match(r.reason, /classifier_network/);
 });
+
+test("parseIntentReply: request category parses correctly", () => {
+  const r = parseIntentReply('{"d":"request"}');
+  assert.equal(r.category, "request");
+  assert.equal(r.worthy, true);
+  assert.equal(r.reason, "ok");
+});
+
+test("parseIntentReply: shoutout_with_request parses correctly", () => {
+  const r = parseIntentReply('{"d":"shoutout_with_request"}');
+  assert.equal(r.category, "shoutout_with_request");
+  assert.equal(r.worthy, true);
+  assert.equal(r.reason, "ok");
+});
+
+test("parseIntentReply: unknown decision still falls open to shoutout (back-compat)", () => {
+  const r = parseIntentReply('{"d":"some_new_category_we_dont_know"}');
+  assert.equal(r.category, "shoutout");
+  assert.match(r.reason, /classifier_unknown/);
+});

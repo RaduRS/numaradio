@@ -28,7 +28,7 @@ const MINIMAX_URL = "https://api.minimax.io/anthropic/v1/messages";
 const CLASSIFIER_MODEL =
   process.env.MINIMAX_INTENT_MODEL ?? "MiniMax-M2.7";
 
-export type IntentCategory = "shoutout" | "reply" | "noise";
+export type IntentCategory = "shoutout" | "reply" | "noise" | "request" | "shoutout_with_request";
 
 export interface IntentResult {
   category: IntentCategory;
@@ -203,6 +203,12 @@ export function parseIntentReply(reply: string): IntentResult {
   }
   if (decision === "reply") {
     return { category: "reply", worthy: true, reason: "ok" };
+  }
+  if (decision === "request") {
+    return { category: "request", worthy: true, reason: "ok" };
+  }
+  if (decision === "shoutout_with_request") {
+    return { category: "shoutout_with_request", worthy: true, reason: "ok" };
   }
   if (decision === "noise") {
     const reasonMatch = reply.match(/"r"\s*:\s*"([^"]+)"/);
