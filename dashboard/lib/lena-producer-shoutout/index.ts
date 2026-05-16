@@ -1,7 +1,6 @@
-import type { PrismaClient } from "@prisma/client";
-import { fetchShoutoutContext, type ShoutoutTrigger } from "./shoutout-context.ts";
-import { runShoutoutProducer } from "./producer.ts";
-import { runShoutoutWriter } from "./writer.ts";
+import { fetchShoutoutContext, type ShoutoutTrigger, type PrismaSlice } from "./shoutout-context";
+import { runShoutoutProducer } from "./producer";
+import { runShoutoutWriter } from "./writer";
 
 export interface LenaShoutoutResult {
   text: string;
@@ -10,7 +9,7 @@ export interface LenaShoutoutResult {
 
 export interface LenaSpeakShoutoutArgs {
   trigger: ShoutoutTrigger;
-  prisma: Pick<PrismaClient, "shoutout" | "chatter">;
+  prisma: PrismaSlice;
   stationId: string;
   nowMs: number;
   llm: (prompts: { system: string; user: string }) => Promise<string>;

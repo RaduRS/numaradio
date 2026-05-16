@@ -1,6 +1,6 @@
-import type { ShoutoutDecision } from "../modes.ts";
-import { LENGTH_WORDS } from "../modes.ts";
-import type { ShoutoutContext } from "../shoutout-context.ts";
+import type { ShoutoutDecision } from "../modes";
+import { LENGTH_WORDS } from "../modes";
+import type { ShoutoutContext } from "../shoutout-context";
 
 const SYSTEM = `You write spoken-narration text for Lena, a Numa Radio DJ, reading a listener's shoutout.
 Mode: shoutout_inline — single-sentence fold, no "going out to" opener.

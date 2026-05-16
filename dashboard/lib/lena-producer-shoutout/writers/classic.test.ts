@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildClassicShoutoutPrompt } from "./classic.ts";
+import { buildClassicShoutoutPrompt } from "./classic";
 
 const decision = { mode: "shoutout_classic" as const, targetFocus: "x", callbackTo: null, lengthHint: "short" as const, tone: "warm" as const };
 const ctx = {

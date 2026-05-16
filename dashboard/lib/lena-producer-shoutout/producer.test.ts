@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runShoutoutProducer } from "./producer.ts";
-import type { ShoutoutContext } from "./shoutout-context.ts";
+import { runShoutoutProducer } from "./producer";
+import type { ShoutoutContext } from "./shoutout-context";
 
 function ctx(): ShoutoutContext {
   return {

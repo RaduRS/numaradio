@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lenaSpeakShoutout } from "./index.ts";
+import { lenaSpeakShoutout } from "./index";
 
 const T0 = new Date("2026-05-16T23:15:00").getTime();
 

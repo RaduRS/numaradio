@@ -6,9 +6,9 @@ import { stripMarkdown } from "@/lib/strip-markdown";
 import { radioHostTransform } from "@/lib/radio-host";
 import { humanizeScript } from "@/lib/humanize";
 import { synthesizeVertex } from "@/lib/vertex-tts";
-import { lenaSpeakShoutout } from "./lena-producer-shoutout/index.ts";
-import { isProducerShoutoutEnabled } from "./lena-producer-shoutout/feature-flag.ts";
-import { callMiniMaxJson } from "./lena-producer-shoutout/minimax-llm.ts";
+import { lenaSpeakShoutout } from "./lena-producer-shoutout";
+import { isProducerShoutoutEnabled } from "./lena-producer-shoutout/feature-flag";
+import { callMiniMaxJson } from "./lena-producer-shoutout/minimax-llm";
 
 const DEEPGRAM_URL = "https://api.deepgram.com/v1/speak";
 // Helena — the canonical Lena voice used across the station (auto-chatter,
@@ -202,23 +202,78 @@ export async function generateShoutout(
       let producerText: string | null = null;
       if (isProducerShoutoutEnabled(process.env)) {
         try {
-          const stationRow = await prisma.station.findUnique({
-            where: { slug: process.env.STATION_SLUG ?? "numaradio" },
-            select: { id: true },
-          });
-          if (stationRow) {
+          // Resolve station id via pg pool
+          const stationRes = await input.pool.query<{ id: string }>(
+            `SELECT id FROM "Station" WHERE slug = $1 LIMIT 1`,
+            [process.env.STATION_SLUG ?? "numaradio"],
+          );
+          const stationId = stationRes.rows[0]?.id;
+
+          if (stationId) {
             const handle =
               input.source.kind === "agent"
                 ? input.source.sender ?? "anonymous"
                 : input.source.requesterName ?? "anonymous";
+
+            // Build a Prisma-shaped shim around the pg.Pool so lenaSpeakShoutout
+            // can fetch recent shoutouts + chatter without depending on @prisma/client
+            // (which isn't in this app's dependencies).
+            const prismaShim = {
+              shoutout: {
+                findMany: async (args: {
+                  where: { stationId: string; createdAt: { gte: Date } };
+                  orderBy: { createdAt: "desc" };
+                  take: number;
+                  select: { id: true; requesterName: true; cleanText: true; createdAt: true };
+                }) => {
+                  const res = await input.pool.query<{
+                    id: string;
+                    requesterName: string | null;
+                    cleanText: string | null;
+                    createdAt: Date;
+                  }>(
+                    `SELECT id, "requesterName", "cleanText", "createdAt"
+                     FROM "Shoutout"
+                     WHERE "stationId" = $1 AND "createdAt" >= $2
+                     ORDER BY "createdAt" DESC
+                     LIMIT $3`,
+                    [args.where.stationId, args.where.createdAt.gte, args.take],
+                  );
+                  return res.rows;
+                },
+              },
+              chatter: {
+                findMany: async (args: {
+                  where: { stationId: string; airedAt: { gte: Date } };
+                  orderBy: { airedAt: "desc" };
+                  take: number;
+                  select: { id: true; script: true; airedAt: true };
+                }) => {
+                  const res = await input.pool.query<{
+                    id: string;
+                    script: string;
+                    airedAt: Date;
+                  }>(
+                    `SELECT id, script, "airedAt"
+                     FROM "Chatter"
+                     WHERE "stationId" = $1 AND "airedAt" >= $2
+                     ORDER BY "airedAt" DESC
+                     LIMIT $3`,
+                    [args.where.stationId, args.where.airedAt.gte, args.take],
+                  );
+                  return res.rows;
+                },
+              },
+            };
+
             const r = await lenaSpeakShoutout({
               trigger: {
                 source: input.source.kind === "agent" ? "agent_shoutout" : "booth_shoutout",
                 handle,
                 text: plain,
               },
-              prisma,
-              stationId: stationRow.id,
+              prisma: prismaShim,
+              stationId,
               nowMs: Date.now(),
               llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
             });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isProducerShoutoutEnabled } from "./feature-flag.ts";
+import { isProducerShoutoutEnabled } from "./feature-flag";
 
 test("on/true/1 are truthy", () => {
   assert.equal(isProducerShoutoutEnabled({ LENA_PRODUCER_SHOUTOUT: "on" }), true);

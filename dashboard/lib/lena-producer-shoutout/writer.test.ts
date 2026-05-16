@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runShoutoutWriter } from "./writer.ts";
+import { runShoutoutWriter } from "./writer";
 
 const ctx = {
   trigger: { source: "booth_shoutout" as const, handle: "anna", text: "hi" },

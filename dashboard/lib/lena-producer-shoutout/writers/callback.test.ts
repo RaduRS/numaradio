@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildCallbackShoutoutPrompt } from "./callback.ts";
+import { buildCallbackShoutoutPrompt } from "./callback";
 
 const decision = { mode: "shoutout_callback" as const, targetFocus: "tie to bob", callbackTo: "s1", lengthHint: "medium" as const, tone: "warm" as const };
 const ctx = {

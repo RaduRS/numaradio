@@ -1,9 +1,9 @@
-import type { ShoutoutDecision } from "./modes.ts";
-import type { ShoutoutContext } from "./shoutout-context.ts";
-import { buildClassicShoutoutPrompt } from "./writers/classic.ts";
-import { buildInlineShoutoutPrompt } from "./writers/inline.ts";
-import { buildQuoteShoutoutPrompt } from "./writers/quote.ts";
-import { buildCallbackShoutoutPrompt } from "./writers/callback.ts";
+import type { ShoutoutDecision } from "./modes";
+import type { ShoutoutContext } from "./shoutout-context";
+import { buildClassicShoutoutPrompt } from "./writers/classic";
+import { buildInlineShoutoutPrompt } from "./writers/inline";
+import { buildQuoteShoutoutPrompt } from "./writers/quote";
+import { buildCallbackShoutoutPrompt } from "./writers/callback";
 
 export interface ShoutoutWriterDeps {
   llm: (prompts: { system: string; user: string }) => Promise<string>;

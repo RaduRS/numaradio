@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildQuoteShoutoutPrompt } from "./quote.ts";
+import { buildQuoteShoutoutPrompt } from "./quote";
 
 const decision = { mode: "shoutout_quote" as const, targetFocus: "x", callbackTo: null, lengthHint: "short" as const, tone: "warm" as const };
 const ctx = {

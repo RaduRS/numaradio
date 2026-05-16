@@ -1,6 +1,4 @@
 
-import type { PrismaClient } from "@prisma/client";
-
 export interface ShoutoutTrigger {
   source: "booth_shoutout" | "agent_shoutout";
   handle: string;
@@ -41,7 +39,33 @@ export function buildShoutoutContext(args: {
   };
 }
 
-type PrismaSlice = Pick<PrismaClient, "shoutout" | "chatter">;
+export type PrismaSlice = {
+  shoutout: {
+    findMany: (args: {
+      where: { stationId: string; createdAt: { gte: Date } };
+      orderBy: { createdAt: "desc" };
+      take: number;
+      select: { id: true; requesterName: true; cleanText: true; createdAt: true };
+    }) => Promise<Array<{
+      id: string;
+      requesterName: string | null;
+      cleanText: string | null;
+      createdAt: Date;
+    }>>;
+  };
+  chatter: {
+    findMany: (args: {
+      where: { stationId: string; airedAt: { gte: Date } };
+      orderBy: { airedAt: "desc" };
+      take: number;
+      select: { id: true; script: true; airedAt: true };
+    }) => Promise<Array<{
+      id: string;
+      script: string;
+      airedAt: Date;
+    }>>;
+  };
+};
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
 export async function fetchShoutoutContext(args: {

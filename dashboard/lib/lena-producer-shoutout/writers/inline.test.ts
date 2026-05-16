@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildInlineShoutoutPrompt } from "./inline.ts";
+import { buildInlineShoutoutPrompt } from "./inline";
 
 const decision = { mode: "shoutout_inline" as const, targetFocus: "x", callbackTo: null, lengthHint: "short" as const, tone: "warm" as const };
 const ctx = {

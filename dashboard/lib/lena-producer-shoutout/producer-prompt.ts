@@ -1,4 +1,4 @@
-import type { ShoutoutContext } from "./shoutout-context.ts";
+import type { ShoutoutContext } from "./shoutout-context";
 
 const SYSTEM = `You are the producer for Lena, a calm slightly-studio-slang DJ on Numa Radio.
 A listener submitted a shoutout to be read on air. Decide HOW Lena narrates it.

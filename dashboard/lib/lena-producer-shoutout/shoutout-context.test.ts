@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildShoutoutContext, fetchShoutoutContext } from "./shoutout-context.ts";
+import { buildShoutoutContext, fetchShoutoutContext } from "./shoutout-context";
 
 const T0 = new Date("2026-05-16T23:15:00").getTime();
 
