@@ -18,6 +18,9 @@ import { moderateShoutout } from "@/lib/moderate";
 import { classifyShoutoutIntent } from "@/lib/classify-shoutout-intent";
 import { generateLenaReply } from "@/lib/lena-reply";
 import { internalAuthOk } from "@/lib/internal-auth";
+import { lenaSpeakChat } from "@/lib/lena-producer-chat";
+import { isProducerReplyEnabled } from "@/lib/lena-producer-chat/feature-flag";
+import { callMiniMaxJson } from "@/lib/lena-producer-chat/minimax-llm";
 
 export const dynamic = "force-dynamic";
 
@@ -316,27 +319,47 @@ async function runYoutubeChatPipeline(args: {
   let skipHumanize = false;
 
   if (isReply) {
-    // Generate Lena's conversational response. Failure here means we
-    // can't air anything sensible — drop quietly rather than falling
-    // back to the host-rewrite of the listener's words (which sounded
-    // wrong: "inRhino said big thank you" is awkward when the listener
-    // was thanking Lena, not the audience).
-    const reply = await generateLenaReply(moderation.text, { displayName });
-    if (!reply.text) {
-      await prisma.shoutout.update({
-        where: { id: shoutoutId },
-        data: {
-          deliveryStatus: "failed",
-          moderationReason: `reply_gen_${reply.reason}`,
-        },
-      });
-      console.warn(
-        `yt-chat-shoutout: reply generation failed for ${shoutoutId} (${reply.reason})`,
-      );
-      return;
+    let producerResult: { text: string; mode: string } | null = null;
+
+    if (isProducerReplyEnabled(process.env)) {
+      try {
+        const stationRow = await prisma.station.findUnique({ where: { slug: process.env.STATION_SLUG ?? "numaradio" }, select: { id: true } });
+        if (stationRow) {
+          producerResult = await lenaSpeakChat({
+            trigger: { source: "youtube_chat_mention", handle: displayName ?? "anonymous", text: moderation.text },
+            prisma,
+            stationId: stationRow.id,
+            nowMs: Date.now(),
+            llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+          });
+        }
+      } catch (err) {
+        console.warn("[lena-producer-chat] failed, falling back to legacy reply:", err);
+      }
     }
-    textToAir = reply.text;
-    skipHumanize = true;
+
+    if (producerResult) {
+      textToAir = producerResult.text;
+      skipHumanize = true;
+    } else {
+      // Legacy fallback (also runs when flag is off)
+      const reply = await generateLenaReply(moderation.text, { displayName });
+      if (!reply.text) {
+        await prisma.shoutout.update({
+          where: { id: shoutoutId },
+          data: {
+            deliveryStatus: "failed",
+            moderationReason: `reply_gen_${reply.reason}`,
+          },
+        });
+        console.warn(
+          `yt-chat-shoutout: reply generation failed for ${shoutoutId} (${reply.reason})`,
+        );
+        return;
+      }
+      textToAir = reply.text;
+      skipHumanize = true;
+    }
     // Persist what Lena will actually say so the dashboard's Recent
     // feed shows the reply, not the listener's question.
     await prisma.shoutout.update({
