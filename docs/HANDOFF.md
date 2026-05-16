@@ -4,6 +4,41 @@ Last updated: 2026-05-16
 
 ---
 
+## 2026-05-16 — Lena Producer Phase 2.5: Classifier extended to 5 categories — CODE READY, DEPLOYS WITH PHASE 2
+
+Classifier-only change. No new flag — extension is always on. Downstream
+dispatcher (`app/api/internal/youtube-chat-shoutout/route.ts`) treats the
+new categories as shoutout-like for now (the message still airs). Phases
+3 + 5 will route them properly through Producer + QueueDirector.
+
+**Spec:** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-16-lena-producer-phase-2-5.md`
+
+**What ships:**
+- `lib/classify-shoutout-intent.ts`: `IntentCategory` extends from 3 to 5
+  (`shoutout | reply | noise` + `request | shoutout_with_request`).
+  Parser handles the two new decision tokens. `SYSTEM_PROMPT` teaches
+  the model the new categories with examples.
+
+**Behavior change at the listener level:**
+- Previously: "play hotel california by eagles" → classifier returned
+  `reply` → Lena responded conversationally without queuing anything.
+- Now: same message → classifier returns `request` → falls through to
+  shoutout path → Lena reads the message as a shoutout. **This is
+  suboptimal** (the listener wanted a song, not their message aired)
+  but doesn't break anything. Phase 5 (QueueDirector) is when this
+  intent actually triggers a queue insert.
+
+**Deploy:** Code-only change, no env flag. Auto-applies on next deploy.
+1. `cd /home/marku/saas/numaradio && git pull`
+2. Public site auto-deploys on push (Vercel). No daemon restart needed —
+   the classifier is called from the Vercel-side dispatch route.
+
+**Rollback:** Revert the commits. Classifier reverts to 3-category set.
+No DB or env changes to undo.
+
+---
+
 ## 2026-05-16 — Lena Producer Phase 2: Producer + Writer for auto-chatter — CODE READY, NEEDS DEPLOY
 
 First user-visible Lena change. Behind `LENA_PRODUCER_AUTO` flag,
