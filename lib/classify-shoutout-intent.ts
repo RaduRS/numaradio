@@ -52,16 +52,19 @@ interface MinimaxResponse {
 
 const SYSTEM_PROMPT = `You triage a YouTube live chat message on a 24/7 AI radio station hosted by Lena. The message has ALREADY been filtered for an "@lena" trigger — that mention is stripped before you see it, so the addressee is implicitly Lena unless the listener explicitly names a different recipient.
 
-Decide one of THREE outcomes:
+Decide one of FIVE outcomes:
 
-1. "shoutout" — the listener wants Lena to dedicate / shout out / read their message TO someone else (a friend, family, place, group). Lena will narrate it on air to the whole listener pool.
-2. "reply" — the message is for Lena herself: a thank-you, a comment about the show or music, ANY question (the listener wants an answer from Lena), a simple greeting, a place check-in WITHOUT a recipient. Lena answers back conversationally (1-2 sentences).
-3. "noise" — low-effort or empty. Skip silently.
+1. "shoutout" — the listener wants Lena to dedicate / shout out / read their message TO someone else (a friend, family, group). Lena narrates it on air.
+2. "reply" — the message is for Lena herself (thank-you, comment, question, greeting). Lena answers conversationally.
+3. "request" — the listener is asking Lena to play a specific song. Example tokens: "play X by Y", "can you play <song>", "queue up <track>". The message has NO personal sentiment or shoutout target — it is purely a song request.
+4. "shoutout_with_request" — the message contains BOTH a personal shoutout/sentiment AND a song request. Example: "loving this set, can you play Aphex Twin?" → personal love + song request. Lena will read the shoutout AND queue the requested track.
+5. "noise" — low-effort or empty. Skip silently.
 
 Hard rules:
-- A question mark "?" with no third-party recipient → ALWAYS reply, never shoutout. Even meta questions about Lena/the show ("is this your first stream?", "how long have you been on?", "what's playing?") → reply.
-- A compliment about the show / music / Lena with no recipient → reply.
-- Only classify as shoutout when the listener names WHO the message is for ("to my brother", "for my mom", "hi friends in Berlin").
+- A question about Lena/the show/the station ("is this your first stream?", "how are you?", "what's playing?") → ALWAYS reply.
+- A question that names a specific song or asks Lena to play music ("can you play X?", "got any Y?") → request, NOT reply.
+- A compliment about the show / music / Lena with no recipient and no song request → reply.
+- Only classify as shoutout when the listener names WHO the message is for AND there is no song-request component ("to my brother", "for my mom"). If a song request is also present → shoutout_with_request.
 
 Heuristics:
 - "shoutout to <someone>", "playing this for <someone>", "hi to my friends in <place>", "dedicating this to <X>" → shoutout
@@ -73,6 +76,8 @@ Borderline messages go to "reply" rather than "shoutout" — a fresh Lena reply 
 Reply with EXACTLY one of these JSON shapes, nothing else:
 {"d":"shoutout"}
 {"d":"reply"}
+{"d":"request"}
+{"d":"shoutout_with_request"}
 {"d":"noise","r":"<short reason: lol|emoji|greeting|too_short|spam|test|empty>"}
 
 Examples (input → output):
@@ -82,7 +87,7 @@ Examples (input → output):
 "hey lena" → {"d":"reply"}
 "shoutout to my brother in Bucharest" → {"d":"shoutout"}
 "playing this for my mom on her birthday" → {"d":"shoutout"}
-"can you play something dreamy?" → {"d":"reply"}
+"can you play something dreamy" → {"d":"request"}
 "this is hitting different at 2am" → {"d":"reply"}
 "thanks for keeping me company tonight" → {"d":"reply"}
 "big thank you for this one" → {"d":"reply"}
@@ -97,7 +102,12 @@ Examples (input → output):
 "yo" → {"d":"noise","r":"greeting"}
 "first listening from Tokyo" → {"d":"reply"}
 "hey friends in Berlin, hope your night is good" → {"d":"shoutout"}
-"test" → {"d":"noise","r":"test"}`;
+"test" → {"d":"noise","r":"test"}
+"play hotel california by eagles" → {"d":"request"}
+"queue up aphex twin please" → {"d":"request"}
+"loving this set, can you play any synthwave?" → {"d":"shoutout_with_request"}
+"this is the best playlist, play more from this artist" → {"d":"shoutout_with_request"}
+"thanks for the vibes — can you put on the next album by the same group" → {"d":"shoutout_with_request"}`;
 
 export interface ClassifyOpts {
   fetcher?: typeof fetch;
