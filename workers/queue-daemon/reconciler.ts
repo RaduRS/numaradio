@@ -19,6 +19,14 @@ export interface ReconcileDeps {
   log?: (msg: string) => void;
   minAgeMs?: number;
   now?: () => number;
+  /** NEW: returns true if the track is the currently-playing track, OR
+   *  was aired in the last `recentPlayWindowMs` (default 5 min). Used as
+   *  defense-in-depth: if we know the track was just played, we don't
+   *  re-push it even if its DB row is somehow still 'staged'. */
+  isTrackRecentlyPlayed?: (trackId: string) => Promise<boolean>;
+  /** NEW: marks a staged row as completed (called when we detected the
+   *  track already played but its status didn't transition). */
+  markCompleted?: (queueItemId: string) => Promise<void>;
 }
 
 export type ReconcileResult = {
@@ -50,6 +58,25 @@ export async function reconcilePriorityQueue(deps: ReconcileDeps): Promise<Recon
     const url = await deps.resolveAssetUrl(item.trackId);
     if (!url) continue;
     if (liquidsoapUrls.has(url)) continue;
+
+    // Defense-in-depth: if track was just played, don't re-push.
+    // Mark the row as completed so future ticks skip it cleanly.
+    if (deps.isTrackRecentlyPlayed) {
+      try {
+        const recentlyPlayed = await deps.isTrackRecentlyPlayed(item.trackId);
+        if (recentlyPlayed) {
+          if (deps.markCompleted) {
+            await deps.markCompleted(item.id);
+          }
+          log(`[reconciler] skipped re-push of ${item.id} (track recently played, marked completed)`);
+          continue;
+        }
+      } catch (err) {
+        log(`[reconciler] recent-play check failed for ${item.id}: ${err instanceof Error ? err.message : String(err)}`);
+        // Fail-open: proceed with re-push (current behavior)
+      }
+    }
+
     try {
       await deps.send(`priority.push ${url}`);
       repushed++;

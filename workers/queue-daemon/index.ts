@@ -780,6 +780,30 @@ async function main() {
         request: (cmd, timeoutMs) => sock.request(cmd, timeoutMs),
         send: (line) => sock.send(line),
         log: (msg) => console.log(msg),
+        isTrackRecentlyPlayed: async (trackId: string) => {
+          // Check NowPlaying first (current track)
+          const np = await prisma.nowPlaying.findFirst({
+            where: { stationId: await stationId() },
+            select: { currentTrackId: true },
+          });
+          if (np?.currentTrackId === trackId) return true;
+          // Then check last 5 min of PlayHistory
+          const recent = await prisma.playHistory.findFirst({
+            where: {
+              trackId,
+              startedAt: { gte: new Date(Date.now() - 5 * 60_000) },
+              segmentType: "audio_track",
+            },
+            select: { id: true },
+          });
+          return !!recent;
+        },
+        markCompleted: async (queueItemId: string) => {
+          await prisma.queueItem.update({
+            where: { id: queueItemId },
+            data: { queueStatus: "completed" },
+          });
+        },
       });
       if (r.repushed > 0) {
         console.log(`[reconciler] tick: staged=${r.stagedInDb} liquidsoap=${r.inLiquidsoap} repushed=${r.repushed}`);
