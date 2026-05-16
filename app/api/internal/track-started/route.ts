@@ -56,11 +56,14 @@ export async function POST(req: Request) {
     durationSeconds: number | null;
     title: string;
     airingPolicy: "library" | "request_only" | "priority_request" | "hold";
+    artistDisplay: string | null;
+    genre: string | null;
+    bpm: number | null;
   } | null = null;
   if (trackId) {
     track = await prisma.track.findUnique({
       where: { id: trackId },
-      select: { id: true, stationId: true, durationSeconds: true, title: true, airingPolicy: true },
+      select: { id: true, stationId: true, durationSeconds: true, title: true, airingPolicy: true, artistDisplay: true, genre: true, bpm: true },
     });
   }
   if (!track && body.title) {
@@ -72,7 +75,7 @@ export async function POST(req: Request) {
           ? { artistDisplay: { equals: body.artist, mode: "insensitive" } }
           : {}),
       },
-      select: { id: true, stationId: true, durationSeconds: true, title: true, airingPolicy: true },
+      select: { id: true, stationId: true, durationSeconds: true, title: true, airingPolicy: true, artistDisplay: true, genre: true, bpm: true },
       orderBy: { updatedAt: "desc" },
     });
   }
@@ -174,9 +177,9 @@ export async function POST(req: Request) {
       id: track.id, // Use Track.id as event id (PlayHistory.id not available here without re-select)
       trackId: track.id,
       title: track.title,
-      artist: (track as { artistDisplay?: string | null }).artistDisplay ?? null,
-      genre: (track as { genre?: string | null }).genre ?? null,
-      bpm: (track as { bpm?: number | null }).bpm ?? null,
+      artist: track.artistDisplay ?? null,
+      genre: track.genre ?? null,
+      bpm: track.bpm ?? null,
       key: null,
       airedAt: startedAt.getTime(),
     });
