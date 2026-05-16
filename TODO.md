@@ -165,3 +165,63 @@ listener-driven queue inserts on top.
 
 ---
 
+
+## Lena Producer — Website song-request surface
+
+**Status:** parked 2026-05-16. Phase 5b shipped YouTube-only listener
+requests (`@lena play X` in chat → catalog lookup → queue insert via
+`/api/internal/lena-queue`). Website booth (numaradio.com) still has
+NO way for listeners to request a library track.
+
+**Resume trigger:** after Phase 5b has been observed live for 3+ days
+with no reconciler-loop incidents, no stale "queued up" announcements,
+no false-decline complaints from listeners. Verify YouTube path is
+rock-solid before doubling the surface.
+
+### Why parked
+
+Tonight (2026-05-16) had two prod incidents in the request flow:
+1. Loop bug — `lib/lena-producer-chat` bypassed `pushHandler`, reconciler
+   re-played Fault Lines 4× in a row. Fixed in `f29078e`.
+2. Temporal-frame bug — Lena announced "Silhouette queued up" while
+   the track was ending. Fixed in `68e3eb9`.
+
+Doubling the surface before the YouTube path is observed clean would
+amplify any latent bug to the website audience too.
+
+### What to build
+
+A new input on numaradio.com that submits library-track requests
+through the same backend as YouTube chat. Options for UX:
+
+- **Option A:** new third tab on the booth ("Play a track"), text input
+  with autocomplete against catalog
+- **Option B:** add a "Play this track" button to each entry in the
+  existing library/now-playing surface
+- **Option C:** voice search ("type or speak a song title")
+
+### Files likely touched
+
+- `app/_components/RequestForm.tsx` or a new component
+- New `app/api/booth/request-track/route.ts` (Vercel) — calls the
+  existing `api.numaradio.com/api/internal/lena-queue` dashboard endpoint
+  with `INTERNAL_API_SECRET`
+- Catalog autocomplete endpoint (probably reuses `lib/catalog-lookup.ts`)
+
+### Cross-cuts
+
+- Catalog disclosure: listeners can request things that aren't in the
+  catalog → decline reason "not_in_catalog" airs on stream. Avoid
+  spamming this by adding client-side autocomplete that only shows
+  matchable tracks.
+- Rate limit: `priority_request` band is shared with shoutouts. Allow
+  N requests per IP per hour (like booth submit). Same per-author rate
+  limit pattern as YouTube chat (3/hr).
+- Anonymous vs named: dashboard already has a sanitiseName helper for
+  YouTube — reuse for website too.
+
+### Estimated size
+
+~6-8 tasks. Smaller than Phase 5b because backend already exists
+(`/api/internal/lena-queue`). Mostly frontend + a thin Vercel proxy
+route + rate-limit wiring.
