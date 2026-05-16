@@ -8,9 +8,21 @@ export function isValidEmail(s: unknown): boolean {
   return typeof s === "string" && EMAIL_RE.test(s.trim()) && s.trim().length <= 254;
 }
 
+// Strip http(s):// and www. URLs, including parenthesised/bracketed
+// wrappers like "(https://suno.com/@foo)". Submitters occasionally paste
+// their Suno/Bandcamp/Spotify profile into the artist field — we never
+// want those links on air or in the library listing.
+function stripUrls(s: string): string {
+  return s
+    .replace(/\s*[([]\s*(?:https?:\/\/|www\.)[^\s)\]]*\s*[)\]]\s*/gi, " ")
+    .replace(/(?:https?:\/\/|www\.)\S+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function isValidName(s: unknown): boolean {
   if (typeof s !== "string") return false;
-  const t = s.trim();
+  const t = stripUrls(s);
   return t.length >= 2 && t.length <= 80;
 }
 
@@ -19,7 +31,7 @@ export function normalizeEmail(s: string): string {
 }
 
 export function normalizeName(s: string): string {
-  return s.trim();
+  return stripUrls(s);
 }
 
 export function isValidTrackTitle(s: unknown): boolean {

@@ -32,6 +32,43 @@ test("isValidName trims and enforces 2..80 chars", () => {
   assert.equal(isValidName("x".repeat(81)), false);
 });
 
+test("isValidName ignores stripped URLs when checking length", () => {
+  // Pure-URL name: nothing left after strip → invalid
+  assert.equal(isValidName("https://suno.com/@captaintenille"), false);
+  assert.equal(isValidName("www.example.com/me"), false);
+  // Real name with a tacked-on link: still valid
+  assert.equal(
+    isValidName("Alchemical Dependency (https://suno.com/@captaintenille)"),
+    true,
+  );
+});
+
+test("normalizeName strips http(s) and www links and their wrappers", () => {
+  assert.equal(
+    normalizeName("Alchemical Dependency (https://suno.com/@captaintenille)"),
+    "Alchemical Dependency",
+  );
+  assert.equal(
+    normalizeName("CaptainTenille [https://suno.com/@captaintenille]"),
+    "CaptainTenille",
+  );
+  assert.equal(
+    normalizeName("DJ Foo https://example.com/x"),
+    "DJ Foo",
+  );
+  assert.equal(
+    normalizeName("Bar Baz www.example.com/y"),
+    "Bar Baz",
+  );
+  // Collapse runs of whitespace produced by stripping
+  assert.equal(
+    normalizeName("Mid https://x.io/a Name"),
+    "Mid Name",
+  );
+  // No URL → unchanged (just trimmed)
+  assert.equal(normalizeName("  Just A Name  "), "Just A Name");
+});
+
 test("sniffMp3 accepts ID3-tagged MP3", () => {
   // ID3 header: 'I' 'D' '3' followed by version + flags + size
   const buf = Buffer.from([0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
