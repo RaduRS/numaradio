@@ -4,6 +4,60 @@ Last updated: 2026-05-16
 
 ---
 
+## 2026-05-16 — Lena Producer Phase 3: YouTube replies through Producer — CODE READY, NEEDS ENV
+
+YouTube `@lena` chat replies now optionally route through the new
+Producer + Writer pipeline (Producer-lite, runs Vercel-side because
+`.vercelignore` excludes `workers/`). Behind `LENA_PRODUCER_REPLY`
+flag, default off. When off, existing `generateLenaReply()` path is
+unchanged.
+
+**Spec:** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-16-lena-producer-phase-3.md`
+
+**What ships:**
+- `lib/lena-producer-chat/` — sibling module to the daemon-side
+  Producer. ChatContext fetched from Postgres (last 30min of
+  Shoutouts + Chatter). Modes: `answer` (default) + `callback` (when
+  a recent shoutout fits). No `silence` — direct mentions ALWAYS get
+  a response (per the "Lena never ignores a direct mention" rule).
+- `app/api/internal/youtube-chat-shoutout/route.ts:318-360` gated:
+  flag on → try `lenaSpeakChat()`; on null/error → fall back to
+  legacy `generateLenaReply()`.
+
+**Deploy:**
+1. `cd /home/marku/saas/numaradio && git pull`
+2. Add `LENA_PRODUCER_REPLY=on` to Vercel env vars (Production +
+   Preview), via dashboard or CLI:
+   ```
+   vercel env add LENA_PRODUCER_REPLY production
+   # enter: on
+   ```
+3. Redeploy to pick up the env var (Vercel auto-redeploys on env
+   change, or push a no-op commit).
+4. Test: from a non-owner YouTube account on a live broadcast, send
+   `@lena what are you spinning tonight` and confirm Lena's response
+   addresses you by handle and feels conversational (not formulaic).
+   Send a second `@lena thanks for that` and watch for `callback`
+   mode kicking in if the first message landed as a shoutout.
+
+**Rollback:** unset `LENA_PRODUCER_REPLY` in Vercel env, redeploy.
+Legacy `generateLenaReply` resumes immediately.
+
+**What to watch:**
+- `[lena-producer-chat] failed, falling back to legacy reply:` in
+  Vercel logs → Producer-side error (DB miss, MiniMax timeout,
+  invalid JSON). Hardening can be added if frequent.
+- Vercel function duration for `/api/internal/youtube-chat-shoutout`
+  goes up by ~2 MiniMax calls (Producer + Writer) when flag on.
+  Currently runs in `after()` so listener-side wait is unaffected.
+
+**Next phase:** Phase 4 routes shoutout narration through Producer +
+fixes the `,.` regex bug in `dashboard/lib/radio-host.ts` + scrubs
+"let it ride" examples in `dashboard/lib/humanize.ts`.
+
+---
+
 ## 2026-05-16 — Lena Producer Phase 2.5: Classifier extended to 5 categories — CODE READY, DEPLOYS WITH PHASE 2
 
 Classifier-only change. No new flag — extension is always on. Downstream
