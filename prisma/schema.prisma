@@ -210,15 +210,17 @@ model Station {
 /// lives in B2 (referenced by audioUrl); the script is the canonical
 /// text representation.
 model Chatter {
-  id          String   @id @default(cuid())
-  stationId   String
-  /// "back_announce" | "shoutout_cta" | "song_cta" | "filler"
-  chatterType String
-  /// 1..20 — slot index in the daemon's rotation buffer
-  slot        Int
-  script      String
-  audioUrl    String?
-  airedAt     DateTime @default(now())
+  id              String   @id @default(cuid())
+  stationId       String
+  /// "back_announce" | "shoutout_cta" | "song_cta" | "filler" | (post-Producer: any ProducerMode string)
+  chatterType     String
+  /// 1..20 — slot index in the daemon's rotation buffer (pre-Producer); null for Producer-era rows
+  slot            Int
+  script          String
+  audioUrl        String?
+  airedAt         DateTime @default(now())
+  /// null for pre-Producer rows; 1+ for Producer-era rows so reconstruction can distinguish vocabularies.
+  producerVersion Int?
 
   station Station @relation(fields: [stationId], references: [id])
 
