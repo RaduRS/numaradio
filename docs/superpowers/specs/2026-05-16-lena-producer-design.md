@@ -76,6 +76,7 @@ workers/queue-daemon/lena-producer/
 │   ├── aside.ts
 │   ├── answer.ts
 │   ├── shoutout-read.ts
+│   ├── shoutout-with-request.ts
 │   ├── queue-pick.ts
 │   ├── accept-request.ts
 │   ├── accept-request-deferred.ts
@@ -188,6 +189,7 @@ INPUTS:
 OUTPUT (strict JSON, no prose):
 {
   "mode": "opinion" | "callback" | "aside" | "answer" | "shoutout_read"
+        | "shoutout_with_request"
         | "queue_pick" | "accept_request" | "accept_request_deferred"
         | "decline_request" | "silence",
   "target_focus": "<one short phrase>",
@@ -209,13 +211,29 @@ RULES:
 - For auto_track_boundary: "silence" is valid and often correct.
 - Do not repeat a mode that appears 3+ times in recentLinesSummary.
 - "callback" only if a callbackPool entry truly fits this moment.
-- length_hint: short=4-12 words, medium=25-45, long=50-80.
+- length_hint: short=4-25 words, medium=25-45, long=50-80.
 - Tone should track mood.
 - For youtube_chat_request with no catalog candidates → mode=decline_request, decline_reason=not_in_catalog.
 - For youtube_chat_request where candidate.trackId appears in recentlyAired (last 60 min)
   → mode=decline_request, decline_reason=recently_aired.
 - For youtube_chat_request accepted but upcomingQueue.next5 has ≥2 priority_request items already
   → mode=accept_request_deferred (not accept_request).
+- For a single message containing BOTH personal/shoutout sentiment AND a song request
+  (classifier returns intent='shoutout_with_request') → mode=shoutout_with_request with
+  queue_action of kind=accept_request (or accept_request_deferred if queue is deep).
+  Writer reads the shoutout AND announces the queued track in one breath.
+
+Per-mode default length (Producer should pick these unless context says otherwise):
+  opinion              → medium
+  callback             → medium
+  aside                → medium (long when late-shift storytelling fits)
+  answer               → short
+  shoutout_read        → medium
+  shoutout_with_request→ medium
+  queue_pick           → short
+  accept_request       → short
+  accept_request_deferred → short to medium (must include queue-position phrasing)
+  decline_request      → short
 ```
 
 ### Validation + retry
@@ -272,6 +290,8 @@ Wraps `workers/queue-daemon/index.ts:382-401` `createQueueItemAtomically`. Enfor
 
 Lena's `queue_pick` and `accept_request` inserts go to the end of the existing `priority_request` band via `createQueueItemAtomically` (same code path as listener song-requests and operator pushes). The `pg_advisory_xact_lock` keyed on `stationId + ":priority_request"` is reused. **No new queue band.**
 
+**Generated music always takes priority.** The base m3u rotation (scheduled tracks accepted from `numaradio-suno`) is the foundation and plays as-is; `priority_request` only *interleaves* between scheduled tracks (existing behavior — shoutouts and listener picks both use this band). Lena's queue actions never displace, reorder, or skip scheduled rotation. Listener requests and Lena's own picks compete with each other inside `priority_request`, not against the rotation.
+
 When `upcomingQueue.next5` already contains ≥2 `priority_request` items, Producer is required to choose `accept_request_deferred` (not `accept_request`) so the Writer's line is accurate.
 
 ### Failure path: queue_action rejected
@@ -282,11 +302,12 @@ If QueueDirector rejects Producer's `queue_action` (e.g., race — track aired b
 
 ```ts
 type TriggerPayload =
-  | { source: 'auto_track_boundary',    nextTrack, mood }
-  | { source: 'youtube_chat_mention',   handle, text, classifiedIntent: 'reply' }
-  | { source: 'youtube_chat_shoutout',  handle, text }
-  | { source: 'youtube_chat_request',   handle, text, candidateTracks: Track[] }  // NEW
-  | { source: 'operator_force',         hint }
+  | { source: 'auto_track_boundary',         nextTrack, mood }
+  | { source: 'youtube_chat_mention',        handle, text, classifiedIntent: 'reply' }
+  | { source: 'youtube_chat_shoutout',       handle, text }
+  | { source: 'youtube_chat_request',        handle, text, candidateTracks: Track[] }            // NEW
+  | { source: 'youtube_chat_shoutout_with_request', handle, text, candidateTracks: Track[] }    // NEW
+  | { source: 'operator_force',              hint }
 
 export async function lenaSpeak(trigger: TriggerPayload): Promise<LenaResult | null>
 // returns null only when Producer picks mode=silence (auto_track_boundary only)
@@ -298,7 +319,12 @@ Surfaces:
 
 ### Classifier change
 
-`lib/classify-shoutout-intent.ts` (existing tri-state: `shoutout | reply | noise`) extends to four states: `shoutout | reply | request | noise`. Classifier output `request` triggers a catalog lookup; resolved candidate tracks are attached to the trigger payload before Producer call. **Classifier extension ships as its own gated step (Phase 2.5 below).**
+`lib/classify-shoutout-intent.ts` (existing tri-state: `shoutout | reply | noise`) extends to five states: `shoutout | reply | request | shoutout_with_request | noise`.
+
+- `request` — pure song request, no personal message ("@lena play X")
+- `shoutout_with_request` — personal message + song request in one ("@lena loving this set, can you play X")
+
+For both `request` and `shoutout_with_request`, the classifier triggers a catalog lookup; resolved candidate tracks are attached to the trigger payload before Producer call. **Classifier extension ships as its own gated step (Phase 2.5 below).**
 
 ### YouTube `@lena` mention rule
 
