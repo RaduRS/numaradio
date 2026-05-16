@@ -4,6 +4,68 @@ Last updated: 2026-05-16
 
 ---
 
+## 2026-05-16 — Lena Producer Phase 2: Producer + Writer for auto-chatter — CODE READY, NEEDS DEPLOY
+
+First user-visible Lena change. Behind `LENA_PRODUCER_AUTO` flag,
+default off. Phase 1 (ShiftMemory) MUST be deployed and `LENA_SHIFT_MEMORY=on`
+for the Producer path to activate — Producer needs ShiftMemory.view()
+to read history.
+
+**Spec:** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-16-lena-producer-phase-2.md`
+
+**What ships:**
+- `workers/queue-daemon/lena-producer/` adds: producer.ts (JSON-validated
+  decision), writer.ts (per-mode prompt dispatcher), writers/
+  {opinion,aside,callback}.ts, producer-context.ts, producer-prompt.ts,
+  modes.ts, fallbacks.ts, index.ts (lenaSpeak public API)
+- `auto-host.ts:generateAsset` gated: if `LENA_PRODUCER_AUTO=on` AND
+  lenaSpeak dep present, use the new pipeline; otherwise legacy
+  promptFor+generateScript runs unchanged.
+- Chatter rows from the Producer path get `producerVersion: 1` and
+  `chatterType` set to the ProducerMode ("opinion" / "aside" /
+  "callback"). Legacy rows keep their rotation type.
+
+**Deploy:**
+1. `cd /home/marku/saas/numaradio && git pull`
+2. Confirm Phase 1 is live: `LENA_SHIFT_MEMORY=on` in `/etc/numa/env`
+   and the daemon log shows `[lena-shift-memory] booted with N events`
+3. Add `LENA_PRODUCER_AUTO=on` to `/etc/numa/env`:
+   ```
+   sudo nano /etc/numa/env
+   # add: LENA_PRODUCER_AUTO=on
+   ```
+4. `sudo systemctl restart numa-queue-daemon`
+5. Watch the first 3-5 auto-chatter breaks:
+   ```
+   journalctl --user -u numa-queue-daemon -f | grep -E "auto-chatter|producer"
+   ```
+   Expect Lena lines that don't say "let it ride", vary in length
+   (sometimes silence — that's Producer choosing not to talk), and
+   occasionally reference earlier shoutouts ("Anna's been with us
+   tonight" patterns).
+
+**Rollback:** `LENA_PRODUCER_AUTO=off` in `/etc/numa/env`, restart
+the daemon. Code stays loaded but the gate flips back to legacy path.
+
+**What to watch:**
+- Producer falls back to safe-default (aside / low-key / short) on
+  malformed JSON — search `safeDefaultDecision` hits in logs.
+- If `producer_silence_or_writer_fail` fires often → either the
+  Writer LLM is flaky or the silence rate feels too high (tune by
+  editing producer-prompt.ts rules).
+- Latency: Producer + Writer is 2 MiniMax calls. ~2-8s typical, ~16s
+  worst-case with one Producer retry. Auto-host's existing timing
+  budget covers this for tracks >90s; very short tracks may see
+  pre-push offset eaten. Monitor via `[auto-chatter] slot=...`
+  log spacing.
+
+**Next phase:** Phase 2.5 extends the YouTube classifier with `request`
++ `shoutout_with_request` intents (no behavior change, just new
+classifier outputs ready for Phases 3/5 to consume).
+
+---
+
 ## 2026-05-16 — Lena Producer Phase 1: ShiftMemory + NOTIFY — CODE READY, NEEDS DEPLOY
 
 Foundation for the new Lena Producer architecture. Read-only,
