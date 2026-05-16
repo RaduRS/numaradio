@@ -17,6 +17,7 @@ export function safeDefaultDecision(args: { source: "auto_track_boundary" }): Pr
       lengthHint: "short",
       tone: "low-key",
       addressListener: null,
+      queueAction: null,
     };
   }
   throw new Error(`safeDefaultDecision: unsupported source ${args.source}`);

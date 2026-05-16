@@ -39,6 +39,7 @@ function parseDecision(
     lengthHint: o.length_hint as ProducerDecision["lengthHint"],
     tone: o.tone as ProducerDecision["tone"],
     addressListener: null, // auto_track_boundary
+    queueAction: null, // Phase 5 (T4) will populate this for mode='queue_pick'
   };
 }
 

@@ -63,12 +63,12 @@ test("runProducer: two bad calls → safeDefaultDecision (aside / low-key / shor
   assert.equal(d.tone, "low-key");
 });
 
-test("runProducer: invalid mode (not in PHASE_2_MODES) → retry, then fallback", async () => {
+test("runProducer: invalid mode (not in PRODUCER_MODES_AVAILABLE) → retry, then fallback", async () => {
   let call = 0;
   const llm = async () => {
     call += 1;
     return JSON.stringify({
-      mode: "queue_pick",
+      mode: "answer",
       target_focus: "x",
       callback_to: null,
       length_hint: "short",

@@ -17,7 +17,7 @@ const ctx: ProducerContext = {
 };
 
 test("runWriter mode=opinion uses opinion prompt and returns the LLM's trimmed text", async () => {
-  const decision: ProducerDecision = { mode: "opinion", targetFocus: "x", callbackTo: null, lengthHint: "short", tone: "warm", addressListener: null };
+  const decision: ProducerDecision = { mode: "opinion", targetFocus: "x", callbackTo: null, lengthHint: "short", tone: "warm", addressListener: null, queueAction: null };
   const llm = async (p: { system: string }) => {
     assert.match(p.system, /opinion/i);
     return "  this one's grown on me.  \n";
@@ -27,7 +27,7 @@ test("runWriter mode=opinion uses opinion prompt and returns the LLM's trimmed t
 });
 
 test("runWriter mode=aside uses aside prompt", async () => {
-  const decision: ProducerDecision = { mode: "aside", targetFocus: "x", callbackTo: null, lengthHint: "short", tone: "low-key", addressListener: null };
+  const decision: ProducerDecision = { mode: "aside", targetFocus: "x", callbackTo: null, lengthHint: "short", tone: "low-key", addressListener: null, queueAction: null };
   const llm = async (p: { system: string }) => {
     assert.match(p.system, /aside/i);
     return "still and easy in here tonight.";
@@ -37,7 +37,7 @@ test("runWriter mode=aside uses aside prompt", async () => {
 });
 
 test("runWriter mode=callback uses callback prompt", async () => {
-  const decision: ProducerDecision = { mode: "callback", targetFocus: "x", callbackTo: "s1", lengthHint: "short", tone: "warm", addressListener: null };
+  const decision: ProducerDecision = { mode: "callback", targetFocus: "x", callbackTo: "s1", lengthHint: "short", tone: "warm", addressListener: null, queueAction: null };
   const llm = async (p: { system: string }) => {
     assert.match(p.system, /callback/i);
     return "anna's been with us a while.";
@@ -47,7 +47,7 @@ test("runWriter mode=callback uses callback prompt", async () => {
 });
 
 test("runWriter mode=silence returns null without calling LLM", async () => {
-  const decision: ProducerDecision = { mode: "silence", targetFocus: "", callbackTo: null, lengthHint: "short", tone: "low-key", addressListener: null };
+  const decision: ProducerDecision = { mode: "silence", targetFocus: "", callbackTo: null, lengthHint: "short", tone: "low-key", addressListener: null, queueAction: null };
   let called = false;
   const llm = async () => {
     called = true;
@@ -59,7 +59,7 @@ test("runWriter mode=silence returns null without calling LLM", async () => {
 });
 
 test("runWriter throws on unsupported mode (for Phase 2 — answer/shoutout_read etc. land in 3-5)", async () => {
-  const decision: ProducerDecision = { mode: "answer", targetFocus: "x", callbackTo: null, lengthHint: "short", tone: "warm", addressListener: null };
+  const decision: ProducerDecision = { mode: "answer", targetFocus: "x", callbackTo: null, lengthHint: "short", tone: "warm", addressListener: null, queueAction: null };
   const llm = async () => "ok";
   await assert.rejects(() => runWriter(decision, ctx, [], { llm }), /unsupported mode/i);
 });

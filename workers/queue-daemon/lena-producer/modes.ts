@@ -17,6 +17,8 @@ export interface ProducerDecision {
   tone: "dry" | "warm" | "playful" | "low-key";
   /** Optional listener handle for direct-address modes. null for auto_track_boundary. */
   addressListener: string | null;
+  /** Phase 5: when mode='queue_pick', the track Producer wants to insert. */
+  queueAction: { kind: "pick"; trackId: string; reason: string } | null;
 }
 
 /** Word-count window per length hint. Used by the Writer prompt + sanity checks. */
@@ -27,13 +29,18 @@ export const LENGTH_WORDS: Record<ProducerDecision["lengthHint"], { min: number;
 };
 
 /**
- * Phase 2 supports these modes only — silence is conditional, the rest
- * are content modes. Other modes (answer, shoutout_read, queue_*, etc.)
- * are spec-defined but land in Phases 3-5.
+ * Modes the Producer may emit. Phase 2 originally shipped opinion / callback
+ * / aside / silence; Phase 5 adds queue_pick (daemon-side queue autonomy).
+ * Other modes (answer, shoutout_read, accept_request, etc.) are spec-defined
+ * but land in later phases.
  */
-export const PHASE_2_MODES: ReadonlyArray<ProducerMode> = [
+export const PRODUCER_MODES_AVAILABLE: ReadonlyArray<ProducerMode> = [
   "opinion",
   "callback",
   "aside",
+  "queue_pick", // NEW Phase 5 mode
   "silence",
 ];
+
+// Backwards compat — keep the old name as an alias so producer.ts doesn't break
+export const PHASE_2_MODES = PRODUCER_MODES_AVAILABLE;

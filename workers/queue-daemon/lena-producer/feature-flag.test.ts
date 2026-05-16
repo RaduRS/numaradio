@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isShiftMemoryEnabled, isProducerAutoEnabled } from "./feature-flag.ts";
+import { isShiftMemoryEnabled, isProducerAutoEnabled, isQueueAutonomyEnabled } from "./feature-flag.ts";
 
 test("isShiftMemoryEnabled returns true when env='on'", () => {
   assert.equal(isShiftMemoryEnabled({ LENA_SHIFT_MEMORY: "on" }), true);
@@ -33,3 +33,7 @@ test("isProducerAutoEnabled returns false when env is unset", () => {
 test("isProducerAutoEnabled returns false when env='off'", () => {
   assert.equal(isProducerAutoEnabled({ LENA_PRODUCER_AUTO: "off" }), false);
 });
+
+test("isQueueAutonomyEnabled returns true when env='on'", () => assert.equal(isQueueAutonomyEnabled({ LENA_QUEUE_AUTONOMY: "on" }), true));
+test("isQueueAutonomyEnabled returns false when unset", () => assert.equal(isQueueAutonomyEnabled({}), false));
+test("isQueueAutonomyEnabled returns false when env='off'", () => assert.equal(isQueueAutonomyEnabled({ LENA_QUEUE_AUTONOMY: "off" }), false));
