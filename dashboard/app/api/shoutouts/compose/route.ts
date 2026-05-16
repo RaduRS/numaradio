@@ -46,7 +46,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         pool: getDbPool(),
       });
       console.info(
-        `action=shoutout source=dashboard operator=${operator} track=${result.trackId} queue=${result.queueItemId}`,
+        `action=shoutout source=dashboard operator=${operator} track=${result.trackId} queue=${result.queueItemId} spokenText=${JSON.stringify(result.spokenText ?? "(none)")}`,
       );
     } catch (e) {
       if (e instanceof ShoutoutError) {

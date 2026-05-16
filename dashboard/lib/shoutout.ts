@@ -210,9 +210,13 @@ export async function generateShoutout(
           const stationId = stationRes.rows[0]?.id;
 
           if (stationId) {
+            // For agent (operator/dashboard) sources, the "sender" field is the
+            // OPERATOR's CF Access email — NEVER expose that to the LLM, which would
+            // embed it in Lena's spoken text and air it. Operator-composed shoutouts
+            // are from "the booth" (no listener attribution applicable).
             const handle =
               input.source.kind === "agent"
-                ? input.source.sender ?? "anonymous"
+                ? "the booth"
                 : input.source.requesterName ?? "anonymous";
 
             // Build a Prisma-shaped shim around the pg.Pool so lenaSpeakShoutout
@@ -398,9 +402,13 @@ export async function generateShoutout(
   // switch to track-started for true air-time fidelity. The few-minute
   // delta is acceptable for callback-pool purposes.
   try {
+    // Same sanitisation as the Phase 4b handle above — the ShiftMemory
+    // handle ends up in the callback-summarizer prompt (LLM input) and
+    // could be quoted back on air via a future callback. Never leak the
+    // operator's CF Access email through this path either.
     const handle =
       input.source.kind === "agent"
-        ? input.source.sender ?? "anonymous"
+        ? "the booth"
         : input.source.requesterName ?? "anonymous";
     const payload = JSON.stringify({
       type: "shoutout_aired",
