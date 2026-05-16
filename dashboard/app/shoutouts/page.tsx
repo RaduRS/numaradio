@@ -376,12 +376,12 @@ export default function ShoutoutsPage() {
       });
     }
 
-    // Chatter DB rows — the daemon's lastPushes ring only holds the
-    // last 10, so anything older falls off. The Chatter table is the
-    // durable source of truth for every Lena auto-chatter utterance.
-    const seenChatterAt = new Set<string>();
+    // Chatter DB rows — the Chatter table is the durable source of
+    // truth for every Lena auto-chatter utterance. The daemon's
+    // lastPushes ring is intentionally ignored for chatter: it caps
+    // at 10 entries AND its trackId encodes the legacy slot rotation
+    // type, not the Producer-chosen mode, so it disagreed with the DB.
     for (const c of data?.chatter ?? []) {
-      seenChatterAt.add(c.airedAt);
       list.push({
         kind: "chatter",
         id: `c-db-${c.id}`,
@@ -392,24 +392,11 @@ export default function ShoutoutsPage() {
       });
     }
 
-    // Daemon lastPushes split into chatter / announce / unknown.
-    // Chatter entries that already came from the DB above are skipped
-    // (deduped by `at` timestamp) so we don't double-list the last 10.
+    // Daemon lastPushes — only announce/unknown entries. Chatter is
+    // sourced from the DB above (no double-listing, no wrong types).
     for (const p of daemonPoll.data?.lastPushes ?? []) {
       if (!p.trackId || !p.at) continue;
-      if (p.trackId.startsWith("auto-chatter:")) {
-        if (seenChatterAt.has(p.at)) continue;
-        // trackId format: auto-chatter:<chatterId>:<type>:slot<N>
-        const parts = p.trackId.split(":");
-        list.push({
-          kind: "chatter",
-          id: `c-${p.at}-${parts[1] ?? ""}`,
-          at: p.at,
-          script: cleanWallText(p.script ?? ""),
-          type: parts[2] ?? "?",
-          slot: parts[3] ?? "?",
-        });
-      } else if (p.trackId.startsWith("announce:")) {
+      if (p.trackId.startsWith("announce:")) {
         // trackId format: announce:<realTrackId>:<chatterId>
         const parts = p.trackId.split(":");
         list.push({
