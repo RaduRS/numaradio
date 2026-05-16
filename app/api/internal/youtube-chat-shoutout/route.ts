@@ -25,6 +25,16 @@ import { lookupCatalogCandidates } from "@/lib/catalog-lookup";
 
 export const dynamic = "force-dynamic";
 
+/** Strip [YT]/[Booth] prefix + leading @ from a display name before sanitisation.
+ *  Handles YouTube handles like "[YT] @inRhino" → "inRhino". */
+function cleanChatHandle(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return raw
+    .replace(/^\s*\[(YT|Booth|booth|yt)\]\s*/i, "")
+    .replace(/^@+/, "")
+    .trim() || null;
+}
+
 const MIN_CHARS = 4;
 const MAX_CHARS = 240;
 const MAX_NAME = 60;
@@ -232,7 +242,7 @@ async function runYoutubeChatPipeline(args: {
 
   if (isRequest && requestIntent && isRequestAutonomyEnabled(process.env)) {
     try {
-      const safeHandle = sanitiseName(displayName) ?? "anonymous";
+      const safeHandle = sanitiseName(cleanChatHandle(displayName)) ?? "anonymous";
       const candidates = await lookupCatalogCandidates({
         prisma,
         stationId,
@@ -421,7 +431,7 @@ async function runYoutubeChatPipeline(args: {
           const stationRow = await prisma.station.findUnique({ where: { slug: process.env.STATION_SLUG ?? "numaradio" }, select: { id: true } });
           if (stationRow) {
             producerResult = await lenaSpeakChat({
-              trigger: { source: "youtube_chat_mention", handle: displayName ?? "anonymous", text: moderation.text },
+              trigger: { source: "youtube_chat_mention", handle: sanitiseName(cleanChatHandle(displayName)) ?? "anonymous", text: moderation.text },
               prisma,
               stationId: stationRow.id,
               nowMs: Date.now(),
