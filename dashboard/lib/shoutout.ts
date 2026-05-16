@@ -304,6 +304,27 @@ export async function generateShoutout(
     throw new ShoutoutError(push.status, "queue_push_failed", push.error);
   }
 
+  // Phase 1 (Lena Producer): notify the daemon's ShiftMemory.
+  // Emitting at queue-time (not air-time) for Phase 1 — Phase 2 may
+  // switch to track-started for true air-time fidelity. The few-minute
+  // delta is acceptable for callback-pool purposes.
+  try {
+    const handle =
+      input.source.kind === "agent"
+        ? input.source.sender ?? "anonymous"
+        : input.source.requesterName ?? "anonymous";
+    const payload = JSON.stringify({
+      type: "shoutout_aired",
+      id: trackId, // Track id is unique and lets Phase 2 JOIN through to Shoutout row if needed
+      handle,
+      originalText: input.text,
+      airedAt: Date.now(),
+    });
+    await input.pool.query(`SELECT pg_notify('lena_event', $1)`, [payload]);
+  } catch (err) {
+    console.warn("[lena-shift-memory] shoutout_aired NOTIFY failed:", err);
+  }
+
   return {
     trackId,
     sourceUrl,
