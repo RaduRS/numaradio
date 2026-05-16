@@ -4,6 +4,104 @@ Last updated: 2026-05-16
 
 ---
 
+## 2026-05-16 (evening) — Phase 5b VALIDATED + Lena polish sweep + artist-spacing — LIVE
+
+Long evening on top of the Phase 1-5b ship. Headline: **Phase 5b held
+end-to-end in prod** (YT listener asked `@lena play digital culprit`,
+Lena announced + queued via `lib/queue-insert.ts`, rotation resumed
+cleanly). Five user-visible polish fixes + one structural rotation
+change shipped on top.
+
+**Commits between `eb74fb9` and `4b3e712` on `main`** (all pushed):
+
+1. `4c66e79` — radio-host: stop emitting `". "` tail + double-quoted `"Numa Radio"`
+   - `ensureTerminal` was appending `.` after a lone trailing close-quote
+   - `addRadioCadence` was wrapping `numa radio` even when already quoted
+   - Fixed both + 5 new tests in `dashboard/lib/radio-host.test.ts`
+
+2. `66fe330` — dashboard On-Air Log reads Chatter DB + strips wall quotes
+   - The log was only ever showing the last 10 ring-buffer entries
+     because chatter rows weren't read from the `Chatter` table
+   - Added `dashboard/lib/chatter.ts` + extended `/api/shoutouts/list`
+     to return 60 recent chatter rows (audio-only, no context_line)
+   - `cleanWallText()` strips `X writes: "..."` preambles, wrapping
+     quotes, and any remaining `"` chars from display text
+   - **Operator: needs `cd dashboard && npm run deploy` on Orion** for
+     the dashboard-side fixes to land
+
+3. `7c0af6d` — drop ring-buffer chatter rendering entirely (DB-only)
+   - DB and ring stamped same row with different timestamps so timestamp
+     dedup missed → every recent chatter showed twice
+   - Ring's trackId parsed legacy slot rotation type (`back_announce`),
+     not the Producer-chosen mode (`queue_pick`), so the duplicates had
+     disagreeing labels — fixed by killing ring chatter rendering
+   - Announces still come from the ring (no DB table for those)
+
+4. `4729bb1` — world-aside prompt: teaser-now + release-later rule
+   - Lena aired "Netflix dropped a first look at The Hawk this week —
+     July release." Two real facts, but em-dash cadence read as a
+     contradiction on radio
+   - Added one rule with good/bad examples to
+     `workers/queue-daemon/world-aside-client.ts`
+   - **Daemon-side change** — already loaded (operator restarted)
+
+5. `850d1d9` — callback-writer: TRACK-CURRENCY rule
+   - Lena said "Avalanche is rolling right now, 13 min later, still
+     earning it" when the track had already finished. Second instance
+     of the same class today (also "I Believe just hit the speakers"
+     when it had aired 18 min earlier)
+   - Added TRACK-CURRENCY load-bearing rule to both writers
+     (`workers/queue-daemon/lena-producer/writers/callback.ts` +
+     `lib/lena-producer-chat/writers/callback.ts`)
+   - 2 prompt-rule assertion tests lock it in place
+   - **Daemon-side change** — already loaded
+
+6. `4b3e712` — rotation: enforce max same-artist run of 2
+   - PlayHistory tonight had Russell Ross 3-in-a-row and Barely Jared
+     3-in-a-row from Fisher-Yates alone. Catalog skew: Russell Ross
+     is 97/155 (62.6%) so "no back-to-back" (minGap=1) is
+     **structurally infeasible** (need 96 non-Russell, have 58).
+   - "No 3 in a row" IS achievable: 38 RR pairs + 21 singletons + 58
+     breakers fits cleanly. Real-catalog dry-run: max run = 2, zero
+     3-in-a-row.
+   - Algorithm: classic task-scheduler heuristic — pick the artist
+     with the most remaining tracks, skip blocked when trailing run
+     hits maxRun. Graceful degrade when >2/3 same artist.
+   - 5 new tests in `scripts/refresh-rotation.test.ts`
+   - **Daemon-side change** — already loaded (verified live: Up Next
+     shows max run = 2)
+
+### What still needs operator action
+
+- **Dashboard redeploy:** `cd dashboard && npm run deploy` on Orion
+  to land the On-Air Log + wall-text cleanup (commits 2 + 3)
+- **Vercel auto-deploys** the callback rule + radio-host fix from
+  commits 1 + 5 on push (no manual step)
+
+### Cleaned in DB (one-off, not code)
+
+Two ugly broadcastText rows from earlier humanize fallback (Sawyers
+Son shoutout, SlimIsChillin shoutout) were rewritten via direct
+Prisma update. Going forward, `cleanWallText()` strips the noise on
+display so the underlying rows can stay as-aired.
+
+### TODO.md — 7 entries parked
+- Booth consent checkbox
+- Newsletter subscribe checkbox
+- Phase 6 cleanup (deprecated paths)
+- Website song-request surface
+- Lena proactively asks in YT chat
+- Phase 5b watch list (rate-limit hits + decline-rate by reason)
+- numaradio-suno random voice-accent variation
+
+### Stream state at sign-off
+- Stream up, daemon green, listeners stable
+- Phase 5b proven in real listener traffic
+- No new schema migrations
+- All tests passing
+
+---
+
 ## 2026-05-16 — Lena Producer Phase 5b: Listener `@lena play X` requests — CODE READY, NEEDS ENV
 
 Completes the queue-autonomy story. Listener types `@lena play Hotel
