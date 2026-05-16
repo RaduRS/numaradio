@@ -594,6 +594,18 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
 
 async function onTrackHandler(body: OnTrackBody): Promise<void> {
   const sid = await stationId();
+
+  // Cleanup runs UNCONDITIONALLY before anything else:
+  // when any new track starts (resolved or not), any prior priority_request
+  // item with queueStatus=playing is no longer playing — complete it.
+  // Without this, an unresolvable track (e.g. rotation URL drift)
+  // would leave the prior playing item stuck → reconciler would see
+  // it as needing re-push → replay loop.
+  await prisma.queueItem.updateMany({
+    where: { stationId: sid, priorityBand: "priority_request", queueStatus: "playing" },
+    data: { queueStatus: "completed" },
+  });
+
   const lookup: TrackLookup = {
     byId: async (id) =>
       prisma.track
@@ -647,13 +659,8 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
   // autoHost.onVoicePushed() when it fires, so we don't stack voices.
   announce.announceIfPending(resolved.id);
 
-  // Complete any prior playing priority item.
-  await prisma.queueItem.updateMany({
-    where: { stationId: sid, priorityBand: "priority_request", queueStatus: "playing" },
-    data: { queueStatus: "completed" },
-  });
-
   // Promote the oldest staged priority item for this track to playing.
+  // (cleanup of prior playing already happened above, unconditionally)
   // Any other staged items for the same track are duplicates (e.g. a
   // manual repush after a silent CDN fetch failure) — mark them
   // completed so they don't linger as ghost Up Next entries on the
