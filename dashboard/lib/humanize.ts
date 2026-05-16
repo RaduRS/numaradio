@@ -20,8 +20,8 @@ const MIN_CONTRACTION_RATIO = 0.5;
  *  the upper edge of "still a shoutout, not an essay". Replaces the
  *  ratio-only check for short inputs, which falsely flagged perfectly
  *  good humanizations like "Going out to inRhino, who asked for a
- *  shoutout on YouTube. There it is, straight from the source. We'll
- *  let it ride." (124 chars from 44 = 2.8× ratio, but legit). */
+ *  shoutout on YouTube. There it is, straight from the source. That's
+ *  a solid request." (124 chars from 44 = 2.8× ratio, but legit). */
 const MAX_REWRITE_CHARS = 320;
 /** Below this input length the 2× expansion guard is too tight — the
  *  humanizer naturally needs to add sender context + perspective shift,
@@ -127,7 +127,7 @@ Try to follow this shape:
       Wonder what that's all about.
       Hope they hear this one.
       Big mood for the season.
-      We'll let it ride.
+      That's a re-listen kind of message.
       Same, honestly.
 
 If the recipient is unclear or no name is mentioned in the message, drop the "going out to" line and lead with the sender:
