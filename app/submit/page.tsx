@@ -79,7 +79,7 @@ export default function SubmitPage() {
           <p
             style={{
               marginTop: -24,
-              marginBottom: 32,
+              marginBottom: 20,
               fontFamily: "var(--font-mono)",
               fontSize: 11,
               letterSpacing: "0.12em",
@@ -95,6 +95,52 @@ export default function SubmitPage() {
               use the request form
             </Link>
           </p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              marginBottom: 32,
+              padding: "12px 16px",
+              border: "1px solid var(--line-strong)",
+              borderRadius: 8,
+              background: "rgba(79, 209, 197, 0.04)",
+              maxWidth: 620,
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 22,
+                borderRadius: 4,
+                background: "var(--accent)",
+                color: "var(--bg)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+              }}
+            >
+              EN
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                letterSpacing: "0.08em",
+                color: "var(--fg-dim)",
+                lineHeight: 1.45,
+              }}
+            >
+              <strong style={{ color: "var(--fg)", fontWeight: 600 }}>English-only station.</strong>{" "}
+              Tracks with non-English vocals or lyrics are rejected at review.
+            </span>
+          </div>
           <SubmitForm />
           <p
             style={{
@@ -268,6 +314,11 @@ export default function SubmitPage() {
                 specific generation.
               </p>
               <p>No tracks with uncleared samples.</p>
+              <p>
+                No tracks with non-English vocals or lyrics. Numa is an
+                English-only station — the host and all on-air content
+                are English, so non-English material can&apos;t be aired.
+              </p>
               <p>
                 No content that can&apos;t be broadcast 24/7 on an open
                 stream <strong>or simulcast on YouTube Live</strong>.
