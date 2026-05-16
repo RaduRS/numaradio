@@ -144,6 +144,23 @@ export interface AutoHostDeps {
   resolveCurrentTrack: () => Promise<CurrentTrackInfo | null>;
   generateScript: (prompts: { system: string; user: string }) => Promise<string>;
   /**
+   * Phase 2 (Lena Producer): when present AND isProducerEnabled() returns true,
+   * lenaSpeak replaces generateScript for auto-break content. Returns null on
+   * Producer-chose-silence OR Writer failure — caller falls back to legacy path.
+   */
+  lenaSpeak?: (trigger: {
+    source: "auto_track_boundary";
+    nextTrack: {
+      id: string;
+      title: string;
+      artist: string | null;
+      genre: string | null;
+      bpm: number | null;
+    };
+  }) => Promise<{ text: string; mode: string; targetFocus: string } | null>;
+  /** Returns true when the Producer code path should be used (env flag check). */
+  isProducerEnabled?: () => boolean;
+  /**
    * Tier 2.5 — fetch a world_aside line from NanoClaw. Optional dep:
    * if not provided, every world_aside slot demotes to filler. Returns
    * a discriminated union — never throws. Caller demotes to filler on
@@ -160,7 +177,15 @@ export interface AutoHostDeps {
   /** Persist the chatter row to Neon so the public site can surface it
    *  as "what Lena just said". Optional — daemon keeps broadcasting if
    *  the DB is briefly unavailable. */
-  persistChatter?: (entry: { chatterId: string; type: ChatterType; slot: number; url: string; script: string }) => Promise<void>;
+  persistChatter?: (entry: {
+    chatterId: string;
+    type: ChatterType;
+    slot: number;
+    url: string;
+    script: string;
+    producerVersion?: number;
+    producerMode?: string;
+  }) => Promise<void>;
   logFailure: (entry: { reason: string; detail?: string }) => void;
   sleep?: (ms: number) => Promise<void>;
   /** Injectable clock for testing; defaults to Date.now. */
@@ -188,6 +213,10 @@ interface ReadyAsset {
   slot: number;
   url: string;
   script: string;
+  /** Phase 2: 1 when the script came from the Producer pipeline, undefined for legacy. */
+  producerVersion?: number;
+  /** Phase 2: the ProducerMode string ("opinion" / "aside" / "callback") for Producer-era assets. */
+  producerMode?: string;
 }
 
 export class AutoHostOrchestrator {
@@ -520,10 +549,43 @@ export class AutoHostOrchestrator {
     };
 
     let script: string;
+    let producerVersion: number | undefined;
+    let producerMode: string | undefined;
+
     if (externalScript) {
       // World_aside: NanoClaw already wrote the line. Skip MiniMax.
       script = externalScript;
+    } else if (this.deps.lenaSpeak && this.deps.isProducerEnabled?.()) {
+      // Phase 2 Producer path. CurrentTrackInfo doesn't expose id/genre/bpm,
+      // so the Producer sees null for those — it can still make good decisions
+      // from mood/show/recent-tracks context held in ShiftMemory.
+      const nextTrack = current
+        ? {
+            id: "current",
+            title: current.title,
+            artist: current.artist,
+            genre: null,
+            bpm: null,
+          }
+        : { id: "unknown", title: "(next track)", artist: null, genre: null, bpm: null };
+      try {
+        const r = await this.deps.lenaSpeak({ source: "auto_track_boundary", nextTrack });
+        if (!r) {
+          this.deps.logFailure({ reason: "producer_silence_or_writer_fail" });
+          return null;
+        }
+        script = r.text;
+        producerVersion = 1;
+        producerMode = r.mode;
+      } catch (e) {
+        this.deps.logFailure({
+          reason: "producer_unexpected_error",
+          detail: e instanceof Error ? e.message : String(e),
+        });
+        return null;
+      }
     } else {
+      // Legacy single-call path (default until LENA_PRODUCER_AUTO=on).
       const prompts = promptFor(type, context);
       try {
         script = await this.deps.generateScript(prompts);
@@ -566,7 +628,7 @@ export class AutoHostOrchestrator {
       this.recentWorldTopics.push(externalTopic);
     }
 
-    return { chatterId, type, slot, url, script };
+    return { chatterId, type, slot, url, script, producerVersion, producerMode };
   }
 }
 
