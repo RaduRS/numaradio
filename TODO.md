@@ -228,3 +228,75 @@ through the same backend as YouTube chat. Options for UX:
 ~6-8 tasks. Smaller than Phase 5b because backend already exists
 (`/api/internal/lena-queue`). Mostly frontend + a thin Vercel proxy
 route + rate-limit wiring.
+
+---
+
+## Lena proactively asks listeners "what should I play next?" in YouTube chat
+
+**Status:** parked 2026-05-16. Phase 5b (listener requests via @lena play X)
+shipped today. Natural next step: Lena initiates the conversation,
+posts a message to YouTube live chat asking listeners what they want.
+
+**Resume trigger:** after Phase 5b is observed for 1-2 weeks. Requires
+both the request flow + YouTube CTA from Lena to be working naturally
+before adding outbound chat.
+
+### What to build
+
+When YouTube broadcast is live AND chat has been quiet for N minutes
+AND there are listeners (gate threshold met), Lena posts a brief
+chat message: "Anyone got a request? Drop @lena play <title> in chat
+and I'll spin it up."
+
+### Architecture
+
+Currently Lena's YouTube chat path is INBOUND only:
+`workers/queue-daemon/youtube-chat-loop.ts` reads messages every N
+seconds via `liveChatMessages.list`. Phase 5b dispatches the route
+that handles them.
+
+For outbound, we need:
+- New OAuth scope: `youtube.force-ssl` (currently only have `youtube.readonly`).
+  See HANDOFF 2026-04-29 — the `youtube-go-live.ts` script already
+  uses force-ssl for the same OAuth token, so the credentials exist.
+- `liveChatMessages.insert` API call (50 quota units per call — expensive!).
+- A new daemon-side scheduler: tracks last-outbound timestamp + last-
+  inbound timestamp, fires every M minutes when conditions are met.
+- A new Producer mode `chat_ask` that generates the prompt text.
+- Cool-down: minimum 15-30 min between outbound asks (avoid feeling spammy).
+- Quota guard: max N outbound per day to stay under the 10k daily YouTube quota.
+
+### Files likely touched
+
+- New `workers/queue-daemon/youtube-chat-write.ts` — wrapper around
+  `liveChatMessages.insert` with quota tracking
+- New `workers/queue-daemon/youtube-chat-scheduler.ts` — orchestrator
+  that fires the proactive ask
+- New `workers/queue-daemon/lena-producer/writers/chat-ask.ts` — Writer
+  prompt for the proactive ask (vary the wording each time)
+- `workers/queue-daemon/lena-producer/modes.ts` — add `chat_ask` mode
+- Dashboard UI: probably an operator toggle (auto / forced_on / forced_off)
+  mirroring the existing autoChatter pattern, in case the operator wants
+  Lena quieter during certain shows
+
+### Cross-cuts
+
+- YouTube chat quota: outbound costs 50 units, vs 5 units for inbound.
+  Currently we use ~3,300/day for inbound polling. Outbound at 1/hour
+  during live broadcasts = ~24/day × 50 = 1,200/day extra. Fits inside
+  10k quota with headroom.
+- Tone: avoid sounding like a bot. Vary wording, reference recent vibe
+  ("Late night in here — anything specific you want to hear?").
+- Tie to existing ShiftMemory: if a listener already requested something
+  recently, prefer to thank them instead of asking for more.
+- Anti-pattern: don't ask if no listeners (gate threshold ≥4 already
+  exists for auto-chatter — reuse).
+
+### Estimated size
+
+~10-15 tasks. Bigger because it's a new outbound surface (write API,
+quota, scheduling, mode, prompt, dashboard toggle, tests).
+
+### When this is done
+
+Remove the entry from this file.
