@@ -157,7 +157,13 @@ export interface AutoHostDeps {
       genre: string | null;
       bpm: number | null;
     };
-  }) => Promise<{ text: string; mode: string; targetFocus: string } | null>;
+  }) => Promise<{
+    text: string;
+    mode: string;
+    targetFocus: string;
+    /** Phase 5: present when QueueDirector accepted + inserted a queue_pick. */
+    queueActionPersisted: { trackId: string; reason: string } | null;
+  } | null>;
   /** Returns true when the Producer code path should be used (env flag check). */
   isProducerEnabled?: () => boolean;
   /**
@@ -577,6 +583,12 @@ export class AutoHostOrchestrator {
         script = r.text;
         producerVersion = 1;
         producerMode = r.mode;
+        if (r.queueActionPersisted) {
+          this.deps.logFailure({
+            reason: "producer_queue_pick_persisted",
+            detail: `track=${r.queueActionPersisted.trackId} reason=${r.queueActionPersisted.reason}`,
+          });
+        }
       } catch (e) {
         this.deps.logFailure({
           reason: "producer_unexpected_error",

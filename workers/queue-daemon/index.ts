@@ -32,8 +32,12 @@ import { startLoudnormPoller } from "./loudnorm-poller.ts";
 import { ShiftMemory } from "./lena-producer/shift-memory.ts";
 import { NotifyListener } from "./lena-producer/notify-listener.ts";
 import { reconstructEvents, pollSince } from "./lena-producer/reconstruction.ts";
-import { isShiftMemoryEnabled, isProducerAutoEnabled } from "./lena-producer/feature-flag.ts";
+import { isShiftMemoryEnabled, isProducerAutoEnabled, isQueueAutonomyEnabled } from "./lena-producer/feature-flag.ts";
 import { lenaSpeak as runLenaSpeak } from "./lena-producer/index.ts";
+import { queueDirectorDecide } from "./lena-producer/queue-director.ts";
+import { fetchCatalogCandidates } from "./lena-producer/catalog-candidates.ts";
+import { showForHour } from "../../lib/schedule.ts";
+import type { ShowBlockName } from "../../lib/show-genre-fit.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -262,12 +266,113 @@ const autoHost = new AutoHostOrchestrator({
     // disabled (LENA_SHIFT_MEMORY=off), refuse — auto-host will fall
     // back to the legacy path automatically.
     if (!shiftMemory) return null;
+    const sid = await stationId();
+    const queueAutonomyOn = isQueueAutonomyEnabled(process.env);
+
+    // Phase 5: pre-fetch catalog candidates + provide a QueueDirector
+    // closure ONLY when LENA_QUEUE_AUTONOMY is on. Without it, Producer
+    // can't emit queue_pick (no candidates, no director).
+    let catalogCandidates: Array<{ id: string; title: string; artist: string | null; genre: string | null; bpm: number | null }> = [];
+    let queueDirector: ((action: { trackId: string; reason: string }) => Promise<boolean>) | undefined;
+
+    if (queueAutonomyOn) {
+      const nowHour = new Date().getHours();
+      const currentShow = showForHour(nowHour).name as ShowBlockName;
+      try {
+        catalogCandidates = await fetchCatalogCandidates({
+          prisma,
+          stationId: sid,
+          currentShow,
+          nowMs: Date.now(),
+        });
+      } catch (err) {
+        console.warn("[queue-director] fetchCatalogCandidates failed:", err);
+      }
+
+      queueDirector = async (action) => {
+        // Fetch the proposed track + current playing track + recently aired
+        const [proposed, np, recent] = await Promise.all([
+          prisma.track.findUnique({
+            where: { id: action.trackId },
+            select: { id: true, title: true, artistDisplay: true, genre: true, bpm: true },
+          }),
+          prisma.nowPlaying.findUnique({
+            where: { stationId: sid },
+            select: { currentTrackId: true },
+          }),
+          prisma.playHistory.findMany({
+            where: { stationId: sid, startedAt: { gte: new Date(Date.now() - 60 * 60_000) } },
+            select: { trackId: true },
+          }),
+        ]);
+        if (!proposed) return false;
+        const currentTrack = np?.currentTrackId
+          ? await prisma.track.findUnique({
+              where: { id: np.currentTrackId },
+              select: { id: true, title: true, artistDisplay: true, genre: true, bpm: true },
+            })
+          : null;
+
+        const decision = queueDirectorDecide({
+          proposedTrack: {
+            id: proposed.id,
+            title: proposed.title,
+            artist: proposed.artistDisplay,
+            genre: proposed.genre,
+            bpm: proposed.bpm,
+          },
+          currentTrack: currentTrack
+            ? {
+                id: currentTrack.id,
+                title: currentTrack.title,
+                artist: currentTrack.artistDisplay,
+                genre: currentTrack.genre,
+                bpm: currentTrack.bpm,
+              }
+            : null,
+          recentTrackIds: recent.map((r) => r.trackId).filter((id): id is string => id != null),
+          currentShow,
+          reason: action.reason,
+        });
+
+        if (!decision.ok) {
+          console.warn(`[queue-director] rejected pick ${action.trackId}: ${decision.reason}`);
+          return false;
+        }
+
+        // Accepted — insert into priority_request band via the existing atomic helper.
+        // Shape matches the existing pushHandler insert (see createQueueItemAtomically
+        // call above): stationId/queueType/sourceObjectType/sourceObjectId/trackId/
+        // priorityBand/queueStatus/insertedBy/reasonCode.
+        try {
+          await createQueueItemAtomically(sid, {
+            stationId: sid,
+            queueType: "music",
+            sourceObjectType: "track",
+            sourceObjectId: action.trackId,
+            trackId: action.trackId,
+            priorityBand: "priority_request",
+            queueStatus: "planned",
+            reasonCode: `lena_pick:${action.reason.slice(0, 50)}`,
+            insertedBy: "lena_producer",
+          });
+          console.log(`[queue-director] inserted ${action.trackId} (reason: ${action.reason})`);
+          return true;
+        } catch (err) {
+          console.warn(`[queue-director] insert failed for ${action.trackId}:`, err);
+          return false;
+        }
+      };
+    }
+
     return runLenaSpeak({
       trigger,
       memory: shiftMemory,
       nowMs: Date.now(),
       llm: async (prompts) =>
         generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+      catalogCandidates,
+      queueDirector,
     });
   },
 });

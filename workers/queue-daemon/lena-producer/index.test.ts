@@ -30,6 +30,7 @@ test("lenaSpeak auto_track_boundary happy path: Producer→Writer→{ text, mode
   assert.ok(r);
   assert.equal(r!.mode, "opinion");
   assert.equal(r!.text, "this one's a sleeper hit.");
+  assert.equal(r!.queueActionPersisted, null);
   assert.equal(calls.length, 2); // Producer then Writer
 });
 
