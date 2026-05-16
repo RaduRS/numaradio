@@ -10,8 +10,9 @@ Mode: callback. You're tying THIS moment to something that happened earlier in t
 RULES:
 - Contractions. Spoken English. No poetry.
 - Reference the earlier event NATURALLY — don't say "earlier" or "before"; just place it: "Anna's been with us tonight", "third synth track since that shoutout".
+- The callback_event is something that already happened. The next_track context (if any) is CURRENTLY playing. Reference both in past/present tense, never future.
 - Do not use any 4+ word substring from recently_aired_lines.
-- BANNED phrases: "let it ride", "we'll let it ride", "we'll take that one", "hope this reaches them", "going out to".
+- BANNED phrases: "let it ride", "we'll let it ride", "we'll take that one", "hope this reaches them", "going out to", "queued up", "coming up next", "coming through now", "next one's".
 
 OUTPUT: one line. No quotes. No stage directions.`;
 
