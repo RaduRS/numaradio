@@ -584,10 +584,9 @@ export class AutoHostOrchestrator {
         producerVersion = 1;
         producerMode = r.mode;
         if (r.queueActionPersisted) {
-          this.deps.logFailure({
-            reason: "producer_queue_pick_persisted",
-            detail: `track=${r.queueActionPersisted.trackId} reason=${r.queueActionPersisted.reason}`,
-          });
+          console.log(
+            `[auto-chatter] producer queue_pick persisted: track=${r.queueActionPersisted.trackId} reason=${r.queueActionPersisted.reason}`,
+          );
         }
       } catch (e) {
         this.deps.logFailure({
