@@ -341,26 +341,29 @@ const autoHost = new AutoHostOrchestrator({
           return false;
         }
 
-        // Accepted — insert into priority_request band via the existing atomic helper.
-        // Shape matches the existing pushHandler insert (see createQueueItemAtomically
-        // call above): stationId/queueType/sourceObjectType/sourceObjectId/trackId/
-        // priorityBand/queueStatus/insertedBy/reasonCode.
+        // Accepted — route through pushHandler so the track is actually
+        // pushed to Liquidsoap's priority queue AND its status transitions
+        // to "staged" (not just "planned"). Calling createQueueItemAtomically
+        // directly skips both, which leaves the reconciler re-pushing the
+        // same row every cycle (same root cause as the Fault Lines incident
+        // that was fixed in Phase 5b — f29078e).
+        // In-process call — no HTTP round-trip since this runs inside the
+        // daemon.
+        const sourceUrl = await resolveAssetUrl(action.trackId);
+        if (!sourceUrl) {
+          console.warn(`[queue-director] no audio_stream asset for ${action.trackId}, skipping`);
+          return false;
+        }
         try {
-          await createQueueItemAtomically(prisma, sid, {
-            stationId: sid,
-            queueType: "music",
-            sourceObjectType: "track",
-            sourceObjectId: action.trackId,
+          await pushHandler({
             trackId: action.trackId,
-            priorityBand: "priority_request",
-            queueStatus: "planned",
-            reasonCode: `lena_pick:${action.reason.slice(0, 50)}`,
-            insertedBy: "lena_producer",
+            sourceUrl,
+            reason: `lena_pick:${action.reason.slice(0, 50)}`,
           });
-          console.log(`[queue-director] inserted ${action.trackId} (reason: ${action.reason})`);
+          console.log(`[queue-director] inserted ${action.trackId} via pushHandler (reason: ${action.reason})`);
           return true;
         } catch (err) {
-          console.warn(`[queue-director] insert failed for ${action.trackId}:`, err);
+          console.warn(`[queue-director] pushHandler failed for ${action.trackId}:`, err);
           return false;
         }
       };
