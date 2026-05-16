@@ -5,6 +5,52 @@ read the **resume trigger** at the top, run the plan.
 
 ---
 
+## Lena Producer — Phases 2 through 6
+
+**Status:** parked 2026-05-16. Phase 1 (ShiftMemory foundation) shipped
+in 23 commits on `main` — see `docs/HANDOFF.md` 2026-05-16 entry for
+the deploy steps.
+**Resume trigger:** anytime after Phase 1 is deployed and observed
+healthy for a few days. Each phase is independently shippable behind
+its own flag.
+
+### Reference docs (load these first)
+
+- **Spec (full architecture, all phases):** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+- **Phase 1 plan (completed, reference for code conventions used):** `docs/superpowers/plans/2026-05-16-lena-producer-phase-1.md`
+- **HANDOFF.md 2026-05-16 entry:** deploy steps + Neon-pooler caveat + the two schema findings (Track.key absent, Shoutout.requesterName not handle)
+
+### Phase ladder (build in this order)
+
+| Phase | Flag | Approx size | What it ships |
+|---|---|---|---|
+| **2** | `LENA_PRODUCER_AUTO=on` | ~25-30 tasks | Producer + Writer for `auto_track_boundary` only. First time Lena's spoken output actually changes. New code in `workers/queue-daemon/lena-producer/`: `producer.ts`, `producer-prompt.ts`, `producer-context.ts`, `writer.ts`, `writers/{opinion,callback,aside,...}.ts`, `modes.ts`. Replaces inline prompts in `workers/queue-daemon/auto-host.ts` (lines ~407-570). |
+| **2.5** | `LENA_CLASSIFIER_REQUEST=on` | ~8 tasks | Extend `lib/classify-shoutout-intent.ts` from tri-state to 5-state (adds `request` + `shoutout_with_request`). Inert until Phases 3/5 consume. |
+| **3** | `LENA_PRODUCER_REPLY=on` | ~10 tasks | Route YouTube `@lena` reply path (`lib/lena-reply.ts`) through Producer. Depends on Phase 2 shipping the Producer surface. |
+| **4** | `LENA_PRODUCER_SHOUTOUT=on` | ~12 tasks | Route shoutout narration (`dashboard/lib/humanize.ts`) through Producer. **Includes the two known fixes:** scrub "let it ride" / "we'll take that one" examples from humanize.ts ~line 130, and fix the `,.` regex bug in `dashboard/lib/radio-host.ts` (existing regex catches `.,` not `,.` — add `[,;]\./g`). |
+| **5** | `LENA_QUEUE_AUTONOMY=on` | ~20-25 tasks | QueueDirector module. New modes: `queue_pick`, `accept_request`, `accept_request_deferred`, `decline_request` with phrasebook by reason. Inserts into `priority_request` band via existing `createQueueItemAtomically` (`workers/queue-daemon/index.ts:382-401`). Needs `lib/show-genre-fit.ts` helper (doesn't exist yet — must build). |
+| **6** | none — pure cleanup | ~5 tasks | Delete deprecated paths: `workers/queue-daemon/chatter-prompts.ts`, `workers/queue-daemon/context-line.ts`, old `lib/lena-reply.ts` prompt, old `dashboard/lib/humanize.ts` rewrite. Only after Phases 2-4 have been on for a few days with no fallback fires. |
+
+### Operating principles to remember
+
+- Each phase = one plan file at `docs/superpowers/plans/YYYY-MM-DD-lena-producer-phase-N.md`
+- Each phase ships independently behind its own flag, can be rolled back by unsetting the flag
+- Lena's behavior is unchanged until Phase 2 flag is flipped on
+- `mode=silence` is ONLY valid for `auto_track_boundary` triggers — direct `@lena` mentions ALWAYS get a spoken response (see memory `feedback_lena_never_ignores_direct_mention.md`)
+- Suno is NOT in this codebase — `decline_request` for any catalog miss (see memory `project_numa_suno_separation.md`)
+- Generated music always takes priority — `priority_request` only interleaves between scheduled tracks
+- autoChatter ON = Lena is fully alive (no per-action quotas, qualitative guardrails only)
+
+### Resume recipe
+
+1. Check that Phase 1 is deployed and `journalctl | grep lena-shift-memory` shows `notify healthy`
+2. Read the spec (~450 lines) to refresh context
+3. Skim Phase 1 plan for code patterns (file structure, TDD style, commit message template)
+4. Write Phase 2 plan: `superpowers:writing-plans` skill, output to `docs/superpowers/plans/YYYY-MM-DD-lena-producer-phase-2.md`
+5. Execute: `superpowers:subagent-driven-development` skill
+
+---
+
 ## Booth consent checkbox — shoutout + song-request forms
 
 **Status:** parked 2026-05-05.
