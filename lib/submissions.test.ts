@@ -9,6 +9,7 @@ import {
   sniffImage,
   audioStorageKey,
   artworkStorageKey,
+  stripUrls,
 } from "./submissions.ts";
 
 test("isValidEmail accepts well-formed addresses", () => {
@@ -32,41 +33,32 @@ test("isValidName trims and enforces 2..80 chars", () => {
   assert.equal(isValidName("x".repeat(81)), false);
 });
 
-test("isValidName ignores stripped URLs when checking length", () => {
-  // Pure-URL name: nothing left after strip → invalid
-  assert.equal(isValidName("https://suno.com/@captaintenille"), false);
-  assert.equal(isValidName("www.example.com/me"), false);
-  // Real name with a tacked-on link: still valid
+test("stripUrls removes http(s) and www links and their wrappers", () => {
   assert.equal(
-    isValidName("Alchemical Dependency (https://suno.com/@captaintenille)"),
-    true,
-  );
-});
-
-test("normalizeName strips http(s) and www links and their wrappers", () => {
-  assert.equal(
-    normalizeName("Alchemical Dependency (https://suno.com/@captaintenille)"),
-    "Alchemical Dependency",
-  );
-  assert.equal(
-    normalizeName("CaptainTenille [https://suno.com/@captaintenille]"),
+    stripUrls("CaptainTenille (https://suno.com/@captaintenille)"),
     "CaptainTenille",
   );
   assert.equal(
-    normalizeName("DJ Foo https://example.com/x"),
+    stripUrls("CaptainTenille [https://suno.com/@captaintenille]"),
+    "CaptainTenille",
+  );
+  assert.equal(
+    stripUrls("DJ Foo https://example.com/x"),
     "DJ Foo",
   );
   assert.equal(
-    normalizeName("Bar Baz www.example.com/y"),
+    stripUrls("Bar Baz www.example.com/y"),
     "Bar Baz",
   );
   // Collapse runs of whitespace produced by stripping
   assert.equal(
-    normalizeName("Mid https://x.io/a Name"),
+    stripUrls("Mid https://x.io/a Name"),
     "Mid Name",
   );
+  // Pure URL → empty string
+  assert.equal(stripUrls("https://suno.com/@x"), "");
   // No URL → unchanged (just trimmed)
-  assert.equal(normalizeName("  Just A Name  "), "Just A Name");
+  assert.equal(stripUrls("  Just A Name  "), "Just A Name");
 });
 
 test("sniffMp3 accepts ID3-tagged MP3", () => {

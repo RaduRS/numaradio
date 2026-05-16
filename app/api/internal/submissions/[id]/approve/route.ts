@@ -25,6 +25,7 @@ import { extractId3Artwork } from "@/lib/extract-id3-artwork";
 import { loadFallbackArtwork } from "@/lib/fallback-artwork";
 import { internalAuthOk } from "@/lib/internal-auth";
 import { sendSubmissionApprovedEmail } from "@/lib/email/submission-approved";
+import { stripUrls } from "@/lib/submissions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -141,6 +142,15 @@ export async function POST(
   const airingPolicy =
     submission.airingPreference === "permanent" ? "library" : "request_only";
 
+  // Strip any pasted profile URLs (Suno/Bandcamp/Spotify/etc.) from the
+  // submitter-supplied artist + title before they hit the Track row or
+  // the artist email. The MusicSubmission row keeps the raw original
+  // as an audit trail of what was submitted.
+  const cleanArtist = stripUrls(submission.artistName) || submission.artistName;
+  const cleanTitle = submission.trackTitle
+    ? stripUrls(submission.trackTitle) || submission.trackTitle
+    : null;
+
   const result = await ingestTrack({
     stationId: station.id,
     audioBuffer,
@@ -148,8 +158,8 @@ export async function POST(
     // Submitter-provided title (validated 1-100 chars at /api/submissions/init).
     // Legacy rows from before that validation existed have null trackTitle —
     // fall back to the old "Untitled — Artist" pattern so they don't crash.
-    title: submission.trackTitle?.trim() || `Untitled — ${submission.artistName}`,
-    artistDisplay: submission.artistName,
+    title: cleanTitle?.trim() || `Untitled — ${cleanArtist}`,
+    artistDisplay: cleanArtist,
     genre: submission.trackGenre ?? undefined,
     durationSeconds: submission.durationSeconds ?? undefined,
     airingPolicy,
@@ -208,8 +218,8 @@ export async function POST(
   after(async () => {
     await sendSubmissionApprovedEmail({
       email: submission.email,
-      artistName: submission.artistName,
-      trackTitle: submission.trackTitle,
+      artistName: cleanArtist,
+      trackTitle: cleanTitle,
       durationSeconds: submission.durationSeconds,
       airingPreference: submission.airingPreference,
     });
