@@ -172,6 +172,21 @@ export async function POST(req: Request): Promise<NextResponse> {
     secret,
   }));
 
+  // Phase 1 (Lena Producer): notify the daemon's ShiftMemory.
+  try {
+    const payload = JSON.stringify({
+      type: "youtube_mention",
+      id: shoutout.id,
+      handle: displayName ?? "anonymous",
+      text: rawText,
+      intent: intent.category, // "shoutout" | "reply" — Phase 2.5 adds "request" + "shoutout_with_request"
+      airedAt: Date.now(),
+    });
+    await prisma.$executeRawUnsafe(`SELECT pg_notify('lena_event', $1)`, payload);
+  } catch (err) {
+    console.warn("[lena-shift-memory] youtube_mention NOTIFY failed:", err);
+  }
+
   return NextResponse.json({
     ok: true,
     status: "moderating",
