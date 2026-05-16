@@ -116,3 +116,47 @@ test("SupervisedSocket.send rejects fast when not connected", async () => {
   // Do not call start(); we just want to confirm the "not connected" path.
   await assert.rejects(() => sup.send("x"), /not connected/);
 });
+
+test("LiquidsoapSocket.request collects response lines until END", async () => {
+  const { port, server } = await tcpServer((s) => {
+    s.on("data", (d) => {
+      if (d.toString().startsWith("priority.queue")) s.write("100 101\nEND\n");
+    });
+  });
+  const sock = new LiquidsoapSocket({ host: "127.0.0.1", port });
+  await sock.connect();
+  const lines = await sock.request("priority.queue");
+  sock.close();
+  server.close();
+  assert.deepEqual(lines, ["100 101"]);
+});
+
+test("LiquidsoapSocket.request times out when no END arrives", async () => {
+  const { port, server } = await tcpServer((s) => {
+    s.on("data", () => s.write("partial\n"));
+  });
+  const sock = new LiquidsoapSocket({ host: "127.0.0.1", port });
+  await sock.connect();
+  await assert.rejects(() => sock.request("priority.queue", 100), /timeout/);
+  sock.close();
+  server.close();
+});
+
+test("LiquidsoapSocket.request serializes concurrent callers", async () => {
+  const order: string[] = [];
+  const { port, server } = await tcpServer((s) => {
+    s.on("data", (d) => {
+      const cmd = d.toString().trim();
+      order.push(`recv:${cmd}`);
+      setTimeout(() => s.write(`reply-to-${cmd}\nEND\n`), 30);
+    });
+  });
+  const sock = new LiquidsoapSocket({ host: "127.0.0.1", port });
+  await sock.connect();
+  const [a, b] = await Promise.all([sock.request("cmd-a"), sock.request("cmd-b")]);
+  sock.close();
+  server.close();
+  assert.deepEqual(order, ["recv:cmd-a", "recv:cmd-b"]);
+  assert.deepEqual(a, ["reply-to-cmd-a"]);
+  assert.deepEqual(b, ["reply-to-cmd-b"]);
+});

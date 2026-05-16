@@ -3,6 +3,7 @@ import { prisma } from "./prisma.ts";
 import { SupervisedSocket } from "./socket.ts";
 import { RingBuffer } from "./status-buffers.ts";
 import { hydrate, type StagedItem } from "./hydrator.ts";
+import { reconcilePriorityQueue } from "./reconciler.ts";
 import { createHandler, type OnTrackBody, type PushBody, type StatusSnapshot } from "./server.ts";
 import { resolveTrackId, type TrackLookup } from "./resolve-track.ts";
 import { S3Client } from "@aws-sdk/client-s3";
@@ -368,6 +369,26 @@ async function listStaged(): Promise<StagedItem[]> {
   }));
 }
 
+async function listStagedWithAge(): Promise<Array<StagedItem & { createdAt: number }>> {
+  const sid = await stationId();
+  const rows = await prisma.queueItem.findMany({
+    where: {
+      stationId: sid,
+      priorityBand: "priority_request",
+      queueStatus: { in: ["planned", "staged"] },
+    },
+    orderBy: { positionIndex: "asc" },
+    select: { id: true, trackId: true, positionIndex: true, queueType: true, createdAt: true },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    trackId: r.trackId,
+    positionIndex: r.positionIndex,
+    queueType: r.queueType === "shoutout" ? "shoutout" : "music",
+    createdAt: r.createdAt.getTime(),
+  }));
+}
+
 async function markFailed(queueItemId: string, reasonCode: string): Promise<void> {
   await prisma.queueItem.update({
     where: { id: queueItemId },
@@ -629,6 +650,32 @@ async function main() {
   });
 
   await sock.start();
+
+  // Periodic reconciler: every 30s, compare DB `staged` priority items
+  // against Liquidsoap's actual `priority.queue` and re-push any that
+  // are missing. Self-heals silent telnet drops (the daemon's
+  // priority.push is fire-and-forget over TCP, so a half-open socket
+  // can leave a track stuck in `staged` forever — operator-visible as
+  // a stuck "Up Next" on the public site).
+  const RECONCILE_TICK_MS = 30_000;
+  const reconcileTick = async () => {
+    if (!sock.isConnected()) return;
+    try {
+      const r = await reconcilePriorityQueue({
+        listStaged: listStagedWithAge,
+        resolveAssetUrl,
+        request: (cmd, timeoutMs) => sock.request(cmd, timeoutMs),
+        send: (line) => sock.send(line),
+        log: (msg) => console.log(msg),
+      });
+      if (r.repushed > 0) {
+        console.log(`[reconciler] tick: staged=${r.stagedInDb} liquidsoap=${r.inLiquidsoap} repushed=${r.repushed}`);
+      }
+    } catch (err) {
+      console.error("[reconciler] tick failed", err);
+    }
+  };
+  setInterval(reconcileTick, RECONCILE_TICK_MS);
 
   // Lena Producer Phase 1: ShiftMemory + NotifyListener (read-only,
   // observability foundation). Gated behind LENA_SHIFT_MEMORY env flag.

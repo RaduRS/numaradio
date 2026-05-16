@@ -76,6 +76,48 @@ export class LiquidsoapSocket {
     });
   }
 
+  /**
+   * Send a telnet command and collect response lines until "END".
+   * Liquidsoap's telnet protocol is single-threaded — concurrent
+   * callers serialize via a chained promise lock so responses can't
+   * interleave. Times out if no END line arrives within timeoutMs.
+   */
+  private requestLock: Promise<unknown> = Promise.resolve();
+  async request(cmd: string, timeoutMs = 2_000): Promise<string[]> {
+    const prev = this.requestLock;
+    let release!: () => void;
+    this.requestLock = new Promise<void>((r) => (release = r));
+    try {
+      await prev;
+      if (!this.sock || !this.connected) throw new Error("not connected");
+      return await this.collectResponse(cmd, timeoutMs);
+    } finally {
+      release();
+    }
+  }
+
+  private collectResponse(cmd: string, timeoutMs: number): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const lines: string[] = [];
+      let settled = false;
+      const finish = (action: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        unsubscribe();
+        action();
+      };
+      const unsubscribe = this.onLine((line) => {
+        if (line === "END") return finish(() => resolve(lines));
+        lines.push(line);
+      });
+      const timer = setTimeout(() => finish(() => reject(new Error(`request timeout: ${cmd}`))), timeoutMs);
+      this.sock!.write(cmd + "\n", (err) => {
+        if (err) finish(() => reject(err));
+      });
+    });
+  }
+
   close(): void {
     if (this.sock) {
       this.sock.destroy();
@@ -130,6 +172,10 @@ export class SupervisedSocket {
 
   async send(line: string): Promise<void> {
     await this.inner.send(line);
+  }
+
+  async request(cmd: string, timeoutMs?: number): Promise<string[]> {
+    return this.inner.request(cmd, timeoutMs);
   }
 
   private async loop(delay: number): Promise<void> {
