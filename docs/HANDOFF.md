@@ -4,6 +4,53 @@ Last updated: 2026-05-16
 
 ---
 
+## 2026-05-16 — Lena Producer Phase 4b: Shoutout narration through Producer — CODE READY, NEEDS ENV
+
+Shoutout narration (currently `humanizeScript`) now optionally routes
+through a 4-mode Producer + Writer pipeline. Behind
+`LENA_PRODUCER_SHOUTOUT` flag, default off. Dashboard-side (Orion).
+
+**Spec:** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-16-lena-producer-phase-4b.md`
+
+**What ships:**
+- `dashboard/lib/lena-producer-shoutout/` — sibling module to
+  `lib/lena-producer-chat/`. Producer modes: `shoutout_classic`
+  (legacy "Going out to X. Y says Z" shape), `shoutout_inline`
+  (single-sentence fold), `shoutout_quote` (verbatim with intro),
+  `shoutout_callback` (tie to a recent event by id).
+- `dashboard/lib/shoutout.ts` gated: flag on → try Producer; on
+  failure → fall back to existing humanizeScript.
+
+**Deploy:**
+1. `cd /home/marku/saas/numaradio && git pull` on Orion
+2. Add `LENA_PRODUCER_SHOUTOUT=on` to `dashboard/.env.local`:
+   ```
+   nano dashboard/.env.local
+   # add: LENA_PRODUCER_SHOUTOUT=on
+   ```
+3. `cd dashboard && npm run deploy` — picks up the new env + flips
+   the flag.
+4. Test: submit a shoutout from numaradio.com — expect one of the
+   4 shapes (not always "Going out to..."). Submit a second
+   shoutout within 30 min and watch for `shoutout_callback` mode
+   that references the first one.
+
+**Rollback:** unset `LENA_PRODUCER_SHOUTOUT` in
+`dashboard/.env.local`, restart dashboard. Legacy humanize resumes.
+
+**What to watch:**
+- `[lena-producer-shoutout] failed, falling back to humanize:` in
+  dashboard logs → Producer-side error. Falls back to existing path.
+- Producer adds 2 MiniMax calls per shoutout (~3-8s typical). Booth
+  submit returns immediately (`after()` wraps the pipeline), so
+  listener doesn't wait.
+
+**Next phase:** Phase 5 — QueueDirector + queue autonomy modes
+(Lena can accept listener song requests, pick the next track).
+
+---
+
 ## 2026-05-16 — Lena Producer Phase 3: YouTube replies through Producer — CODE READY, NEEDS ENV
 
 YouTube `@lena` chat replies now optionally route through the new
