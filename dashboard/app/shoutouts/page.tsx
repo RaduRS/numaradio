@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fmtRelative } from "@/lib/fmt";
 import type { ShoutoutRow } from "@/lib/shoutouts";
+import type { ChatterRow } from "@/lib/chatter";
 import type { DaemonStatusResponse } from "@/lib/types";
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -16,6 +17,23 @@ interface ListResponse {
   // header counter reflects the moderation queue size.
   held: ShoutoutRow[];
   recent: ShoutoutRow[];
+  chatter?: ChatterRow[];
+}
+
+// Wall display: aired audio uses quotes for prosody, but they read
+// terribly on the dashboard. Strip wrapping quotes and the
+// "X writes: \"…\"" preamble shape humanize.ts sometimes emits.
+function cleanWallText(text: string | null | undefined): string {
+  if (!text) return "";
+  let t = text.trim();
+  // Strip a "Name writes: \"…\"." or "Name writes, \"…\"." preamble.
+  const writesMatch = t.match(/^[^"]+?\bwrites[:,]\s*["“](.+)["”]\.?\s*$/s);
+  if (writesMatch) t = writesMatch[1].trim();
+  // Strip a single pair of wrapping quotes.
+  t = t.replace(/^["“](.+)["”]\.?$/s, "$1").trim();
+  // Drop any remaining straight or curly double-quote chars — the
+  // wall doesn't need them and they always read poorly.
+  return t.replace(/["“”]/g, "").trim();
 }
 
 type LogEventKind = "shoutout" | "chatter" | "announce" | "failure";
@@ -351,24 +369,43 @@ export default function ShoutoutsPage() {
         kind: "shoutout",
         id: `s-${s.id}`,
         at: s.updatedAt,
-        text: s.broadcastText ?? s.cleanText ?? s.rawText,
+        text: cleanWallText(s.broadcastText ?? s.cleanText ?? s.rawText),
         sender: s.requesterName ?? "anonymous",
         deliveryStatus: s.deliveryStatus,
         moderationReason: s.moderationReason ?? undefined,
       });
     }
 
+    // Chatter DB rows — the daemon's lastPushes ring only holds the
+    // last 10, so anything older falls off. The Chatter table is the
+    // durable source of truth for every Lena auto-chatter utterance.
+    const seenChatterAt = new Set<string>();
+    for (const c of data?.chatter ?? []) {
+      seenChatterAt.add(c.airedAt);
+      list.push({
+        kind: "chatter",
+        id: `c-db-${c.id}`,
+        at: c.airedAt,
+        script: cleanWallText(c.script),
+        type: c.chatterType,
+        slot: `slot${c.slot}`,
+      });
+    }
+
     // Daemon lastPushes split into chatter / announce / unknown.
+    // Chatter entries that already came from the DB above are skipped
+    // (deduped by `at` timestamp) so we don't double-list the last 10.
     for (const p of daemonPoll.data?.lastPushes ?? []) {
       if (!p.trackId || !p.at) continue;
       if (p.trackId.startsWith("auto-chatter:")) {
+        if (seenChatterAt.has(p.at)) continue;
         // trackId format: auto-chatter:<chatterId>:<type>:slot<N>
         const parts = p.trackId.split(":");
         list.push({
           kind: "chatter",
           id: `c-${p.at}-${parts[1] ?? ""}`,
           at: p.at,
-          script: p.script ?? "",
+          script: cleanWallText(p.script ?? ""),
           type: parts[2] ?? "?",
           slot: parts[3] ?? "?",
         });
@@ -379,7 +416,7 @@ export default function ShoutoutsPage() {
           kind: "announce",
           id: `a-${p.at}-${parts[1] ?? ""}`,
           at: p.at,
-          script: p.script ?? "",
+          script: cleanWallText(p.script ?? ""),
           trackId: parts[1] ?? "",
         });
       }
@@ -407,7 +444,7 @@ export default function ShoutoutsPage() {
 
     // Sort newest-first.
     return list.sort((a, b) => b.at.localeCompare(a.at));
-  }, [recent, daemonPoll.data]);
+  }, [recent, data?.chatter, daemonPoll.data]);
 
   const filteredEvents = useMemo(() => {
     if (logFilter === "all") return events;
