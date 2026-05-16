@@ -417,7 +417,9 @@ const announce = new AnnouncementOrchestrator({
       url,
       script,
     });
-    console.log(`[announce] trackId=${trackId} chatterId=${chatterId}`);
+    console.log(
+      `[announce] trackId=${trackId} chatterId=${chatterId} script=${JSON.stringify(script)}`,
+    );
   },
   logFailure: ({ reason, detail }) => {
     lastFailures.push({ at: new Date().toISOString(), reason, detail });
