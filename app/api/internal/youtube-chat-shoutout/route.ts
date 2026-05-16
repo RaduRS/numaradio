@@ -19,8 +19,9 @@ import { classifyShoutoutIntent } from "@/lib/classify-shoutout-intent";
 import { generateLenaReply } from "@/lib/lena-reply";
 import { internalAuthOk } from "@/lib/internal-auth";
 import { lenaSpeakChat } from "@/lib/lena-producer-chat";
-import { isProducerReplyEnabled } from "@/lib/lena-producer-chat/feature-flag";
+import { isProducerReplyEnabled, isRequestAutonomyEnabled } from "@/lib/lena-producer-chat/feature-flag";
 import { callMiniMaxJson } from "@/lib/lena-producer-chat/minimax-llm";
+import { lookupCatalogCandidates } from "@/lib/catalog-lookup";
 
 export const dynamic = "force-dynamic";
 
@@ -165,13 +166,17 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const secret = process.env.INTERNAL_API_SECRET;
   const isReply = intent.category === "reply";
+  const isRequest = intent.category === "request" || intent.category === "shoutout_with_request";
 
   after(() => runYoutubeChatPipeline({
     shoutoutId: shoutout.id,
+    stationId: station.id,
     rawText,
     displayName,
     requesterName,
     isReply,
+    isRequest,
+    requestIntent: isRequest ? (intent.category as "request" | "shoutout_with_request") : null,
     secret,
   }));
 
@@ -204,13 +209,16 @@ export async function POST(req: Request): Promise<NextResponse> {
 // Errors persist a CONTROLLED moderationReason on the row.
 async function runYoutubeChatPipeline(args: {
   shoutoutId: string;
+  stationId: string;
   rawText: string;
   displayName: string;
   requesterName: string;
   isReply: boolean;
+  isRequest: boolean;
+  requestIntent: "request" | "shoutout_with_request" | null;
   secret: string | undefined;
 }): Promise<void> {
-  const { shoutoutId, rawText, displayName, requesterName, isReply, secret } = args;
+  const { shoutoutId, stationId, rawText, displayName, requesterName, isReply, isRequest, requestIntent, secret } = args;
 
   let moderation: Awaited<ReturnType<typeof moderateShoutout>>;
   try {
@@ -317,6 +325,50 @@ async function runYoutubeChatPipeline(args: {
 
   let textToAir = moderation.text;
   let skipHumanize = false;
+
+  // Phase 5b: listener `@lena play X` requests. Gated by
+  // LENA_REQUEST_AUTONOMY. Falls through to default shoutout handling
+  // on any failure (Lena reads the listener's message as a shoutout —
+  // unchanged from pre-Phase-5b behaviour).
+  if (isRequest && requestIntent && isRequestAutonomyEnabled(process.env)) {
+    try {
+      const candidates = await lookupCatalogCandidates({
+        prisma,
+        stationId,
+        requestText: moderation.text,
+      });
+      const r = await lenaSpeakChat({
+        trigger: {
+          source: "youtube_chat_mention",
+          handle: displayName ?? "anonymous",
+          text: moderation.text,
+          intent: requestIntent,
+        },
+        prisma,
+        stationId,
+        nowMs: Date.now(),
+        llm: (prompts) => callMiniMaxJson(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+        catalogCandidates: candidates,
+      });
+      if (r) {
+        textToAir = r.text;
+        skipHumanize = true;
+        // Persist Lena's spoken line so the dashboard Recent feed shows
+        // her response (not the listener's "play X" message).
+        await prisma.shoutout
+          .update({ where: { id: shoutoutId }, data: { cleanText: textToAir } })
+          .catch(() => {});
+        console.log(
+          `[lena-request] mode=${r.mode} queued=${r.queuedTrackId ?? "none"} for ${shoutoutId}`,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[lena-request] failed for ${shoutoutId}, falling through to shoutout:`,
+        err,
+      );
+    }
+  }
 
   if (isReply) {
     let producerResult: { text: string; mode: string } | null = null;

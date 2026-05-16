@@ -4,6 +4,55 @@ Last updated: 2026-05-16
 
 ---
 
+## 2026-05-16 — Lena Producer Phase 5b: Listener `@lena play X` requests — CODE READY, NEEDS ENV
+
+Completes the queue-autonomy story. Listener types `@lena play Hotel
+California by Eagles` → classifier returns `request` (Phase 2.5) →
+catalog fuzzy-match → Producer accepts/declines → if accept, queue
+insert via the shared `createQueueItemAtomically`.
+
+**Spec:** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-16-lena-producer-phase-5b.md`
+
+**What ships:**
+- `lib/queue-insert.ts` — shared atomic queue inserter (extracted from
+  daemon; safe for cross-process use via `pg_advisory_xact_lock`)
+- `lib/catalog-lookup.ts` — token-overlap fuzzy match against Track library
+- `lib/lena-producer-chat/` extended with 3 new modes: `accept_request`,
+  `accept_request_deferred` (queue is busy), `decline_request` (with
+  reason: `not_in_catalog` / `recently_aired` / `wrong_show_block` /
+  `same_artist_too_soon` / `queue_full`)
+- `app/api/internal/youtube-chat-shoutout/route.ts` routes request +
+  shoutout_with_request intents through the new path. Lena's spoken
+  reply replaces the shoutout text (`skipHumanize=true`); on any
+  failure it falls through to default shoutout handling.
+
+**Deploy:**
+1. `git pull` on Orion (no daemon restart required — Vercel-side path)
+2. Vercel env: add `LENA_REQUEST_AUTONOMY=on` (Production + Preview)
+3. Vercel redeploys automatically on env change
+4. Test from a non-owner YouTube account during a live broadcast:
+   - `@lena play hotel california by eagles` (if in catalog → queued + announced)
+   - `@lena play some song that doesn't exist` (declined politely)
+   - `@lena loving this set, can you play any synthwave` (combined intent — also handled)
+
+**Rollback:** unset `LENA_REQUEST_AUTONOMY` in Vercel env, redeploy.
+Request intents fall through to default shoutout handling (Lena reads
+the listener's message as a shoutout — same behaviour as before Phase 5b).
+
+**Cross-process safety:** Both the daemon (Phase 5 MVP's `queue_pick`)
+and Vercel (Phase 5b's `accept_request`) now call the SAME
+`createQueueItemAtomically` in `lib/queue-insert.ts`. The Postgres
+advisory lock serialises them — no race on `positionIndex`. Verified
+during the Phase 5b extraction (T1).
+
+**Watch in Vercel logs:**
+- `[lena-request] mode=accept_request queued=<trackId> for <shoutoutId>` — success
+- `[lena-request] mode=decline_request queued=none for <shoutoutId>` — polite decline
+- `[lena-request] failed for <id>, falling through to shoutout:` — fail-soft
+
+---
+
 ## 2026-05-16 — Lena Producer Phase 5 MVP: queue_pick (Lena programs her booth) — CODE READY, NEEDS ENV
 
 Lena can now insert tracks into the queue during auto-breaks. Behind
