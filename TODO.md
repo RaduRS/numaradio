@@ -5,52 +5,6 @@ read the **resume trigger** at the top, run the plan.
 
 ---
 
-## Lena Producer — Phases 2 through 6
-
-**Status:** parked 2026-05-16. Phase 1 (ShiftMemory foundation) shipped
-in 23 commits on `main` — see `docs/HANDOFF.md` 2026-05-16 entry for
-the deploy steps.
-**Resume trigger:** anytime after Phase 1 is deployed and observed
-healthy for a few days. Each phase is independently shippable behind
-its own flag.
-
-### Reference docs (load these first)
-
-- **Spec (full architecture, all phases):** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
-- **Phase 1 plan (completed, reference for code conventions used):** `docs/superpowers/plans/2026-05-16-lena-producer-phase-1.md`
-- **HANDOFF.md 2026-05-16 entry:** deploy steps + Neon-pooler caveat + the two schema findings (Track.key absent, Shoutout.requesterName not handle)
-
-### Phase ladder (build in this order)
-
-| Phase | Flag | Approx size | What it ships |
-|---|---|---|---|
-| **2** | `LENA_PRODUCER_AUTO=on` | ~25-30 tasks | Producer + Writer for `auto_track_boundary` only. First time Lena's spoken output actually changes. New code in `workers/queue-daemon/lena-producer/`: `producer.ts`, `producer-prompt.ts`, `producer-context.ts`, `writer.ts`, `writers/{opinion,callback,aside,...}.ts`, `modes.ts`. Replaces inline prompts in `workers/queue-daemon/auto-host.ts` (lines ~407-570). |
-| **2.5** | `LENA_CLASSIFIER_REQUEST=on` | ~8 tasks | Extend `lib/classify-shoutout-intent.ts` from tri-state to 5-state (adds `request` + `shoutout_with_request`). Inert until Phases 3/5 consume. |
-| **3** | `LENA_PRODUCER_REPLY=on` | ~10 tasks | Route YouTube `@lena` reply path (`lib/lena-reply.ts`) through Producer. Depends on Phase 2 shipping the Producer surface. |
-| **4** | `LENA_PRODUCER_SHOUTOUT=on` | ~12 tasks | Route shoutout narration (`dashboard/lib/humanize.ts`) through Producer. **Includes the two known fixes:** scrub "let it ride" / "we'll take that one" examples from humanize.ts ~line 130, and fix the `,.` regex bug in `dashboard/lib/radio-host.ts` (existing regex catches `.,` not `,.` — add `[,;]\./g`). |
-| **5** | `LENA_QUEUE_AUTONOMY=on` | ~20-25 tasks | QueueDirector module. New modes: `queue_pick`, `accept_request`, `accept_request_deferred`, `decline_request` with phrasebook by reason. Inserts into `priority_request` band via existing `createQueueItemAtomically` (`workers/queue-daemon/index.ts:382-401`). Needs `lib/show-genre-fit.ts` helper (doesn't exist yet — must build). |
-| **6** | none — pure cleanup | ~5 tasks | Delete deprecated paths: `workers/queue-daemon/chatter-prompts.ts`, `workers/queue-daemon/context-line.ts`, old `lib/lena-reply.ts` prompt, old `dashboard/lib/humanize.ts` rewrite. Only after Phases 2-4 have been on for a few days with no fallback fires. |
-
-### Operating principles to remember
-
-- Each phase = one plan file at `docs/superpowers/plans/YYYY-MM-DD-lena-producer-phase-N.md`
-- Each phase ships independently behind its own flag, can be rolled back by unsetting the flag
-- Lena's behavior is unchanged until Phase 2 flag is flipped on
-- `mode=silence` is ONLY valid for `auto_track_boundary` triggers — direct `@lena` mentions ALWAYS get a spoken response (see memory `feedback_lena_never_ignores_direct_mention.md`)
-- Suno is NOT in this codebase — `decline_request` for any catalog miss (see memory `project_numa_suno_separation.md`)
-- Generated music always takes priority — `priority_request` only interleaves between scheduled tracks
-- autoChatter ON = Lena is fully alive (no per-action quotas, qualitative guardrails only)
-
-### Resume recipe
-
-1. Check that Phase 1 is deployed and `journalctl | grep lena-shift-memory` shows `notify healthy`
-2. Read the spec (~450 lines) to refresh context
-3. Skim Phase 1 plan for code patterns (file structure, TDD style, commit message template)
-4. Write Phase 2 plan: `superpowers:writing-plans` skill, output to `docs/superpowers/plans/YYYY-MM-DD-lena-producer-phase-2.md`
-5. Execute: `superpowers:subagent-driven-development` skill
-
----
-
 ## Booth consent checkbox — shoutout + song-request forms
 
 **Status:** parked 2026-05-05.
@@ -122,49 +76,98 @@ Remove the entry from this file.
 
 ---
 
-## Lena Producer Phase 5b — Listener song requests
+## Newsletter subscribe checkbox on submit page
 
-**Status:** parked 2026-05-16. Phase 5 MVP (daemon-side queue_pick) is
-shipped locally; Phase 5b extends the queue-autonomy story to listener
-requests via YouTube `@lena play X` messages.
+**Status:** parked 2026-05-16.
+**Resume trigger:** anytime — small additive feature, no blockers.
 
-**Why it's not in Phase 5 MVP:** the listener-request dispatch route
-runs on Vercel (`app/api/internal/youtube-chat-shoutout/route.ts`),
-but the queue insert (`createQueueItemAtomically`) runs in the daemon.
-Cross-process queue insert requires either:
-1. A new HTTP endpoint on the daemon (exposed via cloudflared) that
-   Vercel POSTs to with the desired trackId + reason. Daemon validates
-   via QueueDirector + inserts.
-2. Vercel-side QueueDirector that writes directly to `QueueItem` via
-   Prisma — but needs careful pg_advisory_xact_lock coordination with
-   the daemon's createQueueItemAtomically. Risky.
+### What to build
 
-**Recommended approach:** option 1 (HTTP endpoint on daemon). The
-daemon already has an HTTP server on loopback :4000; expose
-`POST /lena-queue-action` via cloudflared at `api.numaradio.com/...`
-with the existing `INTERNAL_API_SECRET` auth.
+On the artist submission form (`app/_components/SubmitForm.tsx`),
+add an optional checkbox the submitter can tick to opt in to a
+Numa Radio newsletter / mailing list:
 
-**What ships in 5b:**
-- New `POST /lena-queue-action` on daemon HTTP server
-- Cloudflared route for it
-- Vercel-side classifier + Producer-lite for chat request intents
-  (`request` + `shoutout_with_request`) — extend `lib/lena-producer-chat/`
-  with new modes: `accept_request`, `accept_request_deferred`, `decline_request`
-- Catalog candidate lookup on Vercel side (Prisma fuzzy match on Track
-  title/artist against listener's request text)
-- Dispatch route gates request-intent handling behind `LENA_REQUEST_AUTONOMY`
-- Lena's reply line is consistent with what's queued ("Pulling Aphex up
-  for you, Anna — coming after this one")
+> ☐ Keep me posted with Numa Radio updates (occasional, no spam).
 
-**Estimated size:** ~12-15 tasks. Bigger than Phase 5 MVP because of the
-cross-process plumbing + auth + Vercel-side catalog lookup.
+- Default UNCHECKED (opt-in, not opt-out).
+- Visual: same small / dim inline style as the existing consent
+  checkbox cluster — sits below the social-media vouch checkbox.
+- Submit button stays enabled regardless of this checkbox (it's
+  optional).
+- When checked + submitted: persist the submitter's email to a
+  newsletter list. Either:
+  - **Resend** (already integrated for transactional approval/reject
+    emails — see HANDOFF 2026-05-03 evening) — Resend has Audiences
+    / Contacts. Add the email to a "numaradio-artists" audience.
+  - **Or a simple DB column on `MusicSubmission`** (`newsletterOptIn boolean`)
+    + a periodic export. Simpler, no extra service dependency.
 
-**When to ship:** after Phase 5 MVP has been live + observed for a few
-days. Verify the QueueDirector guardrails work as expected before adding
-listener-driven queue inserts on top.
+Recommend Resend Audiences path — already paid for, no new infra,
+and Resend has unsubscribe links + double-opt-in patterns out of
+the box.
+
+### Files to touch
+
+- `app/_components/SubmitForm.tsx` — new checkbox state + JSX
+- `app/api/submissions/intake/route.ts` (or wherever submit lands)
+  — pass `newsletterOptIn` through
+- `dashboard/lib/email/` (existing Resend client) — add a helper
+  `addToArtistAudience(email, displayName)` that POSTs to the
+  Resend Audiences API. Look up Resend Audiences docs for endpoint.
+- Optionally: a small operator-side audit log so we can see opt-in
+  rate over time.
+
+### Operator follow-ups
+
+- Create a "numaradio-artists" audience in Resend dashboard (one-time)
+- Decide on first newsletter cadence + content (monthly station
+  updates? release roundups? — separate brand decision)
+- Add unsubscribe link + footer to any newsletter we send (legal
+  requirement under GDPR / CAN-SPAM — Resend templates handle this)
+
+### When this is done
+
+Remove the entry from this file.
 
 ---
 
+## Lena Producer Phase 6 — Delete deprecated paths
+
+**Status:** parked 2026-05-16. Phases 1–5b shipped today; Phase 6
+cleanup deferred until prod observation period passes.
+
+**Resume trigger:** after Phases 2 / 3 / 4b / 5b have all been on
+in production for 5+ days with no `fallback` log lines firing (the
+legacy paths are the fallbacks — if they never trigger, safe to
+delete).
+
+### What to delete
+
+Once verified safe:
+- `workers/queue-daemon/chatter-prompts.ts` — Phase 2's Producer
+  replaces it. Currently still imported as the fallback if
+  `lenaSpeak()` returns null. Deletion removes that fallback —
+  acceptable when Producer has been stable.
+- `workers/queue-daemon/context-line.ts` — Subsumed by Producer's
+  `aside` mode. Still runs on a 10-min tick writing text-only
+  Chatter rows for the public site's "Lena quote" surface. Need
+  to decide: keep for non-audio Lena quotes, or surface Producer
+  `aside` rows for that purpose too.
+- Old `lib/lena-reply.ts` prompt code — Phase 3's chat-Producer
+  replaces it. Currently still imported as the reply fallback.
+- Old `dashboard/lib/humanize.ts` rewrite logic — Phase 4b's
+  shoutout-Producer replaces it. Currently the fallback.
+
+### Operator follow-ups
+
+- Verify each phase has zero fallback log lines for 5+ days
+- Then run the cleanup PR; ~5 small commits to delete each path
+
+### When this is done
+
+Remove the entry from this file.
+
+---
 
 ## Lena Producer — Website song-request surface
 
