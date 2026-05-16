@@ -287,6 +287,11 @@ GOOD EXAMPLES (specific, real names, in voice. The [bracketed tags] are metadata
 - "Lyrid meteor shower's peaking this week. If you're outside tonight, look up." [use when evening or night — peak observation needs darkness anyway]
 - "Lyrid meteor shower's peaking this week. Worth setting an alarm if you're a sky-watcher." [time-neutral, works in morning/afternoon]
 
+TEASER-NOW + RELEASE-LATER lines: when a line references BOTH a teaser/announcement/first-look that happened recently AND a future release date, make the structure unambiguous. Listeners only hear it once — don't make them parse two dates separated by a dash.
+GOOD: "A first look at Will Ferrell's The Hawk dropped this week — Netflix puts it out in July."
+GOOD: "Netflix just teased The Hawk, Will Ferrell's next comedy — out in July with Florence Pugh."
+BAD: "Netflix dropped a first look at The Hawk this week — July release." [the "this week — July release" cadence reads as a contradiction on radio]
+
 FABRICATED IMMEDIACY — NEVER USE FOR LAUNCHES/RELEASES/ANNOUNCEMENTS:
 The phrases "earlier today", "this morning", "moments ago", "minutes ago", and "a few minutes ago" are BANNED for any release/launch/announcement claim. They make stale news sound fresh and we have no way to verify the snippet is actually that new. Use "this week", "last week", "yesterday", "recently", or just past tense without timing. ("OpenAI launched GPT-5 this week" — good. "OpenAI launched GPT-5 earlier today" — banned even if it sounds punchier.) "Today" / "tonight" / "right now" are still fine for weather and astronomical events that ARE genuinely current.
 
