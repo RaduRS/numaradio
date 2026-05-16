@@ -138,7 +138,7 @@ export default function SubmitPage() {
               }}
             >
               <strong style={{ color: "var(--fg)", fontWeight: 600 }}>English-only station.</strong>{" "}
-              Tracks with non-English vocals or lyrics are rejected at review.
+              We only take tracks with English vocals and lyrics.
             </span>
           </div>
           <SubmitForm />
@@ -315,9 +315,9 @@ export default function SubmitPage() {
               </p>
               <p>No tracks with uncleared samples.</p>
               <p>
-                No tracks with non-English vocals or lyrics. Numa is an
-                English-only station — the host and all on-air content
-                are English, so non-English material can&apos;t be aired.
+                English vocals and lyrics only. Numa&apos;s host speaks
+                English and the station broadcasts in English — tracks
+                in another language can&apos;t be aired.
               </p>
               <p>
                 No content that can&apos;t be broadcast 24/7 on an open
