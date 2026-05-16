@@ -1,5 +1,16 @@
 import type { ShiftEvent } from "./shift-event.ts";
 
+/** Strip [YT]/[Booth] prefix + leading @ from a raw handle so the
+ *  Producer/Writer see a friendly name (the raw value stays in the
+ *  underlying ShiftEvent for audit). */
+function friendlyHandle(raw: string): string {
+  const cleaned = raw
+    .replace(/^\s*\[(YT|Booth|booth|yt)\]\s*/i, "")
+    .replace(/^@+/, "")
+    .trim();
+  return cleaned || raw; // fall back to raw if cleaning emptied it
+}
+
 export interface CallbackCandidate {
   /** Source event id — passed back as `callback_to` when Producer references it. */
   id: string;
@@ -24,7 +35,7 @@ export function deriveCallbacks(
       candidates.push({
         id: e.id,
         sourceType: "shoutout",
-        description: `Shoutout from ${e.handle}: ${truncate(e.originalText, 60)}`,
+        description: `Shoutout from ${friendlyHandle(e.handle)}: ${truncate(e.originalText, 60)}`,
         minsAgo: Math.floor((nowMs - e.airedAt) / 60_000),
         used: usedIds.has(e.id),
       });
@@ -32,7 +43,7 @@ export function deriveCallbacks(
       candidates.push({
         id: e.id,
         sourceType: "mention",
-        description: `${e.handle} said: ${truncate(e.text, 60)}`,
+        description: `${friendlyHandle(e.handle)} said: ${truncate(e.text, 60)}`,
         minsAgo: Math.floor((nowMs - e.airedAt) / 60_000),
         used: usedIds.has(e.id),
       });

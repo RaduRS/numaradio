@@ -50,3 +50,12 @@ test("track_aired is NOT a callback candidate by default (callbacks are listener
   ];
   assert.equal(deriveCallbacks(log, T0, new Set()).length, 0);
 });
+
+test("derives friendly handle (strips [YT] prefix + @)", () => {
+  const log: ShiftEvent[] = [
+    { type: "shoutout_aired", id: "s1", handle: "[YT] @inRhino", originalText: "hi", airedAt: T0 - 60_000 },
+  ];
+  const pool = deriveCallbacks(log, T0, new Set());
+  assert.match(pool[0].description, /Shoutout from inRhino/);
+  assert.doesNotMatch(pool[0].description, /\[YT\]|@inRhino/);
+});
