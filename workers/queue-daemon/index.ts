@@ -28,6 +28,10 @@ import {
 } from "./youtube-chat-loop.ts";
 import { recordYoutubeQuota } from "../../lib/youtube-quota.ts";
 import { startLoudnormPoller } from "./loudnorm-poller.ts";
+import { ShiftMemory } from "./lena-producer/shift-memory.ts";
+import { NotifyListener } from "./lena-producer/notify-listener.ts";
+import { reconstructEvents, pollSince } from "./lena-producer/reconstruction.ts";
+import { isShiftMemoryEnabled } from "./lena-producer/feature-flag.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -626,6 +630,54 @@ async function main() {
 
   await sock.start();
 
+  // Lena Producer Phase 1: ShiftMemory + NotifyListener (read-only,
+  // observability foundation). Gated behind LENA_SHIFT_MEMORY env flag.
+  let lenaListener: NotifyListener | null = null;
+  if (isShiftMemoryEnabled(process.env)) {
+    const sid = await stationId();
+    const shiftMemory = new ShiftMemory();
+    const now = Date.now();
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+    const reconstructed = await reconstructEvents({
+      prisma,
+      stationId: sid,
+      sinceMs: now - FOUR_HOURS_MS,
+      nowMs: now,
+    });
+    for (const ev of reconstructed) shiftMemory.record(ev);
+
+    // High-water marks for the poll fallback — start at the latest
+    // reconstructed event per source, or 4h ago if none.
+    let sincePlayHistoryAt = now - FOUR_HOURS_MS;
+    let sinceChatterAt = now - FOUR_HOURS_MS;
+    let sinceShoutoutAt = now - FOUR_HOURS_MS;
+    for (const ev of reconstructed) {
+      if (ev.type === "track_aired") sincePlayHistoryAt = Math.max(sincePlayHistoryAt, ev.airedAt);
+      if (ev.type === "lena_line_aired") sinceChatterAt = Math.max(sinceChatterAt, ev.airedAt);
+      if (ev.type === "shoutout_aired") sinceShoutoutAt = Math.max(sinceShoutoutAt, ev.airedAt);
+    }
+
+    lenaListener = new NotifyListener({
+      connectionString: process.env.DATABASE_URL!,
+      onEvent: (ev) => {
+        shiftMemory.record(ev);
+        const ts = ev.type === "operator_force" ? ev.forcedAt : ev.airedAt;
+        if (ev.type === "track_aired") sincePlayHistoryAt = Math.max(sincePlayHistoryAt, ts);
+        if (ev.type === "lena_line_aired") sinceChatterAt = Math.max(sinceChatterAt, ts);
+        if (ev.type === "shoutout_aired") sinceShoutoutAt = Math.max(sinceShoutoutAt, ts);
+      },
+      onHealthChange: (state) => {
+        console.log(`[lena-shift-memory] notify ${state}`);
+      },
+      pollForMissedEvents: async () =>
+        pollSince({ prisma, stationId: sid, sincePlayHistoryAt, sinceChatterAt, sinceShoutoutAt }),
+    });
+    await lenaListener.start();
+    console.log(`[lena-shift-memory] booted with ${reconstructed.length} reconstructed events`);
+  } else {
+    console.log("[lena-shift-memory] disabled (LENA_SHIFT_MEMORY not set)");
+  }
+
   // Tier 2 context-line tick. First fire 30s after boot so the daemon
   // has time to connect; subsequent ticks every 10 min. catch() so a
   // single failure never bubbles into an unhandled rejection.
@@ -702,6 +754,7 @@ async function main() {
   const shutdown = () => {
     console.log("[queue-daemon] shutting down");
     loudnormPoller.stop();
+    lenaListener?.stop().catch(() => {});
     sock.stop();
     server.close();
     prisma.$disconnect().finally(() => process.exit(0));
