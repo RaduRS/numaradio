@@ -116,6 +116,9 @@ function addRadioCadence(line: string): string {
       // Clean up double periods from replacements
       .replace(/\.\./g, ".")
       .replace(/\.\,/g, ".")
+      // Collapse comma/semicolon-then-period (LLM ends a phrase with a
+      // comma and ensureTerminal() appends a period → ",." in aired audio)
+      .replace(/[,;]\./g, ".")
   );
 }
 
