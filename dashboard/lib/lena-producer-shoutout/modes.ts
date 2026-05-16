@@ -1,5 +1,10 @@
 
-export type ShoutoutMode = "shoutout_classic" | "shoutout_inline" | "shoutout_quote" | "shoutout_callback";
+export type ShoutoutMode =
+  | "shoutout_classic"
+  | "shoutout_inline"
+  | "shoutout_quote"
+  | "shoutout_callback"
+  | "shoutout_meta";
 
 export interface ShoutoutDecision {
   mode: ShoutoutMode;

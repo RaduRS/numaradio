@@ -4,6 +4,7 @@ import { buildClassicShoutoutPrompt } from "./writers/classic";
 import { buildInlineShoutoutPrompt } from "./writers/inline";
 import { buildQuoteShoutoutPrompt } from "./writers/quote";
 import { buildCallbackShoutoutPrompt } from "./writers/callback";
+import { buildMetaShoutoutPrompt } from "./writers/meta";
 
 export interface ShoutoutWriterDeps {
   llm: (prompts: { system: string; user: string }) => Promise<string>;
@@ -21,6 +22,7 @@ export async function runShoutoutWriter(
     case "shoutout_inline": prompts = buildInlineShoutoutPrompt(decision, ctx, recentAired); break;
     case "shoutout_quote": prompts = buildQuoteShoutoutPrompt(decision, ctx, recentAired); break;
     case "shoutout_callback": prompts = buildCallbackShoutoutPrompt(decision, ctx, recentAired); break;
+    case "shoutout_meta": prompts = buildMetaShoutoutPrompt(decision, ctx, recentAired); break;
   }
   const raw = await deps.llm(prompts);
   return raw.trim() || null;

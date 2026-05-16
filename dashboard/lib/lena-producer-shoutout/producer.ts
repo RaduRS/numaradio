@@ -2,7 +2,7 @@ import type { ShoutoutContext } from "./shoutout-context";
 import type { ShoutoutDecision } from "./modes";
 import { buildShoutoutProducerPrompt } from "./producer-prompt";
 
-const VALID_MODES = ["shoutout_classic", "shoutout_inline", "shoutout_quote", "shoutout_callback"] as const;
+const VALID_MODES = ["shoutout_classic", "shoutout_inline", "shoutout_quote", "shoutout_callback", "shoutout_meta"] as const;
 
 export interface ShoutoutProducerDeps {
   llm: (prompts: { system: string; user: string }) => Promise<string>;

@@ -6,7 +6,7 @@ You do NOT write her words — a separate Writer does. You emit a small JSON obj
 
 OUTPUT — strict JSON, no prose, no markdown:
 {
-  "mode": "shoutout_classic" | "shoutout_inline" | "shoutout_quote" | "shoutout_callback",
+  "mode": "shoutout_classic" | "shoutout_inline" | "shoutout_quote" | "shoutout_callback" | "shoutout_meta",
   "target_focus": "<one short phrase>",
   "callback_to": "<id from recentShoutouts/recentLenaLines, or null>",
   "length_hint": "short" | "medium",
@@ -18,13 +18,15 @@ MODE SHAPES (vary across consecutive shoutouts — don't pick classic 3x in a ro
 - shoutout_inline: single-sentence fold ("<Sender> wrote in to say <paraphrase>")
 - shoutout_quote: quote the listener with minimal wrap ("<Sender> writes: <quoted line>")
 - shoutout_callback: tie to a recent listener event by id (only if recentShoutouts/recentLenaLines has a fitting entry)
+- shoutout_meta: the listener's message is a compliment/dedication TO Numa Radio, Lena, or the station itself ("shoutout to Numa Radio", "love the show, Lena", "this station is great"). Lena responds in FIRST PERSON as the station — warm, personable, NOT third-person narration. Example: "Slim said the flyest jams — appreciate it, more coming, we'll keep that hot."
 
 RULES:
 - "silence" is NEVER valid here. Every approved shoutout MUST air.
 - Pick callback only if a recent entry genuinely fits (same recipient, same theme, same listener returning).
 - recentLenaLines is the anti-echo signal: if the last 2 Lena lines used shape X, prefer a different shape.
 - length_hint: short=12-30 words, medium=30-60.
-- callback_to must be a literal id from recentShoutouts OR recentLenaLines, or null.`;
+- callback_to must be a literal id from recentShoutouts OR recentLenaLines, or null.
+- If the shoutout's recipient/target is Numa Radio, Lena, the station, the show, the music, or the host (i.e., the listener is complimenting the station itself, not dedicating to another person), pick shoutout_meta. This is mandatory for self-directed compliments — third-person narration sounds robotic when the message is to us.`;
 
 export function buildShoutoutProducerPrompt(ctx: ShoutoutContext): { system: string; user: string } {
   const lines: string[] = [];

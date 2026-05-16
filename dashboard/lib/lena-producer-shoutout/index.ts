@@ -1,10 +1,11 @@
 import { fetchShoutoutContext, type ShoutoutTrigger, type PrismaSlice } from "./shoutout-context";
+import type { ShoutoutMode } from "./modes";
 import { runShoutoutProducer } from "./producer";
 import { runShoutoutWriter } from "./writer";
 
 export interface LenaShoutoutResult {
   text: string;
-  mode: "shoutout_classic" | "shoutout_inline" | "shoutout_quote" | "shoutout_callback";
+  mode: ShoutoutMode;
 }
 
 export interface LenaSpeakShoutoutArgs {
