@@ -325,6 +325,11 @@ export default function SubmitPage() {
                 If a label, distributor, or rights deal restricts YouTube
                 distribution for the track, this isn&apos;t the right home.
               </p>
+              <p>
+                Artist name and track title are for credit only — not for
+                links. Any URL pasted into those fields (Suno, Bandcamp,
+                Spotify, anything else) will be stripped before air.
+              </p>
               <p style={{ color: "var(--fg-mute)", fontSize: 13 }}>
                 If any of that rules you out, we&apos;re not the right home.
                 No hard feelings.
