@@ -13,6 +13,7 @@ export interface ProducerDeps {
 function parseDecision(
   raw: string,
   validCallbackIds: ReadonlySet<string>,
+  validCatalogIds: ReadonlySet<string>,
 ): ProducerDecision | null {
   let json: unknown;
   try {
@@ -32,6 +33,23 @@ function parseDecision(
     typeof callbackToRaw === "string" && validCallbackIds.has(callbackToRaw)
       ? callbackToRaw
       : null;
+
+  // queue_action validation
+  let queueAction: ProducerDecision["queueAction"] = null;
+  const qa = o.queue_action;
+  if (qa && typeof qa === "object" && !Array.isArray(qa)) {
+    const qaO = qa as Record<string, unknown>;
+    if (qaO.kind === "pick" && typeof qaO.track_id === "string" && typeof qaO.reason === "string") {
+      if (validCatalogIds.has(qaO.track_id)) {
+        queueAction = { kind: "pick", trackId: qaO.track_id, reason: qaO.reason };
+      }
+      // unknown track_id → strip silently, just like callback_to
+    }
+  }
+
+  // If mode=queue_pick but no valid queueAction, reject (force retry/fallback)
+  if (o.mode === "queue_pick" && !queueAction) return null;
+
   return {
     mode: o.mode as ProducerDecision["mode"],
     targetFocus: o.target_focus,
@@ -39,7 +57,7 @@ function parseDecision(
     lengthHint: o.length_hint as ProducerDecision["lengthHint"],
     tone: o.tone as ProducerDecision["tone"],
     addressListener: null, // auto_track_boundary
-    queueAction: null, // Phase 5 (T4) will populate this for mode='queue_pick'
+    queueAction,
   };
 }
 
@@ -48,12 +66,13 @@ export async function runProducer(
   deps: ProducerDeps,
 ): Promise<ProducerDecision> {
   const validIds = new Set(ctx.callbackPool.map((c) => c.id));
+  const validCatalogIds = new Set(ctx.catalogCandidates.map((c) => c.id));
   const baseline = buildProducerPrompt(ctx);
 
   // Attempt 1
   try {
     const raw = await deps.llm(baseline);
-    const parsed = parseDecision(raw, validIds);
+    const parsed = parseDecision(raw, validIds, validCatalogIds);
     if (parsed) return parsed;
   } catch {
     // fall through to retry
@@ -66,7 +85,7 @@ export async function runProducer(
   };
   try {
     const raw = await deps.llm(reinforced);
-    const parsed = parseDecision(raw, validIds);
+    const parsed = parseDecision(raw, validIds, validCatalogIds);
     if (parsed) return parsed;
   } catch {
     // fall through to safe default

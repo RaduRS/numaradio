@@ -17,6 +17,7 @@ function ctx(): ProducerContext {
     callbackPool: [{ id: "s1", description: "Anna shouted out about the late-night set", minsAgo: 18 }],
     counters: { msSinceLastLine: 240_000, msSinceLastWeatherMention: Infinity, msSinceLastStationDrop: 1800_000, tracksSinceLastShoutout: 2 },
     mood: { currentRun: { genre: "synth", count: 3 }, tempoTrend: "falling", avgBpmLast5: 115, topGenreThisHour: "synth" },
+    catalogCandidates: [],
   };
 }
 

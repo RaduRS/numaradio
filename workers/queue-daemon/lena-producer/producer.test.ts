@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { runProducer } from "./producer.ts";
 import type { ProducerContext } from "./producer-context.ts";
 
-function ctx(): ProducerContext {
+function ctx(opts: { catalogCandidates?: ProducerContext["catalogCandidates"] } = {}): ProducerContext {
   return {
     trigger: {
       source: "auto_track_boundary",
@@ -17,6 +17,7 @@ function ctx(): ProducerContext {
     callbackPool: [],
     counters: { msSinceLastLine: Infinity, msSinceLastWeatherMention: Infinity, msSinceLastStationDrop: Infinity, tracksSinceLastShoutout: 0 },
     mood: { currentRun: { genre: null, count: 0 }, tempoTrend: "steady", avgBpmLast5: null, topGenreThisHour: null },
+    catalogCandidates: opts.catalogCandidates ?? [],
   };
 }
 
@@ -108,4 +109,74 @@ test("runProducer: silence is allowed for auto_track_boundary", async () => {
     });
   const d = await runProducer(ctx(), { llm });
   assert.equal(d.mode, "silence");
+});
+
+test("runProducer: queue_pick with valid track_id is accepted", async () => {
+  const llm = async () =>
+    JSON.stringify({
+      mode: "queue_pick",
+      target_focus: "mood shift",
+      callback_to: null,
+      length_hint: "short",
+      tone: "warm",
+      address_listener: null,
+      queue_action: { kind: "pick", track_id: "c1", reason: "mood_shift" },
+    });
+  const d = await runProducer(ctx({ catalogCandidates: [{ id: "c1", title: "C", artist: "A", genre: "synth", bpm: 120 }] }), { llm });
+  assert.equal(d.mode, "queue_pick");
+  assert.deepEqual(d.queueAction, { kind: "pick", trackId: "c1", reason: "mood_shift" });
+});
+
+test("runProducer: queue_pick without queue_action → retry, then fallback", async () => {
+  let call = 0;
+  const llm = async () => {
+    call += 1;
+    return JSON.stringify({
+      mode: "queue_pick",
+      target_focus: "x",
+      callback_to: null,
+      length_hint: "short",
+      tone: "warm",
+      address_listener: null,
+      queue_action: null,
+    });
+  };
+  const d = await runProducer(ctx({ catalogCandidates: [{ id: "c1", title: "C", artist: null, genre: null, bpm: null }] }), { llm });
+  assert.equal(call, 2);
+  assert.equal(d.mode, "aside"); // fallback
+});
+
+test("runProducer: queue_pick with unknown track_id → retry, then fallback", async () => {
+  let call = 0;
+  const llm = async () => {
+    call += 1;
+    return JSON.stringify({
+      mode: "queue_pick",
+      target_focus: "x",
+      callback_to: null,
+      length_hint: "short",
+      tone: "warm",
+      address_listener: null,
+      queue_action: { kind: "pick", track_id: "not_in_catalog", reason: "x" },
+    });
+  };
+  const d = await runProducer(ctx({ catalogCandidates: [{ id: "c1", title: "C", artist: null, genre: null, bpm: null }] }), { llm });
+  assert.equal(call, 2);
+  assert.equal(d.mode, "aside"); // fallback
+});
+
+test("runProducer: non-queue_pick mode with unknown queue_action track_id → strips silently", async () => {
+  const llm = async () =>
+    JSON.stringify({
+      mode: "opinion",
+      target_focus: "x",
+      callback_to: null,
+      length_hint: "short",
+      tone: "warm",
+      address_listener: null,
+      queue_action: { kind: "pick", track_id: "bogus", reason: "x" },
+    });
+  const d = await runProducer(ctx({ catalogCandidates: [{ id: "c1", title: "C", artist: null, genre: null, bpm: null }] }), { llm });
+  assert.equal(d.mode, "opinion");
+  assert.equal(d.queueAction, null);
 });

@@ -8,12 +8,13 @@ You only emit a small JSON object describing the decision.
 
 OUTPUT — strict JSON, no prose, no markdown, no code fence:
 {
-  "mode": "opinion" | "callback" | "aside" | "silence",
+  "mode": "opinion" | "callback" | "aside" | "queue_pick" | "silence",
   "target_focus": "<one short phrase: what is this line about>",
   "callback_to": "<event id from callbackPool, or null>",
   "length_hint": "short" | "medium" | "long",
   "tone": "dry" | "warm" | "playful" | "low-key",
-  "address_listener": null
+  "address_listener": null,
+  "queue_action": null | { "kind": "pick", "track_id": "<id from catalog>", "reason": "<short why>" }
 }
 
 RULES:
@@ -23,7 +24,9 @@ RULES:
 - length_hint: short=4-25 words, medium=25-45, long=50-80.
 - Tone should track mood — low-key for mellow runs, playful for high-BPM moments, dry by default.
 - For this trigger (auto_track_boundary), address_listener is always null.
-- callback_to must be a literal id from callbackPool, or null. Never invent ids.`;
+- callback_to must be a literal id from callbackPool, or null. Never invent ids.
+- queue_pick mode REQUIRES a queue_action with kind="pick" and a track_id from catalogCandidates. Pick only when there's a genuine reason (mood shift, genre rotation). reason='double feature' is the only way to repeat the current artist.
+- For all other modes, queue_action MUST be null.`;
 
 export function buildProducerPrompt(ctx: ProducerContext): { system: string; user: string } {
   const lines: string[] = [];
@@ -55,6 +58,13 @@ export function buildProducerPrompt(ctx: ProducerContext): { system: string; use
     lines.push(`Callback pool:`);
     for (const c of ctx.callbackPool) {
       lines.push(`  - id=${c.id} (${c.minsAgo}min ago): ${c.description}`);
+    }
+  }
+
+  if (ctx.catalogCandidates.length > 0) {
+    lines.push(`Catalog candidates (pick one for queue_pick mode, or skip queue_pick if none fit):`);
+    for (const c of ctx.catalogCandidates.slice(0, 10)) {
+      lines.push(`  - id=${c.id}: "${c.title}" by ${c.artist ?? "?"} (${c.genre ?? "?"}, ${c.bpm ?? "?"} BPM)`);
     }
   }
 

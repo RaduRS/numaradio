@@ -64,3 +64,29 @@ test("buildProducerContext callbackPool exposes top entries with description + m
   assert.equal(ctx.callbackPool[0].id, "s1");
   assert.equal(ctx.callbackPool[0].minsAgo, 10);
 });
+
+test("buildProducerContext catalogCandidates defaults to [] when not passed", () => {
+  const mem = new ShiftMemory();
+  const trigger: AutoTrackBoundaryTrigger = {
+    source: "auto_track_boundary",
+    nextTrack: { id: "x", title: "X", artist: null, genre: null, bpm: null },
+  };
+  const ctx = buildProducerContext({ memoryView: mem.view(T0), trigger, nowMs: T0 });
+  assert.deepEqual(ctx.catalogCandidates, []);
+});
+
+test("buildProducerContext exposes catalogCandidates when passed", () => {
+  const mem = new ShiftMemory();
+  const trigger: AutoTrackBoundaryTrigger = {
+    source: "auto_track_boundary",
+    nextTrack: { id: "x", title: "X", artist: null, genre: null, bpm: null },
+  };
+  const ctx = buildProducerContext({
+    memoryView: mem.view(T0),
+    trigger,
+    nowMs: T0,
+    catalogCandidates: [{ id: "c1", title: "C", artist: "A", genre: "synth", bpm: 120 }],
+  });
+  assert.equal(ctx.catalogCandidates.length, 1);
+  assert.equal(ctx.catalogCandidates[0].id, "c1");
+});

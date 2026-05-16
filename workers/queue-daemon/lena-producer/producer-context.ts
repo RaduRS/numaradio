@@ -41,6 +41,8 @@ export interface ProducerContext {
     avgBpmLast5: number | null;
     topGenreThisHour: string | null;
   };
+  /** Phase 5: tracks the Producer can pick from when emitting queue_pick. Empty array if queue autonomy is off. */
+  catalogCandidates: Array<{ id: string; title: string; artist: string | null; genre: string | null; bpm: number | null }>;
 }
 
 function bucketFor(hour: number): string {
@@ -94,6 +96,7 @@ export function buildProducerContext(deps: {
   memoryView: ShiftMemoryView;
   trigger: AutoTrackBoundaryTrigger;
   nowMs: number;
+  catalogCandidates?: ProducerContext["catalogCandidates"];
 }): ProducerContext {
   const now = new Date(deps.nowMs);
   return {
@@ -126,5 +129,6 @@ export function buildProducerContext(deps: {
       avgBpmLast5: deps.memoryView.mood.avgBpmLast5,
       topGenreThisHour: deps.memoryView.mood.topGenreThisHour,
     },
+    catalogCandidates: deps.catalogCandidates ?? [],
   };
 }
