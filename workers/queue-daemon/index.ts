@@ -38,6 +38,7 @@ import { queueDirectorDecide } from "./lena-producer/queue-director.ts";
 import { fetchCatalogCandidates } from "./lena-producer/catalog-candidates.ts";
 import { showForHour } from "../../lib/schedule.ts";
 import type { ShowBlockName } from "../../lib/show-genre-fit.ts";
+import { createQueueItemAtomically } from "../../lib/queue-insert.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -345,7 +346,7 @@ const autoHost = new AutoHostOrchestrator({
         // call above): stationId/queueType/sourceObjectType/sourceObjectId/trackId/
         // priorityBand/queueStatus/insertedBy/reasonCode.
         try {
-          await createQueueItemAtomically(sid, {
+          await createQueueItemAtomically(prisma, sid, {
             stationId: sid,
             queueType: "music",
             sourceObjectType: "track",
@@ -527,34 +528,6 @@ async function markFailed(queueItemId: string, reasonCode: string): Promise<void
   lastFailures.push({ at: new Date().toISOString(), reason: reasonCode, detail: queueItemId });
 }
 
-// Atomically allocate the next priority_request positionIndex AND
-// create the QueueItem inside one Postgres transaction, serialised by
-// a station-scoped advisory xact lock. Two concurrent pushHandler
-// calls — e.g. song-worker push + YouTube-chat shoutout dispatch —
-// would otherwise both read MAX(positionIndex) before either inserts,
-// produce identical positionIndex values, and queue order becomes
-// non-deterministic. Lock releases when the transaction commits.
-async function createQueueItemAtomically(
-  sid: string,
-  data: Omit<Parameters<typeof prisma.queueItem.create>[0]["data"], "positionIndex">,
-): Promise<{ id: string }> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      SELECT pg_advisory_xact_lock(hashtext(${sid + ":priority_request"})::bigint)
-    `;
-    const top = await tx.queueItem.findFirst({
-      where: { stationId: sid, priorityBand: "priority_request" },
-      orderBy: { positionIndex: "desc" },
-      select: { positionIndex: true },
-    });
-    const position = (top?.positionIndex ?? 0) + 1;
-    return tx.queueItem.create({
-      data: { ...data, positionIndex: position },
-      select: { id: true },
-    });
-  });
-}
-
 async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   const track = await prisma.track.findUnique({
     where: { id: body.trackId },
@@ -578,7 +551,7 @@ async function pushHandler(body: PushBody): Promise<{ queueItemId: string }> {
   // never replays them on daemon reconnect.
   const initialStatus = kind === "shoutout" ? "completed" : "staged";
 
-  const item = await createQueueItemAtomically(track.stationId, {
+  const item = await createQueueItemAtomically(prisma, track.stationId, {
     stationId: track.stationId,
     queueType,
     sourceObjectType,
