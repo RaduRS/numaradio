@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlaylist, buildManualPlaylist, cyclePlayedFrom } from "./refresh-rotation.ts";
+import { buildPlaylist, buildManualPlaylist, cyclePlayedFrom, spaceByArtist } from "./refresh-rotation.ts";
 
-type T = { id: string; url: string; title: string };
-const t = (id: string, url: string): T => ({ id, url, title: id });
+type T = { id: string; url: string; title: string; artist: string | null };
+const t = (id: string, url: string, artist: string | null = null): T => ({ id, url, title: id, artist });
 
 test("cyclePlayedFrom collects distinct ids until the first duplicate", () => {
   // Most-recent-first order; "a" recurs → cycle is the 3 plays before that.
@@ -206,4 +206,81 @@ test("simulated cycle wrap: first pick of cycle N+1 is not the last of cycle N",
   const lastOfCycleN = nowPlaying!;
   const firstOfCycleN1 = pick();
   assert.notEqual(firstOfCycleN1, lastOfCycleN, "seam must not repeat the just-played track");
+});
+
+function maxRunIn<T extends { artist: string | null }>(seq: readonly T[]): number {
+  let best = 0, cur = 0, prev: string | null = null;
+  for (const t of seq) {
+    const a = t.artist?.trim().toLowerCase() ?? null;
+    if (a !== null && a === prev) cur++;
+    else cur = 1;
+    if (cur > best) best = cur;
+    prev = a;
+  }
+  return best;
+}
+
+test("spaceByArtist (maxRun=2) eliminates 3-in-a-row on Russell-dominant catalog", () => {
+  // 6 R + 3 B + 2 D — feasible for maxRun=2.
+  const pool: T[] = [
+    t("r1", "u-r1", "Russell Ross"), t("r2", "u-r2", "Russell Ross"),
+    t("r3", "u-r3", "Russell Ross"), t("r4", "u-r4", "Russell Ross"),
+    t("r5", "u-r5", "Russell Ross"), t("r6", "u-r6", "Russell Ross"),
+    t("b1", "u-b1", "Barely Jared"), t("b2", "u-b2", "Barely Jared"),
+    t("b3", "u-b3", "Barely Jared"),
+    t("d1", "u-d1", "Digital Culprit"), t("d2", "u-d2", "Digital Culprit"),
+  ];
+  const out = spaceByArtist(pool, 2);
+  assert.equal(out.length, pool.length, "no track lost");
+  assert.ok(maxRunIn(out) <= 2, `max run was ${maxRunIn(out)}, expected ≤ 2`);
+});
+
+test("spaceByArtist case-insensitive on artist", () => {
+  const pool: T[] = [
+    t("a", "u-a", "russell ross"), t("b", "u-b", "RUSSELL ROSS"),
+    t("c", "u-c", "Russell Ross"), t("d", "u-d", "Digital Culprit"),
+  ];
+  // 3 R + 1 D, maxRun=2 → should produce R R D R, not R R R D
+  const out = spaceByArtist(pool, 2);
+  assert.ok(maxRunIn(out) <= 2);
+});
+
+test("spaceByArtist degrades gracefully when dominant artist > ~2/3 of pool", () => {
+  // 5 of 6 are X — maxRun=2 impossible, must accept ≥3-run somewhere.
+  const pool: T[] = [
+    t("x1", "u-x1", "X"), t("x2", "u-x2", "X"), t("x3", "u-x3", "X"),
+    t("x4", "u-x4", "X"), t("x5", "u-x5", "X"), t("o1", "u-o1", "Other"),
+  ];
+  const out = spaceByArtist(pool, 2);
+  assert.equal(out.length, 6);
+  assert.equal(new Set(out.map((x) => x.id)).size, 6, "all unique, no track lost");
+});
+
+test("spaceByArtist treats null artists as run-breakers", () => {
+  const pool: T[] = [
+    t("a", "u-a", null), t("b", "u-b", null), t("c", "u-c", null),
+  ];
+  const out = spaceByArtist(pool, 2);
+  assert.equal(out.length, 3);
+});
+
+test("buildPlaylist (integration) — Russell-heavy catalog never produces 3-in-a-row", () => {
+  // 8 R + 3 B + 2 D = ~62% R, mirrors prod ratio. Run buildPlaylist 50×
+  // with shifting RNG; assert no run exceeds 2 in any output.
+  const library: T[] = [
+    ...Array.from({ length: 8 }, (_, i) => t(`r${i}`, `u-r${i}`, "Russell Ross")),
+    ...Array.from({ length: 3 }, (_, i) => t(`b${i}`, `u-b${i}`, "Barely Jared")),
+    ...Array.from({ length: 2 }, (_, i) => t(`d${i}`, `u-d${i}`, "Digital Culprit")),
+  ];
+  const byUrl = new Map(library.map((x) => [x.url, x] as const));
+  for (let seed = 1; seed <= 50; seed++) {
+    let s = seed;
+    const rng = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+    const lines = buildPlaylist(library, new Set(), new Set(), rng).trim().split("\n");
+    const seq = lines.map((u) => byUrl.get(u)!);
+    assert.ok(
+      maxRunIn(seq) <= 2,
+      `seed=${seed} produced run of ${maxRunIn(seq)}: ${seq.map((x) => x.artist?.[0]).join("")}`,
+    );
+  }
 });

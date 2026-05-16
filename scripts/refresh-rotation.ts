@@ -5,7 +5,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 
-export type RotationTrack = { id: string; url: string; title: string };
+export type RotationTrack = { id: string; url: string; title: string; artist: string | null };
+
+/**
+ * Maximum consecutive tracks by the same artist in auto rotation.
+ * 2 = at most 2 in a row → 3-in-a-row is banned. Achievable as long
+ * as the dominant artist is at most ~2/3 of the catalog; if it ever
+ * exceeds that (e.g. operator is the only artist), the spacer degrades
+ * gracefully (falls back to first remaining track) rather than
+ * refusing to write a playlist.
+ *
+ * Tighter alternative: 1 = no back-to-back. Requires the dominant
+ * artist to be ≤50% of catalog. Currently infeasible here (Russell
+ * Ross is ~63%), so we'd just be degrading constantly.
+ */
+const MAX_ARTIST_RUN = 2;
 
 export type RefreshResult = {
   librarySize: number;
@@ -90,10 +104,82 @@ export function cyclePlayedFrom(recentIds: string[], librarySize: number): Set<s
 }
 
 /**
+ * Reorder a shuffled pool so no same-artist run exceeds `maxRun`
+ * consecutive tracks. Greedy: at each step, if the current trailing
+ * run is already at maxRun, exclude that artist from the next pick;
+ * otherwise pick the first remaining track. Falls back to the first
+ * remaining track if no non-excluded candidate exists (operator-is-
+ * the-only-artist degenerate case).
+ *
+ * Artist match is case-insensitive on artistDisplay. Tracks with null
+ * artist count as a unique "no-artist" group that breaks runs.
+ */
+export function spaceByArtist<T extends { artist: string | null }>(
+  pool: readonly T[],
+  maxRun: number,
+): T[] {
+  if (maxRun <= 0 || pool.length <= 1) return pool.slice();
+  const remaining = pool.slice();
+  const out: T[] = [];
+  const NULL_KEY = "__null__";
+  const normalize = (t: T) => t.artist?.trim().toLowerCase() ?? NULL_KEY;
+
+  while (remaining.length > 0) {
+    // Live counts per artist of what's still in the pool.
+    const counts = new Map<string, number>();
+    for (const t of remaining) {
+      const k = normalize(t);
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    // Measure trailing same-artist run on the output.
+    let trailingArtist: string | null = null;
+    let trailingRun = 0;
+    for (let i = out.length - 1; i >= 0; i--) {
+      const a = normalize(out[i]);
+      if (i === out.length - 1) {
+        trailingArtist = a;
+        trailingRun = 1;
+      } else if (a === trailingArtist && a !== NULL_KEY) {
+        trailingRun++;
+      } else {
+        break;
+      }
+    }
+    const blocked =
+      trailingArtist !== null && trailingArtist !== NULL_KEY && trailingRun >= maxRun
+        ? trailingArtist
+        : null;
+    // Pick the remaining track whose artist has the highest remaining
+    // count, skipping the blocked artist. This is the classic
+    // task-scheduler heuristic and keeps a dominant artist evenly
+    // spread instead of clustering them at the tail.
+    let bestIdx = -1;
+    let bestScore = -1;
+    for (let i = 0; i < remaining.length; i++) {
+      const k = normalize(remaining[i]);
+      if (blocked !== null && k === blocked) continue;
+      const c = counts.get(k) ?? 0;
+      if (c > bestScore) {
+        bestScore = c;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === -1) bestIdx = 0; // graceful degrade — every remaining is blocked
+    out.push(remaining[bestIdx]);
+    remaining.splice(bestIdx, 1);
+  }
+  return out;
+}
+
+/**
  * Generational rotation: shuffle the not-yet-aired tracks from the current
  * cycle. When the cycle is exhausted, wrap and shuffle the whole library
  * minus the bridge (currently-playing track) so the first track of the new
  * cycle can never be the last track of the old one.
+ *
+ * Post-shuffle, an artist-spacing pass keeps same-artist tracks at least
+ * MIN_ARTIST_GAP apart so a Russell-Ross-heavy catalog doesn't produce
+ * "3 Russell Ross in a row" stretches.
  */
 export function buildPlaylist(
   library: RotationTrack[],
@@ -117,7 +203,8 @@ export function buildPlaylist(
     const j = Math.floor(rng() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
-  return a.map((t) => t.url).join("\n") + "\n";
+  const spaced = spaceByArtist(a, MAX_ARTIST_RUN);
+  return spaced.map((t) => t.url).join("\n") + "\n";
 }
 
 /**
@@ -143,6 +230,7 @@ export async function runRefresh(
     select: {
       id: true,
       title: true,
+      artistDisplay: true,
       assets: {
         where: { assetType: "audio_stream" },
         take: 1,
@@ -153,7 +241,9 @@ export async function runRefresh(
 
   const library: RotationTrack[] = tracks.flatMap((t) => {
     const asset = t.assets[0];
-    return asset?.publicUrl ? [{ id: t.id, url: asset.publicUrl, title: t.title }] : [];
+    return asset?.publicUrl
+      ? [{ id: t.id, url: asset.publicUrl, title: t.title, artist: t.artistDisplay ?? null }]
+      : [];
   });
   const libraryIds = library.map((t) => t.id);
 
