@@ -300,3 +300,145 @@ quota, scheduling, mode, prompt, dashboard toggle, tests).
 ### When this is done
 
 Remove the entry from this file.
+
+---
+
+## Investigate: callback writer says "just aired" for tracks that aired ages ago
+
+**Status:** parked 2026-05-16. Confirmed real, not theoretical.
+
+**Resume trigger:** anytime — adds Lena-on-air credibility risk every
+time it fires. Worth fixing before Phase 5b drives more callback
+volume.
+
+### Symptom (observed 2026-05-16 evening)
+
+Lena aired this callback line at 20:57:32:
+> "That Sawyers Son track inRhino asked about an hour ago — I Believe
+> just hit the speakers, finally."
+
+But PlayHistory shows "I Believe" actually aired at 20:39:01 — **18
+minutes earlier**, not "just hit the speakers". Lena confidently
+reported stale temporal data.
+
+Same class of bug as `68e3eb9` (queue_pick writer saying "queued up"
+about a track that was already playing), but on the **callback
+writer** — different writer, different ShiftMemory slice.
+
+### Likely root cause
+
+`workers/queue-daemon/lena-producer/writers/callback.ts` + the
+callback-summarizer pull from ShiftMemory's callback pool
+(`derived-callbacks.ts`). The pool stores events with timestamps,
+but the Writer prompt may not be enforcing the temporal frame —
+e.g., it sees "@inRhino requested I Believe ~1h ago" without
+checking "did the track actually air recently enough to say 'just
+hit the speakers'?"
+
+### What to investigate
+
+1. Re-read `derived-callbacks.ts` — what timestamps does the
+   callback pool surface to the Writer? Is "track aired at" in there
+   at all, or only "request received at"?
+2. Re-read `writers/callback.ts` system prompt — does it have the
+   same "past/present tense, banned 'just aired' style claims" rules
+   that the opinion/queue_pick writers got in `68e3eb9`?
+3. Re-read `lena-producer-chat/writers/callback.ts` (Vercel-side) —
+   same audit, different surface (chat replies).
+4. Decide: tighten the prompt rules + add temporal-frame test
+   coverage, OR pass a derived `trackAiredMinutesAgo` field into the
+   Writer so it has the data to phrase correctly.
+
+### Files likely touched
+
+- `workers/queue-daemon/lena-producer/derived-callbacks.ts`
+- `workers/queue-daemon/lena-producer/writers/callback.ts`
+- `lib/lena-producer-chat/writers/callback.ts`
+- Tests: add a temporal-staleness case to each writer's test file
+
+### When this is done
+
+Remove the entry from this file.
+
+---
+
+## Watch in prod after Phase 5b validation
+
+**Status:** parked 2026-05-16. Phase 5b validated end-to-end
+(YT listener `@lena play digital culprit` → queued + announced +
+rotation resumed cleanly). Not action items, just things to keep
+an eye on for the next 1-2 weeks.
+
+### Watch list
+
+1. **Rate-limit hits.** `AUTHOR_HOUR_LIMIT = 3` per author channel ID
+   per hour. If a single YT listener spams `@lena play X` more than
+   3×/hr their later asks drop silently — they keep seeing their
+   chat message land but Lena never reacts. Watch
+   `journalctl --user -u numa-queue-daemon -f | grep yt-chat` for
+   patterns where the same `<channel-id-suffix>` shows + then goes
+   quiet. If real listeners hit this, raise the limit or surface a
+   one-time "all yours for the next hour" reply.
+2. **same_artist_too_soon declines.** Listener asks for track by
+   currently-playing artist → Phase 5b declines with "Same artist's
+   already playing — we'll get back to them." Watch
+   `journalctl --user -u numa-queue-daemon | grep same_artist` for
+   decline rate. If it's a meaningful fraction of all requests,
+   consider relaxing to "queue this after the current track ends"
+   instead of declining.
+3. **Decline-rate by reason.** `lib/lena-producer-chat/writers/decline-request.ts`
+   has 5 reasons (`not_in_catalog` / `recently_aired` /
+   `wrong_show_block` / `same_artist_too_soon` / `queue_full`).
+   Grep for `[lena-request] mode=decline_request` in Vercel logs to
+   spot if any reason dominates — `not_in_catalog` dominating would
+   mean the website also needs the request surface (parked above) +
+   listener-facing autocomplete.
+
+### When this is done
+
+Remove the entry from this file once Phase 5b has 2+ weeks of clean
+prod observation and the above are tuned (or confirmed irrelevant).
+
+---
+
+## numaradio-suno: random voice-accent variation on track generation
+
+**Status:** parked 2026-05-16. Lives in the separate numaradio-suno
+repo (Suno is NOT in numaradio — Marku curates/accepts before
+tracks reach catalog).
+
+**Resume trigger:** next batch session on numaradio-suno when
+generating new tracks. Decide before the next ~20-track batch so
+the accent variation propagates evenly.
+
+### What to build
+
+When generating tracks via Suno, randomly assign a voice accent
+hint (American / British / Texan / Australian / etc.) so the
+catalog doesn't end up sounding like a single regional voice. Suno
+accepts accent / dialect cues in the prompt style block.
+
+### Why
+
+Right now the catalog skews towards a single accent (likely
+American-default since Suno's training distribution biases there).
+Listeners hear the same vocal register across tracks → station
+identity feels flatter than it could. Random accent assignment
+broadens the catalog's voice palette without listener-side effort.
+
+### Notes
+
+- Implementation lives in numaradio-suno, NOT here. Per memory
+  `project_numa_suno_separation`.
+- Marku still curates each output before acceptance, so a bad
+  accent → genre fit doesn't auto-leak to listeners. Worst case is
+  ~10s of wasted Suno generation.
+- Consider biasing the distribution — e.g., 50% American, 25%
+  British, 15% Australian, 10% other — rather than uniform random,
+  to keep the station identity coherent.
+- Per-genre overrides may make sense (e.g., Country / Americana →
+  Southern US accent; Grime / UK Drill → British; etc.).
+
+### When this is done
+
+Remove the entry from this file.
