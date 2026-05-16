@@ -1,6 +1,64 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-05-09
+Last updated: 2026-05-16
+
+---
+
+## 2026-05-16 — Lena Producer Phase 1: ShiftMemory + NOTIFY — CODE READY, NEEDS DEPLOY
+
+Foundation for the new Lena Producer architecture. Read-only,
+observability-only. No Lena behavior changes ship in this phase.
+
+**Spec:** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-16-lena-producer-phase-1.md`
+
+**What ships:**
+- `Chatter.producerVersion Int?` migration (pure additive)
+- `workers/queue-daemon/lena-producer/` module: ShiftMemory singleton,
+  derived views (counters, mood, callback pool, show context), DB
+  reconstruction on daemon boot, Postgres LISTEN/NOTIFY subscriber,
+  5s poll fallback, `LENA_SHIFT_MEMORY` env flag
+- Emitters wired in `app/api/internal/track-started/route.ts`,
+  `dashboard/lib/shoutout.ts`, `app/api/internal/youtube-chat-shoutout/route.ts`
+- HTTP fallback at `POST /api/lena/event`
+
+**Two schema realities found during implementation** (now in code):
+- `Track.key` does NOT exist (only `bpm`). Event payload emits `key: null`.
+- `Shoutout.handle` does NOT exist — actual field is `requesterName`.
+  Reconstruction reads `requesterName` and maps it to `handle` in the event.
+
+**Deploy:**
+1. `cd /home/marku/saas/numaradio && git pull`
+2. `npx prisma migrate deploy` (applies `add_chatter_producer_version`)
+3. Add `LENA_SHIFT_MEMORY=on` to `/etc/numa/env`:
+   ```
+   sudo nano /etc/numa/env
+   # add: LENA_SHIFT_MEMORY=on
+   ```
+4. Restart the daemon: `sudo systemctl restart numa-queue-daemon`
+5. Deploy the dashboard so the shoutout emitter ships: `cd dashboard && npm run deploy`
+6. Verify:
+   ```
+   journalctl --user -u numa-queue-daemon -f | grep lena-shift-memory
+   ```
+   Expect: `[lena-shift-memory] booted with N reconstructed events`
+   then `[lena-shift-memory] notify healthy`.
+
+**Important — Neon pooled connection note:**
+NotifyListener requires a DIRECT Postgres connection (LISTEN/NOTIFY isn't
+supported on the Neon pooler). The daemon uses `DATABASE_URL` — confirm
+this is the direct (non-pooled) connection string on Orion. If it currently
+points at the pooler, the daemon will log `notify reconnecting` indefinitely
+while the 5s DB poll fallback keeps memory current. Switch DATABASE_URL on
+the daemon side to the direct connection for full performance.
+
+**Rollback:** unset `LENA_SHIFT_MEMORY` in `/etc/numa/env`, restart
+the daemon. Emitters in routes/lib stay (they're try/catched and a
+no-op if no listener is subscribed). The migration is additive and
+needs no rollback.
+
+**Next phase:** Phase 2 ships the Producer + Writer split behind a
+separate flag (`LENA_PRODUCER_AUTO`). Plan: TBD when Phase 1 is live.
 
 ---
 
