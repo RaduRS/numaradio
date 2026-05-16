@@ -32,7 +32,8 @@ import { startLoudnormPoller } from "./loudnorm-poller.ts";
 import { ShiftMemory } from "./lena-producer/shift-memory.ts";
 import { NotifyListener } from "./lena-producer/notify-listener.ts";
 import { reconstructEvents, pollSince } from "./lena-producer/reconstruction.ts";
-import { isShiftMemoryEnabled } from "./lena-producer/feature-flag.ts";
+import { isShiftMemoryEnabled, isProducerAutoEnabled } from "./lena-producer/feature-flag.ts";
+import { lenaSpeak as runLenaSpeak } from "./lena-producer/index.ts";
 
 const STATION_SLUG = process.env.STATION_SLUG ?? "numaradio";
 const LS_HOST = process.env.NUMA_LS_HOST ?? "127.0.0.1";
@@ -132,6 +133,13 @@ const synthesize = createSynthesizer({
   vertexProject: process.env.GOOGLE_CLOUD_PROJECT ?? "",
 });
 
+// Lena Producer Phase 2: shiftMemory is lifted to module scope (nullable,
+// mutable) so the autoHost lenaSpeak closure can access it. main() assigns
+// it inside the LENA_SHIFT_MEMORY gated block at boot. When null, the
+// Producer path is unavailable and auto-host falls back to the legacy
+// single-call path automatically.
+let shiftMemory: ShiftMemory | null = null;
+
 const autoHost = new AutoHostOrchestrator({
   config: () => stationConfig.read(),
   getListenerCount: () =>
@@ -229,21 +237,38 @@ const autoHost = new AutoHostOrchestrator({
     });
     console.log(`[auto-chatter] slot=${slot} type=${type} id=${chatterId}`);
   },
-  persistChatter: async ({ type, slot, url, script }) => {
+  persistChatter: async ({ type, slot, url, script, producerVersion, producerMode }) => {
     const sid = await stationId();
     await prisma.chatter.create({
       data: {
         stationId: sid,
-        chatterType: type,
+        // For Producer-era rows, chatterType stores the ProducerMode string
+        // (opinion/aside/callback). Legacy rows keep their rotation type.
+        chatterType: producerMode ?? type,
         slot,
         script,
         audioUrl: url,
+        producerVersion: producerVersion ?? null,
       },
     });
   },
   logFailure: ({ reason, detail }) => {
     lastFailures.push({ at: new Date().toISOString(), reason, detail });
     console.warn(`[auto-chatter] fail ${reason}: ${detail ?? ""}`);
+  },
+  isProducerEnabled: () => isProducerAutoEnabled(process.env),
+  lenaSpeak: async (trigger) => {
+    // Producer needs ShiftMemory to read history. If ShiftMemory is
+    // disabled (LENA_SHIFT_MEMORY=off), refuse — auto-host will fall
+    // back to the legacy path automatically.
+    if (!shiftMemory) return null;
+    return runLenaSpeak({
+      trigger,
+      memory: shiftMemory,
+      nowMs: Date.now(),
+      llm: async (prompts) =>
+        generateChatterScript(prompts, { apiKey: process.env.MINIMAX_API_KEY ?? "" }),
+    });
   },
 });
 
@@ -682,7 +707,7 @@ async function main() {
   let lenaListener: NotifyListener | null = null;
   if (isShiftMemoryEnabled(process.env)) {
     const sid = await stationId();
-    const shiftMemory = new ShiftMemory();
+    shiftMemory = new ShiftMemory();
     const now = Date.now();
     const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
     const reconstructed = await reconstructEvents({
@@ -707,7 +732,7 @@ async function main() {
     lenaListener = new NotifyListener({
       connectionString: process.env.DATABASE_URL!,
       onEvent: (ev) => {
-        shiftMemory.record(ev);
+        shiftMemory!.record(ev);
         const ts = ev.type === "operator_force" ? ev.forcedAt : ev.airedAt;
         if (ev.type === "track_aired") sincePlayHistoryAt = Math.max(sincePlayHistoryAt, ts);
         if (ev.type === "lena_line_aired") sinceChatterAt = Math.max(sinceChatterAt, ts);
