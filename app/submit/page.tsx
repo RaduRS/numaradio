@@ -105,7 +105,7 @@ export default function SubmitPage() {
               border: "1px solid var(--line-strong)",
               borderRadius: 8,
               background: "rgba(79, 209, 197, 0.04)",
-              maxWidth: 620,
+              maxWidth: 760,
             }}
           >
             <span
