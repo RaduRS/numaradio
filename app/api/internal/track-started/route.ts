@@ -166,5 +166,24 @@ export async function POST(req: Request) {
   }
   await prisma.$transaction(ops as never);
 
+  // Phase 1 (Lena Producer): notify the queue-daemon's ShiftMemory.
+  // Wrapped in try/catch — emission failure must NOT break the existing flow.
+  try {
+    const payload = JSON.stringify({
+      type: "track_aired",
+      id: track.id, // Use Track.id as event id (PlayHistory.id not available here without re-select)
+      trackId: track.id,
+      title: track.title,
+      artist: (track as { artistDisplay?: string | null }).artistDisplay ?? null,
+      genre: (track as { genre?: string | null }).genre ?? null,
+      bpm: (track as { bpm?: number | null }).bpm ?? null,
+      key: null,
+      airedAt: startedAt.getTime(),
+    });
+    await prisma.$executeRawUnsafe(`SELECT pg_notify('lena_event', $1)`, payload);
+  } catch (err) {
+    console.warn("[lena-shift-memory] track_aired NOTIFY failed:", err);
+  }
+
   return Response.json({ ok: true, trackId: track.id, startedAt });
 }
