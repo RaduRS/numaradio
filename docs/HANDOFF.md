@@ -4,6 +4,56 @@ Last updated: 2026-05-16
 
 ---
 
+## 2026-05-16 — Lena Producer Phase 5 MVP: queue_pick (Lena programs her booth) — CODE READY, NEEDS ENV
+
+Lena can now insert tracks into the queue during auto-breaks. Behind
+`LENA_QUEUE_AUTONOMY` flag, default off. Requires `LENA_SHIFT_MEMORY`
++ `LENA_PRODUCER_AUTO` to also be on (queue_pick is a Producer mode).
+
+**Spec:** `docs/superpowers/specs/2026-05-16-lena-producer-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-16-lena-producer-phase-5-mvp.md`
+
+**What ships:**
+- `lib/show-genre-fit.ts` — genre → ShowBlock compatibility mapping
+- `workers/queue-daemon/lena-producer/queue-director.ts` — guardrails
+- `workers/queue-daemon/lena-producer/catalog-candidates.ts` — fetches
+  up to 10 eligible tracks (not aired in last 60min, genre fits current show)
+- Producer/Writer extended with `queue_pick` mode + `queueAction` field
+- Daemon boot wires catalog fetch + QueueDirector closure when flag on
+- Inserts go through existing `createQueueItemAtomically` (same path as
+  shoutouts) — priority_request band, generated music rotation still
+  takes priority
+
+**Guardrails (enforced in code, not prompt):**
+- Recently aired (≤60 min) → reject
+- Same artist as currently playing → reject (unless reason contains "double feature")
+- Genre doesn't fit current show-block → reject
+On reject, Producer's line is downgraded to a non-pick aside so Lena
+doesn't lie to listeners about a phantom track.
+
+**Deploy:**
+1. `cd /home/marku/saas/numaradio && git pull` on Orion
+2. Add to `/etc/numa/env`:
+   ```
+   sudo nano /etc/numa/env
+   # add: LENA_QUEUE_AUTONOMY=on
+   # (Phase 2's LENA_PRODUCER_AUTO + Phase 1's LENA_SHIFT_MEMORY must also be on)
+   ```
+3. `sudo systemctl restart numa-queue-daemon`
+4. Watch: `journalctl --user -u numa-queue-daemon -f | grep -E "queue-director|producer_queue_pick"`
+   - `[queue-director] inserted <trackId>` → Lena picked + insert succeeded
+   - `[queue-director] rejected pick <trackId>: <reason>` → guardrail caught it
+   - `[auto-chatter] fail producer_queue_pick_persisted ...` → audit trail of accepted picks
+
+**Rollback:** unset `LENA_QUEUE_AUTONOMY` in `/etc/numa/env`, restart
+daemon. Producer can't emit queue_pick (no candidates, no director),
+behavior returns to Phase 2.
+
+**Phase 5b (listener `@lena play X` requests) is PARKED in TODO.md.**
+That needs Vercel→daemon plumbing for cross-process queue inserts.
+
+---
+
 ## 2026-05-16 — Lena Producer Phase 4b: Shoutout narration through Producer — CODE READY, NEEDS ENV
 
 Shoutout narration (currently `humanizeScript`) now optionally routes

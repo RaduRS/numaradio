@@ -122,3 +122,46 @@ Remove the entry from this file.
 
 ---
 
+## Lena Producer Phase 5b — Listener song requests
+
+**Status:** parked 2026-05-16. Phase 5 MVP (daemon-side queue_pick) is
+shipped locally; Phase 5b extends the queue-autonomy story to listener
+requests via YouTube `@lena play X` messages.
+
+**Why it's not in Phase 5 MVP:** the listener-request dispatch route
+runs on Vercel (`app/api/internal/youtube-chat-shoutout/route.ts`),
+but the queue insert (`createQueueItemAtomically`) runs in the daemon.
+Cross-process queue insert requires either:
+1. A new HTTP endpoint on the daemon (exposed via cloudflared) that
+   Vercel POSTs to with the desired trackId + reason. Daemon validates
+   via QueueDirector + inserts.
+2. Vercel-side QueueDirector that writes directly to `QueueItem` via
+   Prisma — but needs careful pg_advisory_xact_lock coordination with
+   the daemon's createQueueItemAtomically. Risky.
+
+**Recommended approach:** option 1 (HTTP endpoint on daemon). The
+daemon already has an HTTP server on loopback :4000; expose
+`POST /lena-queue-action` via cloudflared at `api.numaradio.com/...`
+with the existing `INTERNAL_API_SECRET` auth.
+
+**What ships in 5b:**
+- New `POST /lena-queue-action` on daemon HTTP server
+- Cloudflared route for it
+- Vercel-side classifier + Producer-lite for chat request intents
+  (`request` + `shoutout_with_request`) — extend `lib/lena-producer-chat/`
+  with new modes: `accept_request`, `accept_request_deferred`, `decline_request`
+- Catalog candidate lookup on Vercel side (Prisma fuzzy match on Track
+  title/artist against listener's request text)
+- Dispatch route gates request-intent handling behind `LENA_REQUEST_AUTONOMY`
+- Lena's reply line is consistent with what's queued ("Pulling Aphex up
+  for you, Anna — coming after this one")
+
+**Estimated size:** ~12-15 tasks. Bigger than Phase 5 MVP because of the
+cross-process plumbing + auth + Vercel-side catalog lookup.
+
+**When to ship:** after Phase 5 MVP has been live + observed for a few
+days. Verify the QueueDirector guardrails work as expected before adding
+listener-driven queue inserts on top.
+
+---
+
