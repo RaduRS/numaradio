@@ -152,7 +152,7 @@ export function BroadcastStage({ broadcast }: Props) {
             Type <strong>@lena</strong>
             <span className="bcast-caret" aria-hidden />
             + a shoutout or <strong>play [song]</strong>
-            <span className="bcast-cta-tail">— Lena reads it on air or queues the track.</span>
+            <span className="bcast-cta-tail">— Lena reads it on air or queues it.</span>
           </div>
         ) : (
           <div className="bcast-cta-line">
