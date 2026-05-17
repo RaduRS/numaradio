@@ -99,6 +99,7 @@ const REJECT_REASONS = [
   "Genre doesn't fit the station's character",
   "Track length unsuitable (too short or too long)",
   "Vocals or lyrics don't fit the station tone",
+  "Vocals too harsh or aggressive (screaming, extreme shouting)",
   "Track not in English (station is English-only)",
   "Sounds derivative, generic, or unfinished",
   "Copyright or clearance concerns",
