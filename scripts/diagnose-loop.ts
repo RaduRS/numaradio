@@ -75,19 +75,42 @@ async function main(): Promise<void> {
       console.log(`  ${r.startedAt.toISOString()} ${t?.artistDisplay?.padEnd(20) ?? "?".padEnd(20)} ${t?.title ?? r.titleSnapshot ?? "?"} (policy=${t?.airingPolicy ?? "?"})`);
     }
 
-    console.log("\n=== 4. Recent Chatter showing Lena queue_pick decisions ===");
+    console.log("\n=== 4. Recent Chatter (Lena lines + queue_pick if Producer) ===");
     const chatter = await prisma.chatter.findMany({
       where: {
         stationId: station.id,
-        createdAt: { gte: new Date(Date.now() - 60 * 60_000) },
-        producerVersion: { not: null },
+        airedAt: { gte: new Date(Date.now() - 60 * 60_000) },
       },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: { id: true, createdAt: true, chatterType: true, broadcastText: true },
+      orderBy: { airedAt: "desc" },
+      take: 15,
+      select: { id: true, airedAt: true, chatterType: true, script: true, producerVersion: true },
     });
     for (const c of chatter) {
-      console.log(`  ${c.createdAt.toISOString()} type=${c.chatterType} text="${(c.broadcastText ?? "").slice(0, 100)}"`);
+      console.log(`  ${c.airedAt.toISOString()} type=${c.chatterType.padEnd(20)} pv=${c.producerVersion ?? "-"} text="${c.script.slice(0, 90)}"`);
+    }
+
+    console.log("\n=== 5. All recent QueueItem rows (any status, any band) ===");
+    const allQueue = await prisma.queueItem.findMany({
+      where: {
+        stationId: station.id,
+        createdAt: { gte: new Date(Date.now() - 30 * 60_000) },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      select: {
+        id: true,
+        trackId: true,
+        priorityBand: true,
+        queueStatus: true,
+        queueType: true,
+        sourceObjectType: true,
+        createdAt: true,
+        reasonCode: true,
+      },
+    });
+    for (const q of allQueue) {
+      const t = q.trackId ? byId.get(q.trackId) : null;
+      console.log(`  ${q.createdAt.toISOString()} band=${q.priorityBand.padEnd(18)} status=${q.queueStatus.padEnd(10)} type=${q.queueType.padEnd(10)} ${t?.artistDisplay ?? "?"} - ${t?.title ?? "?"} reason=${q.reasonCode ?? "-"}`);
     }
   } finally {
     await prisma.$disconnect();
