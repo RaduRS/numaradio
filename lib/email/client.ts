@@ -21,6 +21,9 @@ export interface SendEmailArgs {
   subject: string;
   html: string;
   text: string;
+  /** Optional extra headers — used for List-Unsubscribe on bulk sends.
+   *  Resend forwards these to the underlying SMTP message. */
+  headers?: Record<string, string>;
 }
 
 export interface SendEmailResult {
@@ -44,6 +47,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       subject: args.subject,
       html: args.html,
       text: args.text,
+      ...(args.headers ? { headers: args.headers } : {}),
     });
     if (r.error) {
       console.error("[email] send failed:", r.error);

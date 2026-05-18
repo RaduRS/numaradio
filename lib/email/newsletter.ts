@@ -1,25 +1,22 @@
-// Newsletter template — placeholder for future bulk sends.
+// Newsletter template + sender. No send route exists yet (the actual
+// "bulk send to opted-in artists" cron / script is unbuilt). When you
+// add one:
+//   1. Query `prisma.musicSubmission.findMany({ where: { newsletterOptIn:
+//      true }, distinct: ['email'], select: { email: true, artistName: true } })`.
+//   2. For each row, call `sendNewsletter()` below — it handles the
+//      unsubscribe URL, the List-Unsubscribe header, and the
+//      `— Numa Radio` sign-off automatically.
 //
-// No send route exists yet. When you build one:
-//   1. Read opt-ins from `MusicSubmission.newsletterOptIn = true`
-//      (dedupe by email — same artist may have submitted twice).
-//   2. For each recipient, mint a signed unsubscribe URL (HMAC pattern
-//      mirrors `lib/sign-audio-url.ts` — sign `{email, exp}` with
-//      INTERNAL_API_SECRET, verify on the unsubscribe route).
-//   3. Pass that URL to `renderNewsletter()` to get html/text.
-//   4. Send via `sendEmail()` — and at send time, ALSO add a
-//      `List-Unsubscribe: <unsubscribeUrl>` header (RFC 8058) so Gmail
-//      / Outlook / Apple Mail render their native one-click unsubscribe
-//      button. The current `sendEmail()` wrapper doesn't accept custom
-//      headers; extend `lib/email/client.ts` minimally when you wire
-//      this up.
-//
-// GDPR baseline: explicit opt-in via the submit form (already done) +
-// per-email unsubscribe (the link this template renders + the
-// List-Unsubscribe header at send time). Don't ship a newsletter
-// without both.
+// GDPR / CAN-SPAM baseline (all enforced here):
+//   - Explicit opt-in via the submit form (already done).
+//   - Per-email unsubscribe link in body (renders below).
+//   - List-Unsubscribe + List-Unsubscribe-Post headers per RFC 8058,
+//     so Gmail / Outlook / Apple Mail show their native one-click
+//     unsubscribe button next to the sender name.
+//   - Sign-off is brand-only ("— Numa Radio"), never the operator name.
 
 import { sendEmail, type SendEmailResult } from "./client";
+import { buildUnsubscribeUrl } from "../newsletter-unsubscribe-token";
 
 export interface NewsletterArgs {
   email: string;
@@ -37,8 +34,10 @@ export interface NewsletterArgs {
    *  blank-line-separated block in text. Keep punchy — the host voice
    *  is short and warm, never corporate. */
   paragraphs: string[];
-  /** Signed one-click unsubscribe URL (see file header). */
-  unsubscribeUrl: string;
+  /** Signed one-click unsubscribe URL. If omitted, `sendNewsletter`
+   *  mints one automatically via `buildUnsubscribeUrl`. Pass an explicit
+   *  one when you want a non-default origin (e.g. preview builds). */
+  unsubscribeUrl?: string;
 }
 
 function escapeHtml(s: string): string {
@@ -50,7 +49,12 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#039;");
 }
 
-export function renderNewsletter(args: NewsletterArgs): { html: string; text: string } {
+type RenderedNewsletter = { html: string; text: string; unsubscribeUrl: string };
+
+const DEFAULT_ORIGIN = "https://numaradio.com";
+
+export function renderNewsletter(args: NewsletterArgs): RenderedNewsletter {
+  const unsubscribeUrl = args.unsubscribeUrl ?? buildUnsubscribeUrl(DEFAULT_ORIGIN, args.email);
   const greetText = args.recipientName.trim() ? `Hi ${args.recipientName.trim()},\n\n` : "";
   const bodyText = args.paragraphs.join("\n\n");
 
@@ -63,13 +67,13 @@ ${greetText}${bodyText}
 — Numa Radio
 https://numaradio.com
 
-You're getting this because you opted in when submitting music to Numa Radio. Unsubscribe any time: ${args.unsubscribeUrl}
+You're getting this because you opted in when submitting music to Numa Radio. Unsubscribe any time: ${unsubscribeUrl}
 `;
 
   const safeName = escapeHtml(args.recipientName.trim());
   const safeEyebrow = escapeHtml(args.eyebrow);
   const safeHeadline = escapeHtml(args.headline);
-  const safeUnsub = escapeHtml(args.unsubscribeUrl);
+  const safeUnsub = escapeHtml(unsubscribeUrl);
   const safeParagraphs = args.paragraphs
     .map((p) => `<p>${escapeHtml(p)}</p>`)
     .join("\n  ");
@@ -89,10 +93,21 @@ You're getting this because you opted in when submitting music to Numa Radio. Un
   </p>
 </body></html>`;
 
-  return { html, text };
+  return { html, text, unsubscribeUrl };
 }
 
 export async function sendNewsletter(args: NewsletterArgs): Promise<SendEmailResult> {
-  const { html, text } = renderNewsletter(args);
-  return sendEmail({ to: args.email, subject: args.subject, html, text });
+  const { html, text, unsubscribeUrl } = renderNewsletter(args);
+  return sendEmail({
+    to: args.email,
+    subject: args.subject,
+    html,
+    text,
+    headers: {
+      // RFC 8058 one-click unsubscribe — Gmail/Outlook/Apple Mail
+      // render their native Unsubscribe button next to the sender.
+      "List-Unsubscribe": `<${unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  });
 }
