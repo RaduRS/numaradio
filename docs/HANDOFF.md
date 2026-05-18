@@ -1,6 +1,77 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-05-18
+Last updated: 2026-05-18 (evening)
+
+---
+
+## 2026-05-18 (evening) — Rotation resilience: CF 522 retries + restart resync — LIVE
+
+Listener-visible symptom: 6 Russell Ross in a row at ~20:38-20:53 UTC.
+The spacer (max 2 same-artist in a row, shipped 2026-05-16) was
+**working perfectly** — positions 107 (Barely Jared) and 110 (tony)
+were placed as breakers between RR pairs. Liquidsoap silently
+**skipped both breaker fetches** with Cloudflare 522s:
+
+```
+21:42:40 [procol.external] Error while fetching http data: 522 - Connection timed out  ← pos 107
+21:47:40 [procol.external] Error while fetching http data: 522 - Connection timed out  ← pos 110
+```
+
+Both URLs returned HTTP 200 minutes before and after — transient CDN
+flakes. With a ~60% one-artist catalog, every breaker skip stitches
+two 2-runs into a 4-6 run. Two commits shipped:
+
+1. `1953cc0` — `liquidsoap/numa.liq`: new `cdn:` protocol wraps curl
+   with `--retry 3 --retry-delay 1 --retry-all-errors --max-time 20`,
+   used as `prefix="cdn:"` on the rotation `playlist()` call. Playlist
+   `timeout` bumped 20s → 60s to leave room for retries. The built-in
+   `https` protocol stays available for anything else (not used in
+   this script). Cost impact: ~zero (CF retries serve from edge cache;
+   99% hit-ratio means no extra B2 origin pulls).
+
+2. `d515f40` — `deploy/systemd/numa-liquidsoap.service` + new
+   `scripts/resync-m3u-to-cycle.ts`. The 2026-05-18 morning
+   "stable m3u" design assumed Liquidsoap's internal position counter
+   was durable — but it **resets to 0 on every restart** (daily
+   `RuntimeMaxSec=86400` auto-restart, crashes, manual restarts). So
+   after any restart, Liquidsoap re-airs the head of the cycle while
+   the dashboard correctly shows the next unplayed track as Up Next.
+   New `ExecStartPre` runs the resync script before Liquidsoap boots:
+   reads cycleOrder + PlayHistory + NowPlaying, writes the m3u with
+   only the unplayed tail (excluding current track). Position 0 of
+   the new m3u = next unplayed track. No-ops cleanly when there's no
+   cycle or the cycle is exhausted.
+
+### Mid-session: I caused the restart bug
+
+Restarting Liquidsoap to load fix #1 reset the position counter and
+re-aired the head of cycle (`cmocsylor` → `0eb2671b`) while the
+dashboard correctly said Sanctuary - Digital Culprit (cycle pos 56)
+was next. Operator caught it. Built fix #2 to prevent the recurrence,
+manually re-ran the resync to put Sanctuary back at the head live.
+
+### Operator state after sign-off
+- Both commits pushed to `origin/main`
+- Liquidsoap restarted with `cdn:` protocol live; rotation source
+  `[ready]`, URLs prefixed with `cdn:`
+- New unit installed via `sudo install -m 0644 ...` and
+  `sudo systemctl daemon-reload` — verified `ExecStartPre` line is
+  in the live unit
+- m3u manually resynced; Sanctuary on air at sign-off, then back to
+  normal cycle order
+- Daily auto-restart at the 24h mark (~tomorrow ~3pm UK) will be the
+  first real-world test of the ExecStartPre hook
+
+### Watch in the next 24-48 hours
+- Listen for 3+ same-artist runs returning — would mean the cdn:
+  protocol still failed (probably a sustained ~30s+ outage across
+  all 3 retries, which is rare).
+- After the daily auto-restart fires, confirm the m3u was resynced:
+  `head -1 /etc/numa/playlist.m3u` should NOT match
+  `head -1 /etc/numa/cycle-order.json | jq -r '.trackIds[0]'`
+  if any tracks have played this cycle.
+- Watch `journalctl -u numa-liquidsoap | grep resync-m3u` for the
+  ExecStartPre output line on restart.
 
 ---
 
