@@ -8,6 +8,12 @@ Requires=icecast2.service
 Type=simple
 User=marku
 EnvironmentFile=/etc/numa/env
+# Resync playlist.m3u to the unplayed tail of the current cycle before
+# Liquidsoap starts. Its internal position counter resets to 0 on every
+# restart, so without this it would re-air tracks already played in
+# this cycle (diverging from the dashboard's Up Next). No-ops cleanly
+# when there's no cycle yet or the cycle is exhausted.
+ExecStartPre=/usr/bin/env -C /home/marku/saas/numaradio /home/marku/saas/numaradio/node_modules/.bin/tsx scripts/resync-m3u-to-cycle.ts
 ExecStart=/usr/bin/liquidsoap /home/marku/saas/numaradio/liquidsoap/numa.liq
 Restart=on-failure
 RestartSec=5
