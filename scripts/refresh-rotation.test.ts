@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlaylist, buildManualPlaylist, cyclePlayedFrom, spaceByArtist } from "./refresh-rotation.ts";
+import { buildPlaylist, buildManualPlaylist, cyclePlayedFrom, spaceByArtist, computeRecentArtists } from "./refresh-rotation.ts";
 
 type T = { id: string; url: string; title: string; artist: string | null };
 const t = (id: string, url: string, artist: string | null = null): T => ({ id, url, title: id, artist });
@@ -262,6 +262,65 @@ test("spaceByArtist treats null artists as run-breakers", () => {
   ];
   const out = spaceByArtist(pool, 2);
   assert.equal(out.length, 3);
+});
+
+test("computeRecentArtists: uses DB history when no latest hint", () => {
+  const artistById = new Map<string, string | null>([
+    ["t1", "Russell Ross"],
+    ["t2", "Other"],
+  ]);
+  // recentTrackIds is newest-first
+  const out = computeRecentArtists(["t1", "t2"], artistById);
+  // Function returns oldest-first
+  assert.deepEqual(out, ["Other", "Russell Ross"]);
+});
+
+test("computeRecentArtists: prepends latest hint when DB hasn't caught up", () => {
+  // DB still shows previous state — latest just started, no PlayHistory yet.
+  const artistById = new Map<string, string | null>([
+    ["t1", "Russell Ross"], // previous track in DB
+    ["t2", "Other"],
+  ]);
+  const out = computeRecentArtists(["t1", "t2"], artistById, {
+    trackId: "t3-just-started",
+    artist: "Russell Ross",
+  });
+  // Sequence becomes [t3, t1, t2] → slice(0,2) [t3, t1] → reverse [t1, t3]
+  // → oldest first = [Russell Ross, Russell Ross]
+  assert.deepEqual(out, ["Russell Ross", "Russell Ross"]);
+});
+
+test("computeRecentArtists: does NOT duplicate when DB already shows latest", () => {
+  // DB caught up — recentTrackIds[0] is the just-started track.
+  const artistById = new Map<string, string | null>([
+    ["t-latest", "Russell Ross"],
+    ["t-prev", "Russell Ross"],
+  ]);
+  const out = computeRecentArtists(["t-latest", "t-prev"], artistById, {
+    trackId: "t-latest",
+    artist: "Russell Ross",
+  });
+  // Sequence stays [t-latest, t-prev] → [Russell Ross, Russell Ross]
+  // (not [RR, RR, RR] which would falsely report a run of 3)
+  assert.deepEqual(out, ["Russell Ross", "Russell Ross"]);
+});
+
+test("computeRecentArtists: race-fix prevents 3-in-a-row when DB lags two ticks behind", () => {
+  // Worst case: track-started writes are slow, DB still shows two-old.
+  // Just-started latest = RR; DB recentTrackIds = [prev-RR, X] (PlayHistory
+  // for current-RR not written yet). Without the hint, recent=[X, RR] and
+  // trailing run=1 → another RR gets picked → 3-in-a-row.
+  const artistById = new Map<string, string | null>([
+    ["t-prev-rr", "Russell Ross"],
+    ["t-x", "Other"],
+  ]);
+  const out = computeRecentArtists(["t-prev-rr", "t-x"], artistById, {
+    trackId: "t-current-rr",
+    artist: "Russell Ross",
+  });
+  // Expected: [Other, RR_prev, RR_current] → slice(0,2) [t-current, t-prev]
+  // → reverse → oldest first = [RR, RR]
+  assert.deepEqual(out, ["Russell Ross", "Russell Ross"]);
 });
 
 test("simulated refresh-per-track: max run aired stays ≤ 2 across refresh boundaries", () => {

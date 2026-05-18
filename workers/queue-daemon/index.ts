@@ -644,9 +644,15 @@ async function onTrackHandler(body: OnTrackBody): Promise<void> {
   // this, the 2-min systemd timer leaves a window where Liquidsoap can
   // pick the same track at the boundary of two shuffle passes (1-in-pool
   // probability per cycle — bit listeners as back-to-back airings).
-  // Race-guard inside runRefresh handles the case where this fires
-  // before the Vercel track-started transaction has committed.
-  refreshRotation(prisma).catch((err) =>
+  //
+  // The `latest` hint passes the just-started trackId + artist as
+  // authoritative truth so the refresh's trailing-artist context can't
+  // be lagged by the race against Vercel's track-started transaction
+  // (which writes NowPlaying + PlayHistory). Without the hint, a slow
+  // Vercel commit lets the daemon refresh see stale state — trailing
+  // run stuck at 1 → another same-artist track at position 0 →
+  // 3-in-a-row on a dominant-artist catalog.
+  refreshRotation(prisma, { trackId: resolved.id, artist: body.artist ?? null }).catch((err) =>
     console.error("[on-track] rotation refresh threw:", err),
   );
 

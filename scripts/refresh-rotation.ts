@@ -197,6 +197,41 @@ export function spaceByArtist<T extends { artist: string | null }>(
 }
 
 /**
+ * Authoritative hint about the track that just started playing. Passed
+ * from the on-track callback (which knows the true latest from the
+ * Liquidsoap payload) so we don't lose to the race between Vercel's
+ * track-started transaction and the daemon's runRefresh call.
+ */
+export interface LatestTrackHint {
+  trackId: string;
+  artist: string | null;
+}
+
+/**
+ * Compose the "last 2 aired artists" list for spaceByArtist.
+ *
+ * Combines DB PlayHistory (most-recent-first, by `recentTrackIds`) with
+ * an optional `latest` hint from the on-track callback. When the hint's
+ * trackId isn't already at the head of `recentTrackIds` (i.e. PlayHistory
+ * hasn't caught up yet), we prepend it so the trailing context reflects
+ * reality. Returns oldest-first to match spaceByArtist's contract.
+ */
+export function computeRecentArtists(
+  recentTrackIds: readonly string[],
+  artistById: Map<string, string | null>,
+  latest?: LatestTrackHint,
+): (string | null)[] {
+  const sequence: { trackId: string; artist: string | null }[] = recentTrackIds.map((id) => ({
+    trackId: id,
+    artist: artistById.get(id) ?? null,
+  }));
+  if (latest && (sequence.length === 0 || sequence[0].trackId !== latest.trackId)) {
+    sequence.unshift({ trackId: latest.trackId, artist: latest.artist });
+  }
+  return sequence.slice(0, 2).map((s) => s.artist).reverse();
+}
+
+/**
  * Generational rotation: shuffle the not-yet-aired tracks from the current
  * cycle. When the cycle is exhausted, wrap and shuffle the whole library
  * minus the bridge (currently-playing track) so the first track of the new
@@ -241,6 +276,7 @@ export function buildPlaylist(
  */
 export async function runRefresh(
   prisma: Pick<PrismaClient, "station" | "track" | "playHistory" | "nowPlaying">,
+  latest?: LatestTrackHint,
 ): Promise<RefreshResult> {
   const station = await prisma.station.findUniqueOrThrow({
     where: { slug: process.env.STATION_SLUG ?? "numaradio" },
@@ -320,24 +356,23 @@ export async function runRefresh(
 
   const cycleExclude = new Set<string>([...before.cyclePlayed, ...after.cyclePlayed]);
   const bridgeExclude = new Set<string>();
-  const nowPlayingId = after.nowPlayingId ?? before.nowPlayingId;
+  // Latest hint wins over DB reads when the on-track callback knows the
+  // truth before Vercel's track-started transaction has committed.
+  const nowPlayingId = latest?.trackId ?? after.nowPlayingId ?? before.nowPlayingId;
   if (nowPlayingId) {
     cycleExclude.add(nowPlayingId);
     bridgeExclude.add(nowPlayingId);
   }
 
-  // Trailing-artist context for spaceByArtist — the last 2 library tracks
-  // aired (oldest first). Without this, every refresh starts with empty
-  // trailing context and the heuristic picks the dominant artist at
-  // position 0, producing unbounded same-artist runs across refresh
-  // boundaries even though each m3u individually respects max-run=2.
+  // Trailing-artist context for spaceByArtist — last 2 library tracks
+  // aired, oldest first. The `latest` hint is folded in so the daemon's
+  // race against Vercel's track-started transaction can't leave us
+  // computing trailing context for stale state.
   const artistById = new Map(library.map((t) => [t.id, t.artist] as const));
-  const recentArtists = (after.recentTrackIds.length >= before.recentTrackIds.length
+  const recentTrackIds = after.recentTrackIds.length >= before.recentTrackIds.length
     ? after.recentTrackIds
-    : before.recentTrackIds)
-    .slice(0, 2)
-    .map((id) => artistById.get(id) ?? null)
-    .reverse();
+    : before.recentTrackIds;
+  const recentArtists = computeRecentArtists(recentTrackIds, artistById, latest);
 
   // Manual rotation override: if the operator has dropped a manual order
   // from the dashboard, write THAT (verbatim, no shuffle) instead of the
