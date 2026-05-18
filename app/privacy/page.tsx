@@ -200,6 +200,13 @@ export default function PrivacyPage() {
             <strong style={{ color: "var(--fg)" }}>If you withdraw:</strong>{" "}
             see section 06.
           </li>
+          <li>
+            <strong style={{ color: "var(--fg)" }}>Newsletter opt-in:</strong>{" "}
+            if you tick the optional &ldquo;keep me posted&rdquo; box, we&apos;ll
+            use your email for occasional Numa Radio updates. Every newsletter
+            includes a one-click unsubscribe; you can also email us to be
+            removed.
+          </li>
         </ul>
       </PrivacyBlock>
 

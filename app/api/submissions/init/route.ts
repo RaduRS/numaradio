@@ -49,6 +49,7 @@ type InitRequest = {
   trackTitle?: unknown;
   trackGenre?: unknown;
   vouched?: unknown;
+  newsletterOptIn?: unknown;
   airingPreference?: unknown;
   audioSize?: unknown;
   artworkKind?: unknown;
@@ -63,7 +64,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return fail("bad_json", "Could not parse JSON body.");
   }
 
-  const { name, email, trackTitle, trackGenre, vouched, airingPreference, audioSize, artworkKind, artworkSize } = body;
+  const { name, email, trackTitle, trackGenre, vouched, newsletterOptIn, airingPreference, audioSize, artworkKind, artworkSize } = body;
+  const optIn = newsletterOptIn === true;
 
   if (typeof name !== "string" || !isValidName(name)) {
     return fail("bad_name", "Please enter a name between 2 and 80 characters.");
@@ -129,6 +131,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         airingPreference: airingPref,
         status: "uploading",
         vouched: true,
+        newsletterOptIn: optIn,
       },
       select: { id: true },
     });
@@ -190,6 +193,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         airingPreference: airingPref,
         status: "uploading",
         vouched: true,
+        newsletterOptIn: optIn,
       },
       select: { id: true },
     });

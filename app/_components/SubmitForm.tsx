@@ -81,6 +81,7 @@ export function SubmitForm() {
   const [airingPreference, setAiringPreference] =
     useState<"one_off" | "permanent">("permanent");
   const [vouched, setVouched] = useState(false);
+  const [newsletterOptIn, setNewsletterOptIn] = useState(false);
   const [state, setState] = useState<State>({ kind: "input" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [audioDrag, setAudioDrag] = useState(false);
@@ -146,6 +147,7 @@ export function SubmitForm() {
           trackTitle: trackTitle.trim(),
           trackGenre: trackGenre.trim() || null,
           vouched: true,
+          newsletterOptIn,
           airingPreference,
           audioSize: audio.size,
           artworkKind: artKind,
@@ -528,6 +530,16 @@ export function SubmitForm() {
         {fieldErrors.vouched && (
           <span className="submit-error">{fieldErrors.vouched}</span>
         )}
+        <label className="submit-vouch submit-vouch-optional">
+          <input
+            type="checkbox"
+            checked={newsletterOptIn}
+            onChange={(e) => setNewsletterOptIn(e.target.checked)}
+          />
+          <span className="submit-vouch-text">
+            Keep me posted with Numa Radio updates (occasional, no spam).
+          </span>
+        </label>
       </div>
 
       {/* Server error */}

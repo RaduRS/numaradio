@@ -608,6 +608,7 @@ model MusicSubmission {
   airingPreference SubmissionAiringPreference   @default(one_off)
   status           SubmissionStatus             @default(pending)
   vouched          Boolean                      @default(false)
+  newsletterOptIn  Boolean                      @default(false)
   rejectReason     String?
   trackId          String?
   createdAt        DateTime                     @default(now())

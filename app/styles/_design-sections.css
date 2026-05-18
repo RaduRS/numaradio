@@ -3442,6 +3442,17 @@
 }
 .submit-vouch-text a:hover { border-bottom-color: var(--accent); }
 
+.submit-vouch.submit-vouch-optional {
+  padding: 10px 14px;
+  margin-top: 8px;
+  border-style: dotted;
+  background: transparent;
+}
+.submit-vouch.submit-vouch-optional .submit-vouch-text {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
 /* ── Submit row ────────────────────────────────────────── */
 .submit-row {
   display: flex;
