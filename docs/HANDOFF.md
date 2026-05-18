@@ -1,6 +1,98 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-05-16
+Last updated: 2026-05-18
+
+---
+
+## 2026-05-18 — Rotation + Up Next major fix — LIVE
+
+Heavy debugging session. Listeners had been hearing 3+ same-artist runs
+and back-to-back same-track repeats; dashboard Up Next was reshuffling
+chaotically and didn't predict what would actually play. All four root
+causes are now fixed and verified live (6 consecutive cycleOrder
+positions played in order post-deploy).
+
+**Commits between `4b3e712` and `32ba332`** (all pushed):
+
+1. `9d4b793` — rotation: close race with Vercel track-started
+   - Daemon's on-track callback fires runRefresh against DB. Vercel's
+     track-started transaction (NowPlaying + PlayHistory) sometimes
+     takes >300ms to commit. The race-guard's 300ms gap missed it.
+   - Daemon now passes the just-started `{trackId, artist}` from
+     Liquidsoap's payload as authoritative truth via `LatestTrackHint`,
+     folded into the trailing-artist context.
+
+2. `1b8652d` — rotation: stable cycleOrder
+   - New `/etc/numa/cycle-order.json` (mirrors `manual-rotation.json`).
+     Cycle's shuffled order persists; refreshes only strip already-
+     played from it. Operator's "Reshuffle" button → forceReshuffle
+     (clear file + rebuild). Cycle wrap → rebuild + persist.
+   - **Newly-approved tracks no longer auto-surface mid-cycle** —
+     operator clicks Reshuffle to bring them in, or waits for wrap.
+     Explicitly preferred trade-off (predictable Up Next > automatic
+     surfacing).
+
+3. `1c369db` — rotation: stop rewriting m3u every refresh
+   - m3u stable for the whole cycle. Dashboard's
+     `/api/rotation/upcoming` derives "what's next" by filtering m3u
+     against PlayHistory since `cycleOrder.createdAt` at read time.
+   - Liquidsoap was going out of order (skip ahead 2, come back) when
+     m3u shrank from the front mid-play.
+
+4. `0cfc83c` — reconciler: check played-since-createdAt, not last 5 min
+   - Operator pushed EUTHANIZE - Do It twice from the dashboard. After
+     they aired, their staged QueueItems should have transitioned to
+     completed but didn't (root cause not fully traced). The reconciler
+     re-pushed them every 30s because its recency window was 5 min and
+     the rows were older. Same class of latent bug behind "No Rush
+     looping" sightings.
+   - Fix: receive `queueItem.createdAt` in `isTrackRecentlyPlayed` and
+     check PlayHistory since that timestamp instead. Stuck rows now
+     get marked completed instead of re-pushed.
+   - `scripts/cleanup-stuck-staged.ts` — one-shot drain (found 0 on
+     this prod, so latent rather than active).
+
+5. `2822e71` — liquidsoap: `reload_mode="watch"`
+   - `mode="normal"` + `reload=120, reload_mode="seconds"` was making
+     Liquidsoap reset its position counter to 0 every 2 min — same
+     2-4 tracks looping at the head of cycleOrder.
+   - `reload_mode="watch"` uses inotify, only reloads on real content
+     change. With the m3u stable for the whole cycle (item #3),
+     Liquidsoap now advances cleanly through all 161 positions.
+
+6. `32ba332` — dashboard upcoming: bind PlayHistory.startedAt as ISO
+   - Hidden tz bug: `pg` formats Date params in local time for
+     TIMESTAMP (without TZ) columns. Orion is BST, so `startedAt >= $2`
+     was offset by 1 hour → zero matches → Up Next showed already-
+     played tracks at positions 0-5.
+   - Pass `.toISOString()` instead of the Date object. The dashboard's
+     read-side type parser (`lib/db.ts:11`) already handles the
+     inverse problem on read; this is the same class of bug on bind.
+
+Plus `8570d25`, `13a69f2` earlier today: newsletter template +
+unsubscribe route + List-Unsubscribe header. And `6b20b5b`: optional
+newsletter opt-in checkbox on the submit form + matching
+`MusicSubmission.newsletterOptIn` column. No send route yet — see the
+file header in `lib/email/newsletter.ts` for the pre-send checklist.
+
+### Files to read first if picking up cold
+
+- `scripts/refresh-rotation.ts` — the entire rotation model lives
+  here. `cycleOrder` persistence, `applyCycleOrder`, `buildFresh`,
+  `runRefresh`, `forceReshuffle`. 33 tests in the `.test.ts`.
+- `workers/queue-daemon/index.ts:649` — on-track callback that fires
+  the daemon-side refresh with the `latest` hint.
+- `dashboard/app/api/rotation/upcoming/route.ts` — Up Next derivation
+  (filters m3u against PlayHistory by cycle.createdAt).
+- `liquidsoap/numa.liq:64` — the playlist source. `reload_mode="watch"`
+  is load-bearing.
+
+### Operator state after this session
+- Daemon restarted with new code
+- Liquidsoap restarted with new config (`reload_mode="watch"`)
+- Dashboard rebuilt + restarted with the date-binding fix
+- All commits pushed to `origin/main`. Vercel auto-deployed.
+- Stream is up, listeners stable, no loop/repeat in observed sequence
 
 ---
 
