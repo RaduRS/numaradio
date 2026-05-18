@@ -76,54 +76,48 @@ Remove the entry from this file.
 
 ---
 
-## Newsletter subscribe checkbox on submit page
+## First newsletter send — pre-flight steps (when ready to send #1)
 
-**Status:** parked 2026-05-16.
-**Resume trigger:** anytime — small additive feature, no blockers.
+**Status:** parked 2026-05-18. Opt-in collection + unsubscribe flow
+shipped today (commits `6b20b5b`, `8570d25`, `13a69f2`). The actual
+bulk-send route is unbuilt — that's the only piece left before the
+first newsletter can go out.
+
+**Resume trigger:** when you have content for your first newsletter
+(monthly recap? new-artist roundup? launch announcement?).
 
 ### What to build
 
-On the artist submission form (`app/_components/SubmitForm.tsx`),
-add an optional checkbox the submitter can tick to opt in to a
-Numa Radio newsletter / mailing list:
+A send route / script that:
+1. Queries `prisma.musicSubmission.findMany({ where: { newsletterOptIn: true }, distinct: ['email'], select: { email: true, artistName: true } })`
+2. For each row, calls `sendNewsletter()` from `lib/email/newsletter.ts`
+   (the template already mints the unsubscribe URL + attaches the
+   `List-Unsubscribe` + `List-Unsubscribe-Post` headers).
+3. Throttles to respect Resend's rate limit (10 emails/sec default).
+4. Audit: log per-recipient `{ email, status, providerMessageId }` to
+   a new table or just `console.log`.
 
-> ☐ Keep me posted with Numa Radio updates (occasional, no spam).
+### Where to put the trigger
 
-- Default UNCHECKED (opt-in, not opt-out).
-- Visual: same small / dim inline style as the existing consent
-  checkbox cluster — sits below the social-media vouch checkbox.
-- Submit button stays enabled regardless of this checkbox (it's
-  optional).
-- When checked + submitted: persist the submitter's email to a
-  newsletter list. Either:
-  - **Resend** (already integrated for transactional approval/reject
-    emails — see HANDOFF 2026-05-03 evening) — Resend has Audiences
-    / Contacts. Add the email to a "numaradio-artists" audience.
-  - **Or a simple DB column on `MusicSubmission`** (`newsletterOptIn boolean`)
-    + a periodic export. Simpler, no extra service dependency.
+- **CLI script** (`scripts/send-newsletter.ts`) is simplest — operator
+  runs it manually when ready. Pass content as args or read from a
+  file (`scripts/newsletters/2026-XX-launch.md`).
+- Or a dashboard route — operator submits eyebrow + headline +
+  paragraphs in a form, hits "Send to N subscribers". Heavier, but
+  nicer UX long-term.
 
-Recommend Resend Audiences path — already paid for, no new infra,
-and Resend has unsubscribe links + double-opt-in patterns out of
-the box.
+Start with the script. Move to dashboard route when send cadence
+matures.
 
-### Files to touch
+### Pre-flight checklist (already done, listed for completeness)
 
-- `app/_components/SubmitForm.tsx` — new checkbox state + JSX
-- `app/api/submissions/intake/route.ts` (or wherever submit lands)
-  — pass `newsletterOptIn` through
-- `dashboard/lib/email/` (existing Resend client) — add a helper
-  `addToArtistAudience(email, displayName)` that POSTs to the
-  Resend Audiences API. Look up Resend Audiences docs for endpoint.
-- Optionally: a small operator-side audit log so we can see opt-in
-  rate over time.
-
-### Operator follow-ups
-
-- Create a "numaradio-artists" audience in Resend dashboard (one-time)
-- Decide on first newsletter cadence + content (monthly station
-  updates? release roundups? — separate brand decision)
-- Add unsubscribe link + footer to any newsletter we send (legal
-  requirement under GDPR / CAN-SPAM — Resend templates handle this)
+- ✅ Opt-in checkbox on submit form (default unchecked)
+- ✅ `MusicSubmission.newsletterOptIn` column
+- ✅ `lib/email/newsletter.ts` template with brand sign-off
+- ✅ Unsubscribe route `/api/newsletter/unsubscribe` (GET + POST RFC 8058)
+- ✅ HMAC sign/verify token helper
+- ✅ `List-Unsubscribe` + `List-Unsubscribe-Post` headers in `sendNewsletter()`
+- ✅ Privacy page disclosure
 
 ### When this is done
 
