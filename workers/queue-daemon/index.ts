@@ -21,7 +21,7 @@ import { createSynthesizer } from "./synth-router.ts";
 import { uploadChatterAudio } from "./chatter-upload.ts";
 import { ContextLineOrchestrator, buildStationState } from "./context-line.ts";
 import { fetchWorldAside } from "./world-aside-client.ts";
-import { runRefresh as refreshRotation, writeManualRotation, clearManualRotation as clearManualRotationFile } from "../../scripts/refresh-rotation.ts";
+import { runRefresh as refreshRotation, forceReshuffle, writeManualRotation, clearManualRotation as clearManualRotationFile } from "../../scripts/refresh-rotation.ts";
 import {
   createYoutubeChatLoop,
   DEFAULT_POLL_INTERVAL_MS as YT_CHAT_INTERVAL_MS,
@@ -758,7 +758,11 @@ async function main() {
       onTrackHandler,
       statusHandler,
       chatterOverrideHandler,
-      refreshRotationHandler: () => refreshRotation(prisma),
+      // The dashboard's Reshuffle button hits POST /refresh-rotation, so
+      // route it through forceReshuffle: clear cycleOrder, then rebuild.
+      // The on-track callback + systemd timer keep using refreshRotation
+      // directly — those preserve the persisted cycle order.
+      refreshRotationHandler: () => forceReshuffle(prisma),
       setManualRotationHandler: async (body) => {
         await writeManualRotation(body.trackIds);
         return refreshRotation(prisma);

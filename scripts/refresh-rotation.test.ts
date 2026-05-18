@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlaylist, buildManualPlaylist, cyclePlayedFrom, spaceByArtist, computeRecentArtists } from "./refresh-rotation.ts";
+import {
+  buildPlaylist,
+  buildManualPlaylist,
+  cyclePlayedFrom,
+  spaceByArtist,
+  computeRecentArtists,
+  applyCycleOrder,
+} from "./refresh-rotation.ts";
 
 type T = { id: string; url: string; title: string; artist: string | null };
 const t = (id: string, url: string, artist: string | null = null): T => ({ id, url, title: id, artist });
@@ -112,6 +119,62 @@ test("simulated full cycle: every track airs exactly once before any repeat", ()
   }
 
   assert.equal(new Set(history).size, library.length, "every track aired exactly once");
+});
+
+test("applyCycleOrder: strips played tracks, preserves order, position N becomes N-K after K plays", () => {
+  // cycleOrder is the fixed shuffle for this cycle. After two tracks
+  // played, the remaining list should be the same order, just shorter.
+  const library: T[] = [
+    t("a", "u-a"), t("b", "u-b"), t("c", "u-c"), t("d", "u-d"), t("e", "u-e"),
+  ];
+  const cycleOrder = ["a", "b", "c", "d", "e"];
+  const played = new Set<string>(["a", "b"]);
+  const out = applyCycleOrder({ library, cycleOrder, played, bridge: new Set() });
+  assert.deepEqual(out.map((x) => x.id), ["c", "d", "e"]);
+});
+
+test("applyCycleOrder: strips tracks removed from library (deletion mid-cycle)", () => {
+  const library: T[] = [t("a", "u-a"), t("c", "u-c")];
+  // 'b' was approved into cycleOrder but later deleted from library.
+  const cycleOrder = ["a", "b", "c"];
+  const out = applyCycleOrder({ library, cycleOrder, played: new Set(), bridge: new Set() });
+  assert.deepEqual(out.map((x) => x.id), ["a", "c"]);
+});
+
+test("applyCycleOrder: empty result when entire cycle has played", () => {
+  const library: T[] = [t("a", "u-a"), t("b", "u-b")];
+  const cycleOrder = ["a", "b"];
+  const played = new Set(["a", "b"]);
+  const out = applyCycleOrder({ library, cycleOrder, played, bridge: new Set() });
+  assert.equal(out.length, 0);
+});
+
+test("applyCycleOrder: ignores newly-approved tracks not in cycleOrder", () => {
+  // Operator approved 'd' after cycleOrder was written — it should NOT
+  // appear in the m3u this cycle (operator must press Reshuffle to
+  // surface it, or wait for cycle wrap).
+  const library: T[] = [t("a", "u-a"), t("b", "u-b"), t("c", "u-c"), t("d", "u-d")];
+  const cycleOrder = ["a", "b", "c"];
+  const out = applyCycleOrder({ library, cycleOrder, played: new Set(), bridge: new Set() });
+  assert.deepEqual(out.map((x) => x.id), ["a", "b", "c"]);
+});
+
+test("applyCycleOrder: stable across multiple plays (no reshuffle mid-cycle)", () => {
+  // Simulates the new model: same cycleOrder, plays accumulate, remaining
+  // order stays identical to the original except for played-stripping.
+  const library: T[] = Array.from({ length: 6 }, (_, i) => t(`k${i}`, `u${i}`));
+  const cycleOrder = ["k3", "k0", "k5", "k1", "k4", "k2"];
+  const played = new Set<string>();
+  const sequence: string[] = [];
+  for (let i = 0; i < cycleOrder.length; i++) {
+    const out = applyCycleOrder({ library, cycleOrder, played, bridge: new Set() });
+    assert.ok(out.length > 0);
+    const next = out[0];
+    sequence.push(next.id);
+    played.add(next.id);
+  }
+  // Sequence aired must match cycleOrder verbatim — no surprise reorders.
+  assert.deepEqual(sequence, cycleOrder);
 });
 
 test("buildManualPlaylist preserves the operator's order verbatim", () => {

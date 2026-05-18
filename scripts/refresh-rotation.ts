@@ -33,6 +33,41 @@ export type RefreshResult = {
 
 const PLAYLIST_PATH = process.env.NUMA_PLAYLIST_PATH ?? "/etc/numa/playlist.m3u";
 const MANUAL_PATH = process.env.NUMA_MANUAL_ROTATION_PATH ?? "/etc/numa/manual-rotation.json";
+const CYCLE_ORDER_PATH = process.env.NUMA_CYCLE_ORDER_PATH ?? "/etc/numa/cycle-order.json";
+
+export type CycleOrder = { trackIds: string[]; createdAt: number };
+
+export async function readCycleOrder(path: string = CYCLE_ORDER_PATH): Promise<CycleOrder | null> {
+  try {
+    const raw = await readFile(path, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.trackIds)) return null;
+    return {
+      trackIds: parsed.trackIds.filter((x: unknown): x is string => typeof x === "string"),
+      createdAt: Number(parsed.createdAt) || Date.now(),
+    };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    console.error(`[refresh-rotation] failed to read ${path}:`, err);
+    return null;
+  }
+}
+
+export async function writeCycleOrder(trackIds: string[], path: string = CYCLE_ORDER_PATH): Promise<void> {
+  const payload: CycleOrder = { trackIds, createdAt: Date.now() };
+  const suffix = randomBytes(4).toString("hex");
+  const tmpPath = join(tmpdir(), `cycle-order-${process.pid}-${Date.now()}-${suffix}.json`);
+  await writeFile(tmpPath, JSON.stringify(payload), "utf8");
+  await rename(tmpPath, path);
+}
+
+export async function clearCycleOrder(path: string = CYCLE_ORDER_PATH): Promise<void> {
+  try { await unlink(path); }
+  catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+}
 
 export type ManualRotation = { trackIds: string[]; setAt: number };
 
@@ -197,6 +232,29 @@ export function spaceByArtist<T extends { artist: string | null }>(
 }
 
 /**
+ * Filter a persisted cycleOrder down to what's actually playable:
+ * tracks still in the library, not yet aired in this cycle. Order is
+ * preserved verbatim — no reshuffle. Bridge applies on wrap, dropping
+ * the just-played track from position 0 of the next cycle.
+ */
+export function applyCycleOrder(args: {
+  library: readonly RotationTrack[];
+  cycleOrder: readonly string[];
+  played: ReadonlySet<string>;
+  bridge: ReadonlySet<string>;
+}): RotationTrack[] {
+  const byId = new Map(args.library.map((t) => [t.id, t] as const));
+  const out: RotationTrack[] = [];
+  for (const id of args.cycleOrder) {
+    if (args.played.has(id)) continue;
+    if (args.bridge.has(id)) continue;
+    const t = byId.get(id);
+    if (t) out.push(t);
+  }
+  return out;
+}
+
+/**
  * Authoritative hint about the track that just started playing. Passed
  * from the on-track callback (which knows the true latest from the
  * Liquidsoap payload) so we don't lose to the race between Vercel's
@@ -313,16 +371,14 @@ export async function runRefresh(
   const historyTake = Math.max(library.length * 2, 8);
 
   const readState = async (): Promise<{
-    cyclePlayed: Set<string>;
     nowPlayingId: string | null;
     recentTrackIds: string[];
   }> => {
     const [recent, nowPlaying] = await Promise.all([
-      // Filter PlayHistory to library tracks only. Without this, voice
-      // chatter / shoutouts / song-request airings consume slots in
-      // cycleExclude (which is sized to library.length via cyclePlayedFrom),
-      // displacing real library plays and stopping the wrap from firing
-      // when every library track has actually played.
+      // Filter PlayHistory to library tracks only — voice chatter /
+      // shoutouts / song-request airings live in PlayHistory too but
+      // aren't relevant to library rotation order or recent-artist
+      // trailing context.
       prisma.playHistory.findMany({
         where: libraryIds.length > 0
           ? { stationId: station.id, trackId: { in: libraryIds } }
@@ -338,7 +394,6 @@ export async function runRefresh(
     ]);
     const recentTrackIds = recent.map((r) => r.trackId!).filter(Boolean);
     return {
-      cyclePlayed: cyclePlayedFrom(recentTrackIds, library.length),
       nowPlayingId: nowPlaying?.currentTrackId ?? null,
       recentTrackIds,
     };
@@ -346,42 +401,72 @@ export async function runRefresh(
 
   // Race-guard: a `track-started` transaction (Liquidsoap → Vercel →
   // Neon: NowPlaying upsert + PlayHistory insert) takes ~100-500 ms to
-  // commit. If we read in that window the just-started track is invisible
-  // to both reads. Reading twice with a 300 ms gap and unioning closes
-  // the window — same pattern that protected the old sliding-window
-  // implementation against back-to-back airings.
+  // commit. Reading twice with a 300 ms gap closes most of that window;
+  // the `latest` hint from the on-track callback closes the rest.
   const before = await readState();
   await new Promise((r) => setTimeout(r, 300));
   const after = await readState();
 
-  const cycleExclude = new Set<string>([...before.cyclePlayed, ...after.cyclePlayed]);
   const bridgeExclude = new Set<string>();
-  // Latest hint wins over DB reads when the on-track callback knows the
-  // truth before Vercel's track-started transaction has committed.
   const nowPlayingId = latest?.trackId ?? after.nowPlayingId ?? before.nowPlayingId;
   if (nowPlayingId) {
-    cycleExclude.add(nowPlayingId);
     bridgeExclude.add(nowPlayingId);
   }
 
-  // Trailing-artist context for spaceByArtist — last 2 library tracks
-  // aired, oldest first. The `latest` hint is folded in so the daemon's
-  // race against Vercel's track-started transaction can't leave us
-  // computing trailing context for stale state.
+  // Trailing-artist context for spaceByArtist on fresh-cycle builds —
+  // last 2 library tracks aired, oldest first. Folded in with the
+  // `latest` hint so the daemon's race against Vercel's track-started
+  // transaction can't leave us computing trailing context from stale
+  // state.
   const artistById = new Map(library.map((t) => [t.id, t.artist] as const));
   const recentTrackIds = after.recentTrackIds.length >= before.recentTrackIds.length
     ? after.recentTrackIds
     : before.recentTrackIds;
   const recentArtists = computeRecentArtists(recentTrackIds, artistById, latest);
 
-  // Manual rotation override: if the operator has dropped a manual order
-  // from the dashboard, write THAT (verbatim, no shuffle) instead of the
-  // auto-shuffled cycle. The "exhausted" check is tied to PlayHistory
-  // since the manual order's setAt — NOT to cycleExclude — so the manual
-  // queue can't be prematurely cleared by an unrelated priority-queue
-  // push or a concurrent runRefresh seeing a slightly fresher cycle.
-  // Bridge: the currently-playing track is always dropped from the
-  // upcoming list to prevent immediate repeats.
+  // Build the planned order for this cycle, in the same shape as
+  // manualRotation. Persists to /etc/numa/cycle-order.json so refreshes
+  // don't reshuffle — they only strip already-played tracks. Wraps
+  // automatically when the cycle is exhausted; an operator-driven
+  // Reshuffle clears the file via forceReshuffle().
+  const buildFresh = (): string[] => {
+    let pool = library.filter((t) => !bridgeExclude.has(t.id));
+    if (pool.length === 0) pool = library.slice(); // degenerate single-track lib
+    const a = pool.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return spaceByArtist(a, MAX_ARTIST_RUN, recentArtists).map((t) => t.id);
+  };
+  let cycle = await readCycleOrder();
+  if (!cycle || cycle.trackIds.length === 0) {
+    const ids = buildFresh();
+    await writeCycleOrder(ids);
+    cycle = { trackIds: ids, createdAt: Date.now() };
+  }
+  // played = tracks from cycleOrder that have aired since cycleOrder
+  // was written. Tying "played" to createdAt instead of cyclePlayedFrom
+  // keeps the cycle ledger insulated from priority pushes / chatter /
+  // any non-library airings that PlayHistory also records.
+  const cyclePlayedRows = await prisma.playHistory.findMany({
+    where: {
+      stationId: station.id,
+      trackId: { in: cycle.trackIds },
+      startedAt: { gte: new Date(cycle.createdAt) },
+    },
+    select: { trackId: true },
+  });
+  let played = new Set<string>(
+    cyclePlayedRows.map((r) => r.trackId).filter((x): x is string => !!x),
+  );
+  if (nowPlayingId) played.add(nowPlayingId);
+
+  // Manual rotation override sits between cycleOrder and the m3u. The
+  // operator's verbatim list plays first; the auto tail is derived from
+  // the SAME stable cycleOrder (just with the manual remainder filtered
+  // out) so the operator never sees the auto upcoming list reshuffle
+  // beneath them either.
   const manual = await readManualRotation();
   if (manual && manual.trackIds.length > 0) {
     const playedSince = await prisma.playHistory.findMany({
@@ -399,22 +484,16 @@ export async function runRefresh(
 
     const { content: manualContent, remainingIds } = buildManualPlaylist(library, manual.trackIds, consumed);
     if (remainingIds.length > 0) {
-      // Append the auto-shuffled pool of "what would play next" so the m3u
-      // always carries the full upcoming queue. Without this, when the
-      // manual remainder shrinks to 1-2 tracks Liquidsoap (mode="normal",
-      // reload=120) loops the tiny file and the dashboard's Up Next view
-      // truncates to those 1-2 entries. The tail excludes the manual
-      // remainder (don't double-count those upcoming tracks) AND the
-      // cycle-played + currently-playing (existing bridges).
-      const tailExclude = new Set<string>([...cycleExclude, ...remainingIds]);
-      // Manual remainder sits between recent history and the auto tail —
-      // seed the tail with the trailing artists of the manual order so the
-      // seam between the last manual track and position 0 of the tail
-      // respects max-run=2 too.
-      const manualTailRecent = remainingIds
-        .slice(-2)
-        .map((id) => artistById.get(id) ?? null);
-      const tailContent = buildPlaylist(library, tailExclude, bridgeExclude, Math.random, manualTailRecent);
+      const tailPlayed = new Set<string>([...played, ...remainingIds]);
+      const tailUpcoming = applyCycleOrder({
+        library,
+        cycleOrder: cycle.trackIds,
+        played: tailPlayed,
+        bridge: new Set(),
+      });
+      const tailContent = tailUpcoming.length === 0
+        ? ""
+        : tailUpcoming.map((t) => t.url).join("\n") + "\n";
       const combined = manualContent + tailContent;
 
       const suffix = randomBytes(4).toString("hex");
@@ -423,25 +502,38 @@ export async function runRefresh(
       await rename(tmpPath, PLAYLIST_PATH);
       return {
         librarySize: library.length,
-        cyclePlayed: cycleExclude.size,
+        cyclePlayed: played.size,
         poolSize: remainingIds.length,
         cycleWrapped: false,
         manualMode: true,
       };
     }
-    // Manual list exhausted — clear the sentinel and fall through to
-    // normal generational refresh. The bridge in buildPlaylist excludes
-    // nowPlaying, so the seam between the last manual track and the
-    // first auto track can't repeat.
     await clearManualRotation();
   } else if (manual) {
-    // Empty trackIds list — dashboard rejects this but the daemon's
-    // raw POST /manual-rotation accepts it. Self-clear and fall through.
     await clearManualRotation();
   }
 
-  const cycleWrapped = library.length > 0 && library.every((t) => cycleExclude.has(t.id));
-  const content = buildPlaylist(library, cycleExclude, bridgeExclude, Math.random, recentArtists);
+  let upcoming = applyCycleOrder({ library, cycleOrder: cycle.trackIds, played, bridge: new Set() });
+  let cycleWrapped = false;
+  if (upcoming.length === 0) {
+    // Cycle wrap: every track in cycleOrder has aired. Reshuffle for
+    // the next cycle, excluding nowPlaying as the seam bridge.
+    const ids = buildFresh();
+    await writeCycleOrder(ids);
+    cycle = { trackIds: ids, createdAt: Date.now() };
+    const playedAfterWrap = new Set<string>();
+    if (nowPlayingId) playedAfterWrap.add(nowPlayingId);
+    upcoming = applyCycleOrder({
+      library,
+      cycleOrder: ids,
+      played: playedAfterWrap,
+      bridge: bridgeExclude,
+    });
+    played = playedAfterWrap;
+    cycleWrapped = true;
+  }
+
+  const content = upcoming.length === 0 ? "" : upcoming.map((t) => t.url).join("\n") + "\n";
 
   const suffix = randomBytes(4).toString("hex");
   const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
@@ -450,13 +542,24 @@ export async function runRefresh(
 
   return {
     librarySize: library.length,
-    cyclePlayed: cycleExclude.size,
-    poolSize: cycleWrapped
-      ? Math.max(library.length - bridgeExclude.size, 0)
-      : Math.max(library.length - cycleExclude.size, 0),
+    cyclePlayed: played.size,
+    poolSize: upcoming.length,
     cycleWrapped,
     manualMode: false,
   };
+}
+
+/**
+ * Operator-driven reshuffle: clear the persisted cycleOrder so the next
+ * runRefresh rebuilds it from scratch (including any newly-approved
+ * tracks). Wired to the dashboard's Reshuffle button via the daemon's
+ * /refresh-rotation endpoint.
+ */
+export async function forceReshuffle(
+  prisma: Pick<PrismaClient, "station" | "track" | "playHistory" | "nowPlaying">,
+): Promise<RefreshResult> {
+  await clearCycleOrder();
+  return runRefresh(prisma);
 }
 
 async function main() {
