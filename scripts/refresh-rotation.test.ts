@@ -264,6 +264,67 @@ test("spaceByArtist treats null artists as run-breakers", () => {
   assert.equal(out.length, 3);
 });
 
+test("simulated refresh-per-track: max run aired stays ≤ 2 across refresh boundaries", () => {
+  // Mirrors prod: every track-started fires runRefresh, which calls
+  // buildPlaylist from scratch. Without trailing-artist context the
+  // task-scheduler heuristic picks the dominant artist (Russell Ross)
+  // at position 0 every refresh → unbounded same-artist runs across
+  // refresh boundaries even though each individual m3u respects max-2.
+  const library: T[] = [
+    ...Array.from({ length: 10 }, (_, i) => t(`r${i}`, `u-r${i}`, "Russell Ross")),
+    ...Array.from({ length: 3 }, (_, i) => t(`b${i}`, `u-b${i}`, "Barely Jared")),
+    ...Array.from({ length: 3 }, (_, i) => t(`d${i}`, `u-d${i}`, "Digital Culprit")),
+  ];
+  const byUrl = new Map(library.map((x) => [x.url, x] as const));
+  const history: string[] = [];
+  let nowPlaying: string | null = null;
+  let seed = 7;
+  const rng = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  const aired: T[] = [];
+
+  for (let i = 0; i < library.length; i++) {
+    const cycle = cyclePlayedFrom(history, library.length);
+    const bridge = new Set<string>();
+    if (nowPlaying) {
+      cycle.add(nowPlaying);
+      bridge.add(nowPlaying);
+    }
+    const recentArtists = aired.slice(-2).map((tr) => tr.artist);
+    const lines = buildPlaylist(library, cycle, bridge, rng, recentArtists).trim().split("\n");
+    const track = byUrl.get(lines[0])!;
+    aired.push(track);
+    history.unshift(track.id);
+    nowPlaying = track.id;
+  }
+
+  assert.ok(
+    maxRunIn(aired) <= 2,
+    `max run aired = ${maxRunIn(aired)}, expected ≤ 2. Aired sequence: ${aired
+      .map((tr) => tr.artist?.[0] ?? "?")
+      .join("")}`,
+  );
+});
+
+test("spaceByArtist respects recentArtists trailing context (skips dominant artist at run cap)", () => {
+  // 5 R + 2 B + 2 D, but recently we already aired 2 R back-to-back.
+  // A fresh build that ignores history would pick R for position 0 (highest
+  // remaining count). With recentArtists=["Russell Ross","Russell Ross"]
+  // the trailing run is already 2 → R must be blocked at position 0.
+  const pool: T[] = [
+    t("r1", "u-r1", "Russell Ross"), t("r2", "u-r2", "Russell Ross"),
+    t("r3", "u-r3", "Russell Ross"), t("r4", "u-r4", "Russell Ross"),
+    t("r5", "u-r5", "Russell Ross"),
+    t("b1", "u-b1", "Barely Jared"), t("b2", "u-b2", "Barely Jared"),
+    t("d1", "u-d1", "Digital Culprit"), t("d2", "u-d2", "Digital Culprit"),
+  ];
+  const out = spaceByArtist(pool, 2, ["Russell Ross", "Russell Ross"]);
+  assert.notEqual(
+    out[0].artist?.toLowerCase(),
+    "russell ross",
+    "position 0 must not extend the trailing RR run",
+  );
+});
+
 test("buildPlaylist (integration) — Russell-heavy catalog never produces 3-in-a-row", () => {
   // 8 R + 3 B + 2 D = ~62% R, mirrors prod ratio. Run buildPlaylist 50×
   // with shifting RNG; assert no run exceeds 2 in any output.

@@ -117,12 +117,20 @@ export function cyclePlayedFrom(recentIds: string[], librarySize: number): Set<s
 export function spaceByArtist<T extends { artist: string | null }>(
   pool: readonly T[],
   maxRun: number,
+  /** Artists of tracks aired immediately before this build, oldest first.
+   *  Lets the spacer see across refresh boundaries — without this, a fresh
+   *  build always starts with an empty trailing context and the heuristic
+   *  picks the dominant artist at position 0, extending runs that already
+   *  spanned the previous m3u. */
+  recentArtists: readonly (string | null)[] = [],
 ): T[] {
   if (maxRun <= 0 || pool.length <= 1) return pool.slice();
   const remaining = pool.slice();
   const out: T[] = [];
   const NULL_KEY = "__null__";
   const normalize = (t: T) => t.artist?.trim().toLowerCase() ?? NULL_KEY;
+  const normalizeArtist = (a: string | null) => a?.trim().toLowerCase() ?? NULL_KEY;
+  const recent = recentArtists.map(normalizeArtist);
 
   while (remaining.length > 0) {
     // Live counts per artist of what's still in the pool.
@@ -131,18 +139,35 @@ export function spaceByArtist<T extends { artist: string | null }>(
       const k = normalize(t);
       counts.set(k, (counts.get(k) ?? 0) + 1);
     }
-    // Measure trailing same-artist run on the output.
+    // Measure trailing same-artist run on the output, continuing into
+    // recent history if every element of out matches the same artist
+    // (or out is empty).
     let trailingArtist: string | null = null;
     let trailingRun = 0;
+    let continuedIntoRecent = out.length === 0;
     for (let i = out.length - 1; i >= 0; i--) {
       const a = normalize(out[i]);
-      if (i === out.length - 1) {
+      if (trailingArtist === null) {
         trailingArtist = a;
         trailingRun = 1;
       } else if (a === trailingArtist && a !== NULL_KEY) {
         trailingRun++;
       } else {
         break;
+      }
+      if (i === 0) continuedIntoRecent = true;
+    }
+    if (continuedIntoRecent) {
+      for (let i = recent.length - 1; i >= 0; i--) {
+        const a = recent[i];
+        if (trailingArtist === null) {
+          trailingArtist = a;
+          trailingRun = 1;
+        } else if (a === trailingArtist && a !== NULL_KEY) {
+          trailingRun++;
+        } else {
+          break;
+        }
       }
     }
     const blocked =
@@ -186,6 +211,7 @@ export function buildPlaylist(
   cycleExclude: Set<string>,
   bridgeExclude: Set<string>,
   rng: () => number = Math.random,
+  recentArtists: readonly (string | null)[] = [],
 ): string {
   if (library.length === 0) return "";
   let pool = library.filter((t) => !cycleExclude.has(t.id));
@@ -203,7 +229,7 @@ export function buildPlaylist(
     const j = Math.floor(rng() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
-  const spaced = spaceByArtist(a, MAX_ARTIST_RUN);
+  const spaced = spaceByArtist(a, MAX_ARTIST_RUN, recentArtists);
   return spaced.map((t) => t.url).join("\n") + "\n";
 }
 
@@ -250,7 +276,11 @@ export async function runRefresh(
   // Read enough history to detect a cycle wrap (one full library + slack).
   const historyTake = Math.max(library.length * 2, 8);
 
-  const readState = async (): Promise<{ cyclePlayed: Set<string>; nowPlayingId: string | null }> => {
+  const readState = async (): Promise<{
+    cyclePlayed: Set<string>;
+    nowPlayingId: string | null;
+    recentTrackIds: string[];
+  }> => {
     const [recent, nowPlaying] = await Promise.all([
       // Filter PlayHistory to library tracks only. Without this, voice
       // chatter / shoutouts / song-request airings consume slots in
@@ -270,12 +300,11 @@ export async function runRefresh(
         select: { currentTrackId: true },
       }),
     ]);
+    const recentTrackIds = recent.map((r) => r.trackId!).filter(Boolean);
     return {
-      cyclePlayed: cyclePlayedFrom(
-        recent.map((r) => r.trackId!).filter(Boolean),
-        library.length,
-      ),
+      cyclePlayed: cyclePlayedFrom(recentTrackIds, library.length),
       nowPlayingId: nowPlaying?.currentTrackId ?? null,
+      recentTrackIds,
     };
   };
 
@@ -296,6 +325,19 @@ export async function runRefresh(
     cycleExclude.add(nowPlayingId);
     bridgeExclude.add(nowPlayingId);
   }
+
+  // Trailing-artist context for spaceByArtist — the last 2 library tracks
+  // aired (oldest first). Without this, every refresh starts with empty
+  // trailing context and the heuristic picks the dominant artist at
+  // position 0, producing unbounded same-artist runs across refresh
+  // boundaries even though each m3u individually respects max-run=2.
+  const artistById = new Map(library.map((t) => [t.id, t.artist] as const));
+  const recentArtists = (after.recentTrackIds.length >= before.recentTrackIds.length
+    ? after.recentTrackIds
+    : before.recentTrackIds)
+    .slice(0, 2)
+    .map((id) => artistById.get(id) ?? null)
+    .reverse();
 
   // Manual rotation override: if the operator has dropped a manual order
   // from the dashboard, write THAT (verbatim, no shuffle) instead of the
@@ -330,7 +372,14 @@ export async function runRefresh(
       // remainder (don't double-count those upcoming tracks) AND the
       // cycle-played + currently-playing (existing bridges).
       const tailExclude = new Set<string>([...cycleExclude, ...remainingIds]);
-      const tailContent = buildPlaylist(library, tailExclude, bridgeExclude);
+      // Manual remainder sits between recent history and the auto tail —
+      // seed the tail with the trailing artists of the manual order so the
+      // seam between the last manual track and position 0 of the tail
+      // respects max-run=2 too.
+      const manualTailRecent = remainingIds
+        .slice(-2)
+        .map((id) => artistById.get(id) ?? null);
+      const tailContent = buildPlaylist(library, tailExclude, bridgeExclude, Math.random, manualTailRecent);
       const combined = manualContent + tailContent;
 
       const suffix = randomBytes(4).toString("hex");
@@ -357,7 +406,7 @@ export async function runRefresh(
   }
 
   const cycleWrapped = library.length > 0 && library.every((t) => cycleExclude.has(t.id));
-  const content = buildPlaylist(library, cycleExclude, bridgeExclude);
+  const content = buildPlaylist(library, cycleExclude, bridgeExclude, Math.random, recentArtists);
 
   const suffix = randomBytes(4).toString("hex");
   const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
