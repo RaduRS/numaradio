@@ -32,6 +32,43 @@ settings.server.timeout.set(-1.)
 
 playlist_file = "/etc/numa/playlist.m3u"
 
+# ─── Retry-aware CDN fetcher ───────────────────────────────────────
+# Cloudflare occasionally returns 522 (origin connection timeout) when
+# fetching B2-backed track URLs — a single failed fetch with healthy
+# fetches seconds before and after. Liquidsoap's built-in https
+# protocol uses curl but gives up after one attempt, silently skipping
+# the m3u line. With a ~60% one-artist catalog, every skipped breaker
+# stitches two 2-runs of that artist into 4-6 in a row. We register
+# our own `cdn:` protocol that wraps curl with --retry 3, then use it
+# as a prefix on the rotation playlist so every URL is fetched through
+# this resilient path. The built-in https protocol stays available for
+# anything else (it's not used elsewhere in this script today).
+def cdn_fetch(~rlog, ~maxtime=_, url) =
+  outpath = file.temp("liq-cdn-", ".mp3")
+  cmd =
+    "curl --silent --show-error --location --fail " ^
+    "--connect-timeout 5 --max-time 20 " ^
+    "--retry 3 --retry-delay 1 --retry-all-errors " ^
+    "--output " ^ process.quote(outpath) ^ " " ^
+    process.quote(url)
+  res = process.run(cmd)
+  if res.status == "exit" and res.status.code == 0 then
+    [outpath]
+  else
+    rlog("[cdn] fetch failed: status=#{res.status} code=#{res.status.code} url=#{url} stderr=#{res.stderr}")
+    file.remove(outpath)
+    []
+  end
+end
+protocol.add(
+  static=false,
+  temporary=true,
+  syntax="cdn:<https-url>",
+  doc="Fetch HTTP(S) URLs via curl with retries (absorbs transient CF 522s).",
+  "cdn",
+  cdn_fetch
+)
+
 # ─── Sources ───────────────────────────────────────────────────────
 # Music song-requests. Unchanged semantics: preempts rotation at track
 # boundary via fallback(track_sensitive=true).
@@ -70,6 +107,8 @@ rotation = playlist(
   id="rotation",
   mode="normal",
   reload_mode="watch",
+  prefix="cdn:",
+  timeout=60.,
   playlist_file
 )
 
