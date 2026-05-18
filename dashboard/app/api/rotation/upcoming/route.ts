@@ -61,11 +61,16 @@ export async function GET(req: Request): Promise<NextResponse> {
   let ids = allIds;
   if (cycleCreatedAt !== null && allIds.length > 0) {
     const pool = getDbPool();
+    // Bind the timestamp as an ISO string, NOT a Date object. pg formats
+    // Date params as local-time strings for `timestamp without time zone`
+    // columns, so on a non-UTC host the comparison is offset by the local
+    // tz and matches nothing. The dashboard's read-side type parser
+    // (lib/db.ts) only fixes parsing, not binding.
     const playedRes = await pool.query<{ track_id: string }>(
       `SELECT DISTINCT "trackId" AS track_id
        FROM "PlayHistory"
        WHERE "trackId" = ANY($1::text[]) AND "startedAt" >= $2`,
-      [allIds, new Date(cycleCreatedAt)],
+      [allIds, new Date(cycleCreatedAt).toISOString()],
     );
     const played = new Set(playedRes.rows.map((r) => r.track_id));
     ids = allIds.filter((id) => !played.has(id));
