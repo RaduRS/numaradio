@@ -140,6 +140,36 @@ test("reconcile re-pushes only the missing one when LS has some items", async ()
   assert.deepEqual(sent, [`priority.push ${urlB}`]);
 });
 
+test("reconcile marks completed (and skips re-push) when track already aired since createdAt", async () => {
+  // This is the No Rush / EUTHANIZE loop bug: a staged item is older than the
+  // 5-min window the legacy `isTrackRecentlyPlayed` checked, but the track DID
+  // already play. Reconciler kept re-pushing it forever. New check uses
+  // queueItem.createdAt as the lower bound — any play since the row was created
+  // counts as "this item already aired, mark it completed".
+  const sent: string[] = [];
+  const url = "https://cdn.example.com/no-rush.mp3";
+  let markedCompleted: string | null = null;
+  const d = deps({
+    // Created 30 min ago — way outside the old 5-min recency window.
+    listStaged: async () => [stagedAt("qi-norush", "track-norush", 30 * 60_000)],
+    resolveAssetUrl: async () => url,
+    request: mockRequest({ "priority.queue": [] }),
+    send: async (l) => { sent.push(l); },
+    isTrackRecentlyPlayed: async (trackId, queueItemCreatedAt) => {
+      // The track aired 20 minutes ago — after the queue item was created.
+      // Old code would have returned false (older than 5-min window).
+      // New code returns true (aired AFTER queueItemCreatedAt).
+      void queueItemCreatedAt; // suppress unused-arg warning
+      return trackId === "track-norush";
+    },
+    markCompleted: async (id) => { markedCompleted = id; },
+  });
+  const r = await reconcilePriorityQueue(d);
+  assert.equal(r.repushed, 0, "must NOT re-push a track that already aired");
+  assert.equal(markedCompleted, "qi-norush", "must mark the stuck row completed");
+  assert.deepEqual(sent, []);
+});
+
 test("reconcile tolerates request() failure without throwing", async () => {
   const sent: string[] = [];
   const d = deps({

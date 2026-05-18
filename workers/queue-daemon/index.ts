@@ -801,18 +801,21 @@ async function main() {
         request: (cmd, timeoutMs) => sock.request(cmd, timeoutMs),
         send: (line) => sock.send(line),
         log: (msg) => console.log(msg),
-        isTrackRecentlyPlayed: async (trackId: string) => {
+        isTrackRecentlyPlayed: async (trackId: string, queueItemCreatedAt: number) => {
           // Check NowPlaying first (current track)
           const np = await prisma.nowPlaying.findFirst({
             where: { stationId: await stationId() },
             select: { currentTrackId: true },
           });
           if (np?.currentTrackId === trackId) return true;
-          // Then check last 5 min of PlayHistory
+          // Then check if the track has aired at ANY point since this queue
+          // item was created. The legacy 5-min recency window missed cases
+          // where a staged item had been re-pushed for >5 min and the track
+          // had already aired (No Rush / EUTHANIZE loop).
           const recent = await prisma.playHistory.findFirst({
             where: {
               trackId,
-              startedAt: { gte: new Date(Date.now() - 5 * 60_000) },
+              startedAt: { gte: new Date(queueItemCreatedAt) },
               segmentType: "audio_track",
             },
             select: { id: true },

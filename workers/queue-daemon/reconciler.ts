@@ -19,11 +19,12 @@ export interface ReconcileDeps {
   log?: (msg: string) => void;
   minAgeMs?: number;
   now?: () => number;
-  /** NEW: returns true if the track is the currently-playing track, OR
-   *  was aired in the last `recentPlayWindowMs` (default 5 min). Used as
-   *  defense-in-depth: if we know the track was just played, we don't
-   *  re-push it even if its DB row is somehow still 'staged'. */
-  isTrackRecentlyPlayed?: (trackId: string) => Promise<boolean>;
+  /** Returns true if the track has been played at any point since the
+   *  queue item was created. The `queueItemCreatedAt` lower bound is
+   *  load-bearing: a 5-min recency window misses tracks that aired
+   *  e.g. 20 min ago but whose staged row was created 40 min ago —
+   *  reconciler then re-pushes them forever (No Rush / EUTHANIZE loop). */
+  isTrackRecentlyPlayed?: (trackId: string, queueItemCreatedAt: number) => Promise<boolean>;
   /** NEW: marks a staged row as completed (called when we detected the
    *  track already played but its status didn't transition). */
   markCompleted?: (queueItemId: string) => Promise<void>;
@@ -63,7 +64,7 @@ export async function reconcilePriorityQueue(deps: ReconcileDeps): Promise<Recon
     // Mark the row as completed so future ticks skip it cleanly.
     if (deps.isTrackRecentlyPlayed) {
       try {
-        const recentlyPlayed = await deps.isTrackRecentlyPlayed(item.trackId);
+        const recentlyPlayed = await deps.isTrackRecentlyPlayed(item.trackId, item.createdAt);
         if (recentlyPlayed) {
           if (deps.markCompleted) {
             await deps.markCompleted(item.id);
