@@ -44,6 +44,13 @@ export async function POST(req: Request): Promise<NextResponse> {
         text: rawText,
         source: { kind: "agent", sender: `dashboard:${operator}` },
         pool: getDbPool(),
+        // UI contract: "Type exactly what Lena should say on air."
+        // Lena IS the booth — without this flag, the humanize/Producer
+        // pipeline treats "the booth" as an external sender and Lena
+        // ends up saying "the booth said X" instead of just saying X.
+        // skipHumanize keeps the operator's text verbatim, with only
+        // radioHost mechanical polish (contractions, line splits).
+        skipHumanize: true,
       });
       console.info(
         `action=shoutout source=dashboard operator=${operator} track=${result.trackId} queue=${result.queueItemId} spokenText=${JSON.stringify(result.spokenText ?? "(none)")}`,
