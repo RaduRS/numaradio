@@ -440,10 +440,12 @@ export async function runRefresh(
     return spaceByArtist(a, MAX_ARTIST_RUN, recentArtists).map((t) => t.id);
   };
   let cycle = await readCycleOrder();
+  let cycleJustBuilt = false;
   if (!cycle || cycle.trackIds.length === 0) {
     const ids = buildFresh();
     await writeCycleOrder(ids);
     cycle = { trackIds: ids, createdAt: Date.now() };
+    cycleJustBuilt = true;
   }
   // played = tracks from cycleOrder that have aired since cycleOrder
   // was written. Tying "played" to createdAt instead of cyclePlayedFrom
@@ -531,14 +533,34 @@ export async function runRefresh(
     });
     played = playedAfterWrap;
     cycleWrapped = true;
+    cycleJustBuilt = true;
   }
 
-  const content = upcoming.length === 0 ? "" : upcoming.map((t) => t.url).join("\n") + "\n";
+  // Only write the m3u when cycleOrder changed (first build, wrap, or
+  // operator Reshuffle via forceReshuffle). Rewriting on every refresh
+  // makes Liquidsoap's `mode=normal` + `reload=120` go out of order:
+  // its in-memory position counter goes stale against a shrinking file
+  // and it skips tracks (then sometimes comes back to skipped ones).
+  // With m3u stable for the whole cycle, Liquidsoap plays through
+  // positions 0..N-1 linearly. The dashboard's Up Next API derives
+  // "upcoming" by reading PlayHistory against cycle.createdAt itself —
+  // see dashboard/app/api/rotation/upcoming/route.ts.
+  if (cycleJustBuilt) {
+    // m3u = full cycleOrder, in order. Liquidsoap reads this once per
+    // cycle, plays through it, then reloads when we rebuild on wrap.
+    const fullUpcoming = applyCycleOrder({
+      library,
+      cycleOrder: cycle.trackIds,
+      played: new Set(),
+      bridge: new Set(),
+    });
+    const content = fullUpcoming.length === 0 ? "" : fullUpcoming.map((t) => t.url).join("\n") + "\n";
 
-  const suffix = randomBytes(4).toString("hex");
-  const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
-  await writeFile(tmpPath, content, "utf8");
-  await rename(tmpPath, PLAYLIST_PATH);
+    const suffix = randomBytes(4).toString("hex");
+    const tmpPath = join(tmpdir(), `playlist-${process.pid}-${Date.now()}-${suffix}.m3u`);
+    await writeFile(tmpPath, content, "utf8");
+    await rename(tmpPath, PLAYLIST_PATH);
+  }
 
   return {
     librarySize: library.length,
