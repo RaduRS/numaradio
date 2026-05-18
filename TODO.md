@@ -5,6 +5,69 @@ read the **resume trigger** at the top, run the plan.
 
 ---
 
+## queue_pick "double feature" guardrail — also check rotation tail
+
+**Status:** parked 2026-05-18.
+**Resume trigger:** next time a listener complains about 3+ same-artist
+in a row that traces back to a Lena queue_pick (not a CF 522 skip
+or a rotation-only stretch).
+
+### Background
+
+Lena's Producer (Phase 5 MVP `queue_pick`) has a `same-artist as
+currently playing → reject` guardrail in
+`workers/queue-daemon/lena-producer/queue-director.ts`, with an
+explicit `reason.includes("double feature")` override so Lena can
+intentionally pair two tracks by the same artist when it makes sense
+on air. Tonight (2026-05-18) she did exactly that — pushed Night
+Rounds (Russell Ross) right after Eight People (Russell Ross) with
+`reason: "double feature"`.
+
+What she didn't see: the rotation `cdn:`-prefixed tail already had
+**One By One + Eight People** (both RR) queued in front. So her
+"double feature" actually turned into a 3-in-a-row on listeners' ears.
+
+The guardrail only knows about `NowPlaying.currentTrackId`. It doesn't
+know what's lined up next in the rotation m3u or the existing
+QueueItem queue.
+
+### Fix sketch
+
+In `queue-director.ts`, before allowing a same-artist `queue_pick`:
+
+1. Check the **trailing artist of the rotation's next-up**. The
+   daemon already computes `recentArtists` via
+   `computeRecentArtists()` in `scripts/refresh-rotation.ts` — call
+   it (or extract the read-side helper) to peek at the next rotation
+   track's artist via `cycleOrder.trackIds[next-unplayed]`.
+2. If trailing artist === proposed artist AND there are no breakers
+   between NowPlaying and that next rotation track → reject even
+   with `double feature` reason. Lena can pair, but not pile.
+3. Alternatively: check existing queued `QueueItem` rows
+   (`status="staged"` / `"pending"`) for the same artist and reject
+   if found.
+
+Either approach prevents a queue_pick from extending an already-
+2-deep RR run into 3+.
+
+### Test plan
+
+- Unit: extend `queue-director.test.ts` with a case where rotation's
+  next-up matches the queue_pick artist + a NowPlaying-only test to
+  make sure the legacy guardrail still catches the simple case.
+- Live: ship without a flag (strictly more conservative). Watch the
+  daemon log for `[queue-director] rejected pick … reason=rotation_trailing_match`.
+
+### Why parked
+
+Tonight Marku said "ok i think" — Lena's "double feature" was a
+deliberate choice, just unlucky with the rotation context. Not urgent
+until a listener actually complains. The artist-spacer + cdn: retries
+already handle the rotation-only cause of same-artist streaks. This
+is a tail-condition tightening, not a primary fix.
+
+---
+
 ## Booth consent checkbox — shoutout + song-request forms
 
 **Status:** parked 2026-05-05.
