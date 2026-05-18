@@ -49,23 +49,27 @@ priority = request.queue(id="priority")
 # pre-push depth check is the right place to enforce a cap.
 overlay_queue = request.queue(id="overlay_queue")
 
-# Rotation playlist — polled every 2 min in sync with the refresher's
-# atomic tmp→rename.
+# Rotation playlist. The m3u file is only rewritten by the daemon on
+# cycle build / wrap / forceReshuffle (see scripts/refresh-rotation.ts),
+# so Liquidsoap holds the same 161-track plan stable for the whole
+# cycle and plays through it linearly.
+#
+# reload_mode="watch": inotify-based, only reloads when the file
+# CONTENT actually changes. The previous reload_mode="seconds"
+# (reload=120) re-read every 2 min and reset position to 0 when it
+# saw a new mtime — which made Liquidsoap play the same 4-5 tracks at
+# the head of the playlist on a loop instead of advancing through all
+# 161. With watch + a stable m3u, Liquidsoap's internal position
+# counter advances cleanly to the end, then loops back for the next
+# cycle.
 #
 # mode="normal": play the file top-to-bottom in the order we wrote it.
-# (The default, "randomize", does its OWN shuffle AND reshuffles at
-# cycle boundary — which is how listeners ended up hearing the same
-# track twice in a row: the reshuffle had a ~1/N chance of landing
-# the just-ended track first. With mode="normal" + an authoritative
-# Fisher-Yates from scripts/refresh-rotation.ts, Liquidsoap respects
-# our ordering. Our pool excludes the currently-playing track via
-# PlayHistory + NowPlaying, so position 0 can never be the track
-# that's just finishing.)
+# (Default "randomize" does its own shuffle + reshuffles at cycle
+# boundary — caused back-to-back airings before this was set.)
 rotation = playlist(
   id="rotation",
   mode="normal",
-  reload=120,
-  reload_mode="seconds",
+  reload_mode="watch",
   playlist_file
 )
 
