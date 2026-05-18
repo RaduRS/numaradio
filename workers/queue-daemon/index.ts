@@ -28,6 +28,7 @@ import {
   type YoutubeChatLoop,
 } from "./youtube-chat-loop.ts";
 import { recordYoutubeQuota } from "../../lib/youtube-quota.ts";
+import { sweepHeldShoutouts } from "../../lib/privacy-sweep.ts";
 import { startLoudnormPoller } from "./loudnorm-poller.ts";
 import { ShiftMemory } from "./lena-producer/shift-memory.ts";
 import { NotifyListener } from "./lena-producer/notify-listener.ts";
@@ -837,6 +838,25 @@ async function main() {
     }
   };
   setInterval(reconcileTick, RECONCILE_TICK_MS);
+
+  // Held-shoutout auto-resolve. Held rows older than 4h get flipped to
+  // deliveryStatus='blocked' so the dashboard's Held card stays clean
+  // when the operator misses a Telegram notification. Daily Vercel cron
+  // does the same call as a safety net; this runs every 30 min so the
+  // dashboard self-heals fast without waiting for 04:00 UTC.
+  const HELD_SWEEP_TICK_MS = 30 * 60_000;
+  const heldSweepTick = async () => {
+    try {
+      const n = await sweepHeldShoutouts();
+      if (n > 0) console.log(`[held-sweep] auto-resolved ${n} stale held shoutouts`);
+    } catch (err) {
+      console.error("[held-sweep] tick failed", err);
+    }
+  };
+  // Fire once at boot to catch anything the previous daemon missed,
+  // then on the timer.
+  void heldSweepTick();
+  setInterval(heldSweepTick, HELD_SWEEP_TICK_MS);
 
   // Lena Producer Phase 1: ShiftMemory + NotifyListener (read-only,
   // observability foundation). Gated behind LENA_SHIFT_MEMORY env flag.

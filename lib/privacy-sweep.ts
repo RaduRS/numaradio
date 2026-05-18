@@ -18,6 +18,12 @@ import { prisma } from "./db";
 export const SHOUTOUT_UNAIRED_DAYS = 90;
 export const SONGREQUEST_DAYS = 90;
 export const REJECTED_SUBMISSION_DAYS = 30;
+/** Held shoutouts auto-resolve to `blocked` after this many hours if no
+ *  operator action. Listener context is dead within minutes; airing a
+ *  4-hour-old "can we listen to X?" would feel stale. Without this, any
+ *  Telegram notification the operator misses leaves the row stuck in
+ *  the dashboard's Held card until the 90-day privacy sweep. */
+export const HELD_SHOUTOUT_AUTO_BLOCK_HOURS = 4;
 
 export interface SweepCounts {
   shoutoutsDeleted: number;
@@ -101,6 +107,38 @@ export async function runSweep(): Promise<SweepCounts> {
   });
 
   return counts;
+}
+
+/**
+ * Auto-resolve held shoutouts older than `HELD_SHOUTOUT_AUTO_BLOCK_HOURS`
+ * by flipping them to `deliveryStatus='blocked'` (audit trail preserved).
+ * Pure additive UPDATE — no deletions. Returns the count of rows
+ * resolved so callers can log.
+ *
+ * Why not 'aired'? The listener context is dead; airing a 4-hour-old
+ * "can we listen to X?" feels stale and confuses listeners. 'blocked'
+ * keeps the row visible in Recent for operator audit, but removes it
+ * from the Held card so the dashboard stays clean.
+ */
+export async function sweepHeldShoutouts(
+  thresholdHours: number = HELD_SHOUTOUT_AUTO_BLOCK_HOURS,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
+  const r = await prisma.shoutout.updateMany({
+    where: {
+      moderationStatus: "held",
+      deliveryStatus: { in: ["held", "pending"] },
+      createdAt: { lt: cutoff },
+    },
+    data: {
+      deliveryStatus: "blocked",
+      // Don't clobber the original moderator reason; the existing
+      // moderationStatus='held' + new deliveryStatus='blocked' tells
+      // the operator this was auto-resolved (vs 'blocked' moderationStatus
+      // which means the moderator outright rejected it).
+    },
+  });
+  return r.count;
 }
 
 /** Read the last sweep audit entry for dashboard display. */

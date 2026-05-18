@@ -11,7 +11,7 @@
 
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { runSweep } from "@/lib/privacy-sweep";
+import { runSweep, sweepHeldShoutouts } from "@/lib/privacy-sweep";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -35,10 +35,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   try {
     const counts = await runSweep();
+    // Also auto-resolve held shoutouts older than 4h. The daemon runs
+    // this same function on a 30-min tick (workers/queue-daemon), this
+    // is the daily safety-net for that.
+    const heldResolved = await sweepHeldShoutouts();
     console.log(
-      `[privacy-sweep] cron ok · shoutouts=${counts.shoutoutsDeleted} songRequests=${counts.songRequestsDeleted} rejectedSubmissions=${counts.rejectedSubmissionsDeleted}`,
+      `[privacy-sweep] cron ok · shoutouts=${counts.shoutoutsDeleted} songRequests=${counts.songRequestsDeleted} rejectedSubmissions=${counts.rejectedSubmissionsDeleted} heldResolved=${heldResolved}`,
     );
-    return NextResponse.json({ ok: true, counts });
+    return NextResponse.json({ ok: true, counts, heldResolved });
   } catch (err) {
     // Log full error server-side; opaque error to caller so Prisma /
     // Postgres internals don't leak schema or constraint names.
