@@ -21,7 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PlayIcon, PauseIcon, ImageIcon, Loader2Icon, Trash2Icon } from "lucide-react";
+import { PlayIcon, PauseIcon, ImageIcon, Loader2Icon, Trash2Icon, Fingerprint, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { ActionIcon } from "@/components/ui/action-icon";
 import { ArtworkPreview } from "@/components/ui/artwork-preview";
 import { fmtRelative } from "@/lib/fmt";
 import type { LibraryTrack } from "@/lib/library";
@@ -163,35 +164,6 @@ function ShowCell({ track, onChange }: { track: LibraryTrack; onChange: () => vo
 
 // ─── Action icon button ────────────────────────────────────────────
 
-function ActionIcon({
-  onClick, disabled, title, tone, children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  title: string;
-  tone: "accent" | "muted" | "bad";
-  children: React.ReactNode;
-}) {
-  const toneCls =
-    tone === "accent"
-      ? "text-fg-mute hover:text-accent hover:border-accent/60 hover:bg-[var(--accent-soft)]"
-      : tone === "bad"
-        ? "text-fg-mute hover:text-[var(--bad)] hover:border-[var(--bad)]/60 hover:bg-[var(--bad)]/10"
-        : "text-fg-mute hover:text-fg hover:border-fg-mute hover:bg-bg/60";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      className={`w-8 h-8 inline-flex items-center justify-center border border-line rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${toneCls}`}
-    >
-      {children}
-    </button>
-  );
-}
-
 // ─── Component ─────────────────────────────────────────────────────
 
 const PAGE_SIZE = 10;
@@ -272,6 +244,9 @@ export default function LibraryPage() {
   const [regenHint, setRegenHint] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<LibraryTrack | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // fingerprintStatus: per-library-track fingerprint check result
+  type FpStatus = "idle" | "checking" | "clean" | "match" | "error";
+  const [fingerprintStatus, setFingerprintStatus] = useState<Record<string, FpStatus>>({});
 
   async function deleteTrack(t: LibraryTrack) {
     setDeleting(true);
@@ -295,6 +270,30 @@ export default function LibraryPage() {
       toast.error(e instanceof Error ? e.message : "network error");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function runLibraryFingerprintCheck(trackId: string) {
+    setFingerprintStatus((prev) => ({ ...prev, [trackId]: "checking" }));
+    try {
+      const r = await fetch(`/api/internal/tracks/${trackId}/fingerprint`, {
+        method: "POST",
+        headers: { "x-internal-secret": "placeholder" }, // proxy appends the real secret
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json() as { result: "clean" | "match" | "error"; meta?: { errorMsg?: string } };
+      const status: FpStatus = j.result;
+      setFingerprintStatus((prev) => ({ ...prev, [trackId]: status }));
+      if (j.result === "clean") {
+        toast.success("Fingerprint clean — no match found");
+      } else if (j.result === "match") {
+        toast.error("Match found — review before keeping this track");
+      } else {
+        toast.error(`Fingerprint check failed: ${j.meta?.errorMsg ?? "unknown error"}`);
+      }
+    } catch (err) {
+      setFingerprintStatus((prev) => ({ ...prev, [trackId]: "error" }));
+      toast.error(`Fingerprint check failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -733,6 +732,39 @@ export default function LibraryPage() {
                               >
                                 <Trash2Icon size={15} strokeWidth={2} />
                               </ActionIcon>
+                              {(() => {
+                                const fp = fingerprintStatus[t.id] ?? "idle";
+                                const isFpChecking = fp === "checking";
+                                return (
+                                  <ActionIcon
+                                    onClick={() => runLibraryFingerprintCheck(t.id)}
+                                    disabled={isFpChecking || isRegen || isPending || deleting}
+                                    title={
+                                      fp === "clean" ? "Fingerprint: no match found" :
+                                      fp === "match" ? "Fingerprint: match found" :
+                                      fp === "error" ? "Fingerprint check failed" :
+                                      "Check fingerprint"
+                                    }
+                                    tone={
+                                      fp === "clean" ? "accent" :
+                                      fp === "match" ? "bad" :
+                                      fp === "error" ? "warn" : "muted"
+                                    }
+                                  >
+                                    {isFpChecking ? (
+                                      <Loader2Icon size={15} className="animate-spin" />
+                                    ) : fp === "clean" ? (
+                                      <CheckCircle size={15} />
+                                    ) : fp === "match" ? (
+                                      <XCircle size={15} />
+                                    ) : fp === "error" ? (
+                                      <AlertCircle size={15} />
+                                    ) : (
+                                      <Fingerprint size={15} />
+                                    )}
+                                  </ActionIcon>
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>

@@ -70,6 +70,12 @@ enum SafetyStatus {
   needs_review
 }
 
+enum FingerprintResult {
+  clean
+  match
+  error
+}
+
 enum RequestStatus {
   submitted
   rate_limited
@@ -258,6 +264,11 @@ model Track {
   loudnessLufs            Float?
   loudnessTruePeakDbtp    Float?
   loudnessSourceLufs      Float?
+  // Fingerprint check result. Operator must run Check Fingerprint
+  // before approving a submission. Stored to avoid re-checking.
+  fingerprintResult       FingerprintResult?
+  fingerprintMeta        Json?  // { matchedRecordings: [{mbid,title,artist,score}], errorMsg }
+  fingerprintedAt        DateTime?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 

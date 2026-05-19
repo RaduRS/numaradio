@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { PlayIcon, PauseIcon } from "lucide-react";
+import { PlayIcon, PauseIcon, Fingerprint, Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { PreviewSource } from "@/lib/preview-source";
+import { ActionIcon } from "@/components/ui/action-icon";
 
 type Pending = {
   id: string;
@@ -148,6 +149,9 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
   const [findRows, setFindRows] = useState<Reviewed[] | null>(null);
   const [findLoading, setFindLoading] = useState(false);
   const [sweepStatus, setSweepStatus] = useState<SweepStatus | null>(null);
+  // fingerprintStatus: per-pending-submission fingerprint check result
+  type FpStatus = "idle" | "checking" | "clean" | "match" | "error";
+  const [fingerprintStatus, setFingerprintStatus] = useState<Record<string, FpStatus>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -322,6 +326,30 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
       toast.error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function runFingerprintCheck(submissionId: string) {
+    setFingerprintStatus((prev) => ({ ...prev, [submissionId]: "checking" }));
+    try {
+      const r = await fetch(`/api/internal/tracks/${submissionId}/fingerprint`, {
+        method: "POST",
+        headers: { "x-internal-secret": "placeholder" }, // proxy appends the real secret
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json() as { result: "clean" | "match" | "error"; meta?: { errorMsg?: string } };
+      const status: FpStatus = j.result;
+      setFingerprintStatus((prev) => ({ ...prev, [submissionId]: status }));
+      if (j.result === "clean") {
+        toast.success("Fingerprint clean — no match found");
+      } else if (j.result === "match") {
+        toast.error("Match found — do not approve this track");
+      } else {
+        toast.error(`Fingerprint check failed: ${j.meta?.errorMsg ?? "unknown error"}`);
+      }
+    } catch (err) {
+      setFingerprintStatus((prev) => ({ ...prev, [submissionId]: "error" }));
+      toast.error(`Fingerprint check failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -608,45 +636,81 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2 border-t border-line/50 pt-3">
-                  <Select
-                    value={showBySubmission[p.id] ?? "daylight_channel"}
-                    onValueChange={(v) => {
-                      if (typeof v === "string" && v) {
-                        setShowBySubmission((prev) => ({ ...prev, [p.id]: v as ShowSlug }));
-                      }
-                    }}
-                    disabled={busy === p.id}
-                  >
-                    <SelectTrigger
-                      size="sm"
-                      className="h-8 w-[200px] font-mono text-xs disabled:opacity-50"
-                      title="Show this track will be added to on approve"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SHOW_OPTIONS.map((s) => (
-                        <SelectItem key={s.value} value={s.value} className="font-mono text-xs">
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    onClick={() => approve(p.id)}
-                    disabled={busy === p.id}
-                  >
-                    {busy === p.id ? "…" : "Approve"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setRejectingId(p.id)}
-                    disabled={busy !== null}
-                  >
-                    Reject
-                  </Button>
+                  {(() => {
+                    const fp = fingerprintStatus[p.id] ?? "idle";
+                    const fpChecked = fp !== "idle";
+                    return (
+                      <>
+                        <ActionIcon
+                          onClick={() => runFingerprintCheck(p.id)}
+                          disabled={fp === "checking" || busy === p.id}
+                          title={
+                            fp === "clean" ? "No match found" :
+                            fp === "match" ? "Matched — do not approve" :
+                            fp === "error" ? "Check failed — see toast" :
+                            "Check fingerprint (required before approve)"
+                          }
+                          tone={
+                            fp === "clean" ? "accent" :
+                            fp === "match" ? "bad" :
+                            fp === "error" ? "warn" : "muted"
+                          }
+                        >
+                          {fp === "checking" ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : fp === "clean" ? (
+                            <CheckCircle size={14} />
+                          ) : fp === "match" ? (
+                            <XCircle size={14} />
+                          ) : fp === "error" ? (
+                            <AlertCircle size={14} />
+                          ) : (
+                            <Fingerprint size={14} />
+                          )}
+                        </ActionIcon>
+                        <Select
+                          value={showBySubmission[p.id] ?? "daylight_channel"}
+                          onValueChange={(v) => {
+                            if (typeof v === "string" && v) {
+                              setShowBySubmission((prev) => ({ ...prev, [p.id]: v as ShowSlug }));
+                            }
+                          }}
+                          disabled={busy === p.id}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="h-8 w-[200px] font-mono text-xs disabled:opacity-50"
+                            title="Show this track will be added to on approve"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SHOW_OPTIONS.map((s) => (
+                              <SelectItem key={s.value} value={s.value} className="font-mono text-xs">
+                                {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          onClick={() => approve(p.id)}
+                          disabled={!fpChecked || busy === p.id}
+                          title={!fpChecked ? "Run fingerprint check first" : undefined}
+                        >
+                          {busy === p.id ? "…" : "Approve"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRejectingId(p.id)}
+                          disabled={busy !== null}
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </li>

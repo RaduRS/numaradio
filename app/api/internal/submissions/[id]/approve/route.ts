@@ -171,6 +171,24 @@ export async function POST(
     return NextResponse.json({ error: "ingest_failed", reason: result }, { status: 500 });
   }
 
+  // Safety gate: if the fingerprint check flagged this as a known commercial
+  // recording, hard-block the approve so it can't go into rotation.
+  // The UI enforces that the operator must run "Check Fingerprint" first;
+  // this is the server-side backstop in case the route is called directly.
+  const trackFp = await prisma.track.findUnique({
+    where: { id: result.trackId },
+    select: { fingerprintResult: true },
+  });
+  if (trackFp?.fingerprintResult === "match") {
+    return NextResponse.json(
+      {
+        error: "fingerprint_match",
+        message: "This track matched a known commercial recording. Reject it instead of approving.",
+      },
+      { status: 422 },
+    );
+  }
+
   let updateOk = false;
   let updateErr: unknown = null;
   for (let attempt = 0; attempt < 3; attempt++) {
