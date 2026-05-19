@@ -19,7 +19,6 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import os from "node:os";
 import { prisma } from "./db";
-import { getObject } from "./storage";
 
 const ACOUSTID_API = "https://api.acoustid.org/v2/lookup";
 // Hardcoded app key — the acoustid package distributes one for open-source use.
@@ -49,7 +48,7 @@ export interface FingerprintMeta {
   errorMsg?: string;
 }
 
-// ─── Public API (Track) ─────────────────────────────────────────────────────────
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Run a full fingerprint check on the given track.
@@ -60,7 +59,7 @@ export async function runFingerprintCheck(trackId: string): Promise<{
   result: FingerprintResult;
   meta: FingerprintMeta;
 }> {
-  // 1. Load track + audio URL (short, releases DB connection immediately)
+  // 1. Load track + audio URL
   const track = await prisma.track.findUnique({
     where: { id: trackId },
     include: { assets: { where: { assetType: "audio" } } },
@@ -72,13 +71,15 @@ export async function runFingerprintCheck(trackId: string): Promise<{
   const audioUrl = audioAsset.publicUrl;
 
   let tmpDir: string | undefined;
+  let tmpFile: string | undefined;
 
   try {
     // 2. Download to temp file
     tmpDir = await mkdir(join(os.tmpdir(), `numa-fp-${trackId.slice(0, 8)}-${Date.now()}`), {
       recursive: true,
     });
-    const tmpFile = join(tmpDir!, "audio.mp3");
+    // tmpDir is definitely set here (await above); use ! to satisfy TS
+    tmpFile = join(tmpDir!, "audio.mp3");
     await downloadToFile(audioUrl, tmpFile);
 
     // 3. Run fpcalc
@@ -94,7 +95,6 @@ export async function runFingerprintCheck(trackId: string): Promise<{
     }
 
     // 5. MusicBrainz enrich for each MBID (rate-limited to 1 req/s)
-    //    No DB connection held during this network-heavy phase.
     const matched: MatchedRecording[] = [];
     for (const rec of recordings) {
       try {
@@ -120,89 +120,6 @@ export async function runFingerprintCheck(trackId: string): Promise<{
       try { await rm(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
     }
   }
-}
-
-// ─── Submission fingerprint (pending, no Track yet) ───────────────────────────
-
-/**
- * Run a full fingerprint check on a pending MusicSubmission.
- * Downloads audio from B2, runs fpcalc, queries AcoustID + MusicBrainz,
- * persists result on the MusicSubmission row.
- */
-export async function runSubmissionFingerprintCheck(submissionId: string): Promise<{
-  result: FingerprintResult;
-  meta: FingerprintMeta;
-}> {
-  // 1. Load submission + audio from B2
-  const submission = await prisma.musicSubmission.findUnique({
-    where: { id: submissionId },
-  });
-  if (!submission) throw new Error(`Submission ${submissionId} not found`);
-
-  let tmpDir: string | undefined;
-
-  try {
-    tmpDir = await mkdir(join(os.tmpdir(), `numa-fp-sub-${submissionId.slice(0, 8)}-${Date.now()}`), {
-      recursive: true,
-    });
-    const tmpFile = join(tmpDir!, "audio.mp3");
-
-    // Download audio from B2
-    const audioBuffer = await getObject(submission.audioStorageKey);
-    await pipeline(Readable.from(audioBuffer), createWriteStream(tmpFile));
-
-    // 2. Run fpcalc
-    const fpResult = await runFpcalc(tmpFile);
-    if (!fpResult) {
-      return storeSubmissionResult(submissionId, "error", { matchedRecordings: [], errorMsg: "fpcalc produced no output" });
-    }
-
-    // 3. AcoustID lookup
-    const recordings = await lookupAcoustId(fpResult.fingerprint, fpResult.duration);
-    if (recordings.length === 0) {
-      return storeSubmissionResult(submissionId, "clean", { matchedRecordings: [] });
-    }
-
-    // 4. MusicBrainz enrich
-    const matched: MatchedRecording[] = [];
-    for (const rec of recordings) {
-      try {
-        const mb = await lookupMusicBrainz(rec.id);
-        if (mb) {
-          matched.push({ mbid: rec.id, title: mb.title, artist: mb.artist, score: rec.score });
-        }
-      } catch {
-        // skip
-      }
-      await sleep(1100);
-    }
-
-    const result: FingerprintResult = matched.length > 0 ? "match" : "clean";
-    return storeSubmissionResult(submissionId, result, { matchedRecordings: matched });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return storeSubmissionResult(submissionId, "error", { matchedRecordings: [], errorMsg: msg });
-  } finally {
-    if (tmpDir) {
-      try { await rm(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    }
-  }
-}
-
-async function storeSubmissionResult(
-  submissionId: string,
-  result: FingerprintResult,
-  meta: FingerprintMeta,
-): Promise<{ result: FingerprintResult; meta: FingerprintMeta }> {
-  await prisma.musicSubmission.update({
-    where: { id: submissionId },
-    data: {
-      fingerprintResult: result,
-      fingerprintMeta: meta as unknown as object,
-      fingerprintedAt: new Date(),
-    },
-  });
-  return { result, meta };
 }
 
 // ─── Step 1: Download ─────────────────────────────────────────────────────────

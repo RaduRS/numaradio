@@ -68,17 +68,6 @@ export async function POST(
       { status: 200 },
     );
   }
-  // Safety gate: operator must run Check Fingerprint before approving.
-  // Without it, Approve is disabled in the UI — this is the server-side backstop.
-  if (submission.fingerprintResult !== "clean") {
-    return NextResponse.json(
-      {
-        error: "fingerprint_check_required",
-        message: "Run the fingerprint check before approving. If it returned a match, reject instead.",
-      },
-      { status: 422 },
-    );
-  }
 
   const station = await prisma.station.findUniqueOrThrow({
     where: { slug: STATION_SLUG },
