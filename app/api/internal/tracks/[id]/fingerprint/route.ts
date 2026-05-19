@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { internalAuthOk } from "@/lib/internal-auth";
 import { runFingerprintCheck } from "@/lib/fingerprint";
 
+// Must run on Node.js runtime — fpcalc spawn requires child_process.
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(
@@ -20,7 +22,18 @@ export async function POST(
   }
 
   const { id } = await params;
-  const { result, meta } = await runFingerprintCheck(id);
+  console.info(`[fingerprint] track=${id}`);
 
-  return NextResponse.json({ result, meta });
+  try {
+    const { result, meta } = await runFingerprintCheck(id);
+    console.info(`[fingerprint] track=${id} result=${result}`);
+    return NextResponse.json({ result, meta });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[fingerprint] track=${id} error=${msg}`);
+    return NextResponse.json(
+      { result: "error", meta: { matchedRecordings: [], errorMsg: msg } },
+      { status: 200 },
+    );
+  }
 }
