@@ -622,6 +622,11 @@ model MusicSubmission {
   newsletterOptIn  Boolean                      @default(false)
   rejectReason     String?
   trackId          String?
+  // Fingerprint check result for pending submissions (before a Track exists).
+  // Used to gate the Approve button — operator must run the check first.
+  fingerprintResult    FingerprintResult?
+  fingerprintMeta     Json?
+  fingerprintedAt     DateTime?
   createdAt        DateTime                     @default(now())
   reviewedAt       DateTime?
   reviewedBy       String?

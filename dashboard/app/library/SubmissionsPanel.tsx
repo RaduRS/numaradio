@@ -332,7 +332,7 @@ export function SubmissionsPanel({ onPreview, activePreviewKey }: SubmissionsPan
   async function runFingerprintCheck(submissionId: string) {
     setFingerprintStatus((prev) => ({ ...prev, [submissionId]: "checking" }));
     try {
-      const r = await fetch(`/api/internal/tracks/${submissionId}/fingerprint`, {
+      const r = await fetch(`/api/submissions/${submissionId}/fingerprint`, {
         method: "POST",
         headers: { "x-internal-secret": "placeholder" }, // proxy appends the real secret
       });
