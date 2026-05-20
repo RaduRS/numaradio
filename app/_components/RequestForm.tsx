@@ -19,6 +19,8 @@ const REVIEW_LINES = [
   "Not every submission is guaranteed to play.",
 ];
 
+const CLOSED = process.env.NEXT_PUBLIC_CLOSED === "true";
+
 export function RequestForm({
   initialTab = "song",
   tab: controlledTab,
@@ -281,6 +283,23 @@ export function RequestForm({
       "Still working on that — we'll catch up next time you visit.",
     );
     setSendLabel("✓ Sent");
+  }
+
+  if (CLOSED) {
+    return (
+      <div
+        style={{
+          padding: "24px 16px",
+          textAlign: "center",
+          color: "var(--fg-mute)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          letterSpacing: "0.06em",
+        }}
+      >
+        Requests are closed.
+      </div>
+    );
   }
 
   return (

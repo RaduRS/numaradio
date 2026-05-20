@@ -11,6 +11,8 @@ type State =
 const MAX_AUDIO_MB = 10;
 const MAX_ART_MB = 2;
 
+const CLOSED = process.env.NEXT_PUBLIC_CLOSED === "true";
+
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
@@ -254,6 +256,26 @@ export function SubmitForm() {
       }
       return next;
     });
+  }
+
+  // ── Closed state ─────────────────────────────────────────
+  if (CLOSED) {
+    return (
+      <div
+        style={{
+          padding: "32px 24px",
+          border: "1px solid var(--line)",
+          borderRadius: 12,
+          textAlign: "center",
+          color: "var(--fg-mute)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 13,
+          letterSpacing: "0.06em",
+        }}
+      >
+        Submissions are closed.
+      </div>
+    );
   }
 
   // ── Confirmation state ───────────────────────────────────
