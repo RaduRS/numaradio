@@ -286,11 +286,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // showed zero audio with no error event for minutes. Event-driven
   // scheduleRetry is the primary recovery; this is the backstop.
   useEffect(() => {
-    if (status !== "loading") return;
-    const interval = setInterval(() => {
-      if (wantPlaybackRef.current) playRef.current();
-    }, 12_000);
-    return () => clearInterval(interval);
+    // POLLING DISABLED — DB is down, no live data.
+    // if (status !== "loading") return;
+    // const interval = setInterval(() => {
+    //   if (wantPlaybackRef.current) playRef.current();
+    // }, 12_000);
+    // return () => clearInterval(interval);
   }, [status]);
 
   // Clean up any pending retry timer on unmount.

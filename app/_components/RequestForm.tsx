@@ -72,54 +72,33 @@ export function RequestForm({
   // failed (rare but possible since we no longer await TTS/B2/queue push),
   // surface a one-time line and clear the stash.
   useEffect(() => {
-    let cancelled = false;
-    const check = async (): Promise<void> => {
-      const stash = readShoutoutStash();
-      if (!stash) return;
-      if (!isFresh(stash.submittedAt, SHOUTOUT_STASH_MAX_AGE_MS)) {
-        clearShoutoutStash();
-        return;
-      }
-      try {
-        const res = await fetch(
-          `/api/booth/shoutout/${stash.shoutoutId}/status`,
-          { cache: "no-store" },
-        );
-        if (cancelled) return;
-        if (!res.ok) {
-          // 404 (row gone) or 5xx — give up, don't nag the user about it
-          clearShoutoutStash();
-          return;
-        }
-        const data = (await res.json()) as { ok?: boolean; status?: string };
-        if (cancelled || !data.ok) return;
-        if (data.status === "failed") {
-          setRecoveryMessage(
-            "Heads up — your last shoutout didn't make it on air. Try again.",
-          );
-          clearShoutoutStash();
-        } else if (
-          data.status === "aired" ||
-          data.status === "blocked" ||
-          data.status === "held"
-        ) {
-          // terminal state — clear quietly, no user notification needed
-          clearShoutoutStash();
-        }
-        // else "pending" — leave stash; we'll re-check next focus
-      } catch {
-        // network down — try again on next focus
-      }
-    };
-    void check();
-    const onFocus = (): void => {
-      void check();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("focus", onFocus);
-    };
+    // POLLING DISABLED — DB is down, no live data.
+    // let cancelled = false;
+    // const check = async (): Promise<void> => {
+    //   const stash = readShoutoutStash();
+    //   if (!stash) return;
+    //   if (!isFresh(stash.submittedAt, SHOUTOUT_STASH_MAX_AGE_MS)) {
+    //     clearShoutoutStash();
+    //     return;
+    //   }
+    //   try {
+    //     const res = await fetch(`/api/booth/shoutout/${stash.shoutoutId}/status`, { cache: "no-store" });
+    //     if (cancelled) return;
+    //     if (!res.ok) { clearShoutoutStash(); return; }
+    //     const data = (await res.json()) as { ok?: boolean; status?: string };
+    //     if (cancelled || !data.ok) return;
+    //     if (data.status === "failed") {
+    //       setRecoveryMessage("Heads up — your last shoutout didn't make it on air. Try again.");
+    //       clearShoutoutStash();
+    //     } else if (data.status === "aired" || data.status === "blocked" || data.status === "held") {
+    //       clearShoutoutStash();
+    //     }
+    //   } catch { /* network down */ }
+    // };
+    // void check();
+    // const onFocus = (): void => { void check(); };
+    // window.addEventListener("focus", onFocus);
+    // return () => { cancelled = true; window.removeEventListener("focus", onFocus); };
   }, []);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -196,7 +175,8 @@ export function RequestForm({
         setFormKey((k) => k + 1);
         setRecoveryMessage(null);
         writeShoutoutStash(data.shoutoutId);
-        await pollModerationOutcome(data.shoutoutId);
+        // POLLING DISABLED — DB is down, no live data.
+        // await pollModerationOutcome(data.shoutoutId);
       } else if (data.status === "blocked") {
         setStatusTone("error");
         setStatusMessage(data.message ?? "That one can't go on air.");

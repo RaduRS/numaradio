@@ -104,29 +104,22 @@ export function SongTab() {
   }, []);
 
   useEffect(() => {
-    if (pending) return;
-    const tick = async (): Promise<void> => {
-      // Skip while tab is hidden — visibility listener re-fires on focus.
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      try {
-        const res = await fetch("/api/booth/song/queue-stats");
-        if (!res.ok) return;
-        const data = (await res.json()) as { ok: boolean } & QueueStats;
-        if (data.ok) setQueueStats(data);
-      } catch {
-        // ignore
-      }
-    };
-    tick();
-    const id = setInterval(tick, 10_000);
-    const onVis = () => {
-      if (document.visibilityState === "visible") tick();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-    };
+    // POLLING DISABLED — DB is down, no live data.
+    // if (pending) return;
+    // const tick = async (): Promise<void> => {
+    //   if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    //   try {
+    //     const res = await fetch("/api/booth/song/queue-stats");
+    //     if (!res.ok) return;
+    //     const data = (await res.json()) as { ok: boolean } & QueueStats;
+    //     if (data.ok) setQueueStats(data);
+    //   } catch { /* ignore */ }
+    // };
+    // tick();
+    // const id = setInterval(tick, 10_000);
+    // const onVis = () => { if (document.visibilityState === "visible") tick(); };
+    // document.addEventListener("visibilitychange", onVis);
+    // return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, [pending]);
 
   // Rotate the pending message every ~4.5s while Lena's working.
@@ -149,42 +142,30 @@ export function SongTab() {
   }, [status]);
 
   useEffect(() => {
-    if (!pending) return;
-    let cancelled = false;
-    const tick = async (): Promise<void> => {
-      // Skip while tab is hidden — visibility listener re-fires on focus.
-      // The status row is append-only on the server, so resuming with a
-      // single immediate poll catches up cleanly.
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      try {
-        const res = await fetch(`/api/booth/song/${pending.requestId}/status`);
-        if (res.status === 404) {
-          // Server forgot this row (failure cleanup, or very stale stash).
-          // Unstick the UI instead of leaving the rotator running forever.
-          if (cancelled) return;
-          clearSongStash();
-          setPending(null);
-          setStatus(null);
-          return;
-        }
-        if (!res.ok) return;
-        const data = (await res.json()) as StatusResponse;
-        if (!cancelled && data.ok) setStatus(data);
-      } catch {
-        // ignore
-      }
-    };
-    tick();
-    const id = setInterval(tick, 5_000);
-    const onVis = () => {
-      if (document.visibilityState === "visible") tick();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-    };
+    // POLLING DISABLED — DB is down, no live data.
+    // if (!pending) return;
+    // let cancelled = false;
+    // const tick = async (): Promise<void> => {
+    //   if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    //   try {
+    //     const res = await fetch(`/api/booth/song/${pending.requestId}/status`);
+    //     if (res.status === 404) {
+    //       if (cancelled) return;
+    //       clearSongStash();
+    //       setPending(null);
+    //       setStatus(null);
+    //       return;
+    //     }
+    //     if (!res.ok) return;
+    //     const data = (await res.json()) as StatusResponse;
+    //     if (!cancelled && data.ok) setStatus(data);
+    //   } catch { /* ignore */ }
+    // };
+    // tick();
+    // const id = setInterval(tick, 5_000);
+    // const onVis = () => { if (document.visibilityState === "visible") tick(); };
+    // document.addEventListener("visibilitychange", onVis);
+    // return () => { cancelled = true; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, [pending]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>): Promise<void> {

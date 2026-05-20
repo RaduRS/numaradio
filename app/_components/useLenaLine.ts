@@ -1,16 +1,7 @@
 "use client";
-
-// Module-level singleton for /api/station/lena-line. All four surfaces
-// (PlayerCard, ExpandedPlayerDesktop, ExpandedPlayerMobile, About page
-// Lena card) subscribe to this so we make one poll per minute regardless
-// of how many cards are mounted at once.
+// POLLING DISABLED — DB is down, no live data.
 
 import { useEffect, useState } from "react";
-
-// Encoder-tab guard — see useNowPlaying.ts for the rationale.
-const BROADCAST_MODE =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("broadcast") === "1";
 
 export type LenaLineLive = {
   source: "live";
@@ -32,86 +23,26 @@ export type LenaLinePool = {
 };
 export type LenaLine = LenaLineLive | LenaLineContext | LenaLinePool | null;
 
-const POLL_MS = 60_000;
+// Static placeholder for presentation mode
+const PLACEHOLDER: LenaLinePool = {
+  source: "pool",
+  script: "Welcome to Numa Radio — AI-powered radio, 24/7.",
+  show: "Night Shift",
+};
 
-const subscribers = new Set<(line: LenaLine) => void>();
-let cached: LenaLine = null;
-let intervalId: ReturnType<typeof setInterval> | null = null;
-let abortCtrl: AbortController | null = null;
-
-async function poll() {
-  if (!abortCtrl) return;
-  // Skip polling while the tab is hidden; visibilitychange listener
-  // re-fires poll() the moment the tab becomes visible.
-  // Encoder tab (?broadcast=1) is exempt — see useNowPlaying for why.
-  if (!BROADCAST_MODE && typeof document !== "undefined" && document.visibilityState !== "visible") return;
-  try {
-    const url = BROADCAST_MODE
-      ? `/api/station/lena-line?t=${Date.now()}`
-      : "/api/station/lena-line";
-    const r = await fetch(url, {
-      signal: abortCtrl.signal,
-      cache: "no-store",
-    });
-    if (!r.ok) return;
-    const json = (await r.json()) as LenaLine;
-    cached = json;
-    for (const sub of subscribers) sub(json);
-  } catch {
-    // Keep previous cached value
-  }
-}
-
-function onVisibilityChange() {
-  if (typeof document === "undefined") return;
-  if (document.visibilityState === "visible") poll();
-}
-
-function startPolling() {
-  if (intervalId !== null) return;
-  abortCtrl = new AbortController();
-  poll();
-  intervalId = setInterval(poll, POLL_MS);
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", onVisibilityChange);
-  }
-}
-
-function stopPolling() {
-  if (intervalId !== null) {
-    clearInterval(intervalId);
-    intervalId = null;
-  }
-  if (abortCtrl) {
-    abortCtrl.abort();
-    abortCtrl = null;
-  }
-  if (typeof document !== "undefined") {
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-  }
-}
+// No-op: no polling, no network calls
+function startPolling() {}
+function stopPolling() {}
 
 export function useLenaLine(): LenaLine {
-  const [line, setLine] = useState<LenaLine>(cached);
+  const [line, setLine] = useState<LenaLine>(PLACEHOLDER);
   useEffect(() => {
-    subscribers.add(setLine);
-    if (subscribers.size === 1) startPolling();
-    setLine(cached);
-    return () => {
-      subscribers.delete(setLine);
-      if (subscribers.size === 0) stopPolling();
-    };
+    setLine(PLACEHOLDER);
+    return () => {};
   }, []);
   return line;
 }
 
-/** Format a fresh "just now / 2 min ago" timestamp for live lines. */
-export function relativeTimeLabel(atIso: string, now: number = Date.now()): string {
-  const ageMs = now - new Date(atIso).getTime();
-  if (ageMs < 0) return "just now";
-  const sec = Math.round(ageMs / 1000);
-  if (sec < 30) return "just now";
-  if (sec < 90) return "1 min ago";
-  const min = Math.round(sec / 60);
-  return `${min} min ago`;
+export function relativeTimeLabel(_atIso: string, _now: number = Date.now()): string {
+  return "just now";
 }

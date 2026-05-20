@@ -14,10 +14,12 @@ export function LiveClock({ className = "" }: { className?: string }) {
   const [text, setText] = useState("");
 
   useEffect(() => {
-    const tick = () => setText(formatLocalTime(new Date()));
-    tick();
-    const id = setInterval(tick, 30_000);
-    return () => clearInterval(id);
+    // POLLING DISABLED — DB is down, no live data.
+    // const tick = () => setText(formatLocalTime(new Date()));
+    // tick();
+    // const id = setInterval(tick, 30_000);
+    // return () => clearInterval(id);
+    setText(formatLocalTime(new Date()));
   }, []);
 
   // Render an empty span on the server so SSR + first client paint match.

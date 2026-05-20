@@ -132,62 +132,33 @@ export function ShoutoutWall() {
   const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
-    const ctrl = new AbortController();
-
-    // Regular polls hit the CDN-cached URL (30s s-maxage). Event-triggered
-    // refetches append a timestamp so they bypass the cache and see the
-    // freshly-written "aired" row.
-    async function poll(fresh = false) {
-      // Skip routine polls while tab is hidden; event-triggered refetches
-      // (fresh=true from numa:shoutout-ended) and visibility-resume
-      // refetches always run.
-      if (
-        !fresh &&
-        typeof document !== "undefined" &&
-        document.visibilityState !== "visible"
-      ) return;
-      try {
-        const url = fresh
-          ? `/api/station/shoutouts/recent?t=${Date.now()}`
-          : "/api/station/shoutouts/recent";
-        const r = await fetch(url, {
-          signal: ctrl.signal,
-          cache: "no-store",
-        });
-        if (!r.ok) return;
-        const json = (await r.json()) as Payload;
-        setItems(json.shoutouts);
-      } catch {
-        /* keep previous */
-      }
-    }
-
-    poll();
-    const pollId = setInterval(() => poll(false), POLL_MS);
-    const tickId = setInterval(() => setNow(Date.now()), 30_000);
-
-    // Refetch as soon as Broadcast detects a shoutout has finished airing —
-    // the `deliveryStatus='aired'` row has just been written, so the wall
-    // should update within a second instead of waiting for the next poll.
-    const onShoutoutEnded = () => {
-      // Tiny delay to let the shoutout-ended webhook's DB write commit
-      // before we re-read.
-      window.setTimeout(() => poll(true), 1_000);
-    };
-    window.addEventListener("numa:shoutout-ended", onShoutoutEnded);
-
-    const onVis = () => {
-      if (document.visibilityState === "visible") poll(false);
-    };
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      clearInterval(pollId);
-      clearInterval(tickId);
-      window.removeEventListener("numa:shoutout-ended", onShoutoutEnded);
-      document.removeEventListener("visibilitychange", onVis);
-      ctrl.abort();
-    };
+    // POLLING DISABLED — DB is down, no live data.
+    // const ctrl = new AbortController();
+    // async function poll(fresh = false) {
+    //   if (!fresh && typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    //   try {
+    //     const url = fresh ? `/api/station/shoutouts/recent?t=${Date.now()}` : "/api/station/shoutouts/recent";
+    //     const r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+    //     if (!r.ok) return;
+    //     const json = (await r.json()) as Payload;
+    //     setItems(json.shoutouts);
+    //   } catch { /* keep previous */ }
+    // }
+    // poll();
+    // const pollId = setInterval(() => poll(false), POLL_MS);
+    // const tickId = setInterval(() => setNow(Date.now()), 30_000);
+    // const onShoutoutEnded = () => { window.setTimeout(() => poll(true), 1_000); };
+    // window.addEventListener("numa:shoutout-ended", onShoutoutEnded);
+    // const onVis = () => { if (document.visibilityState === "visible") poll(false); };
+    // document.addEventListener("visibilitychange", onVis);
+    // return () => {
+    //   clearInterval(pollId);
+    //   clearInterval(tickId);
+    //   window.removeEventListener("numa:shoutout-ended", onShoutoutEnded);
+    //   document.removeEventListener("visibilitychange", onVis);
+    //   ctrl.abort();
+    // };
+    setItems([]);
   }, []);
 
   if (items === null) {

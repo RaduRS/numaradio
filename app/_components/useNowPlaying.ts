@@ -1,25 +1,9 @@
 "use client";
-// Module-level singleton for /api/station/now-playing.
-//
-// MediaSessionSync (always mounted inside PlayerProvider) calls useNowPlaying
-// at layout level, so by the time the user opens the expanded player the
-// singleton's cached data is fresh. The expanded player reads it instantly
-// instead of waiting for its own first fetch to land — fixes the ~1s
-// "artwork missing" gap on first open.
-//
-// Derived fields (elapsedSeconds / progress) are computed per-render from
-// the shared snapshot + each consumer's local 1s clock tick.
+// POLLING DISABLED — DB is down, no live data.
+// All functions here are no-ops; consumers get empty/static defaults.
+// To re-enable for a presentation, replace with static B2 image URLs.
 
 import { useEffect, useState } from "react";
-
-// True when this tab is the headless Chromium pulled by the YouTube
-// encoder (`/live?broadcast=1`). In that mode we MUST NOT skip polls
-// on visibilityState (Xvfb without a compositor reports unreliably)
-// and we bypass the edge cache so the encoder shows track changes
-// within seconds of the listener actually hearing them.
-const BROADCAST_MODE =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("broadcast") === "1";
 
 export type ShoutoutStatus =
   | { active: false }
@@ -37,173 +21,27 @@ export type NowPlaying = {
 };
 
 export type NowPlayingDerived = NowPlaying & {
-  /** Seconds since the track started (clamped to [0, duration]). */
   elapsedSeconds: number;
-  /** 0..1 ratio for progress UIs. */
   progress: number;
 };
 
-const POLL_MS = 15_000;
-const TICK_MS = 1_000;
-// Buffer past expectedEndAt before refetching at a track boundary. Liquidsoap
-// fires on_track ~instantly when the next track starts on its end, but the
-// listener's audio is buffered ~5-10s downstream — flipping artwork right at
-// expectedEndAt would update the UI while the listener still hears the outro.
-const TRANSITION_BUFFER_MS = 3_000;
-
 const EMPTY: NowPlaying = { isPlaying: false };
 
-type Subscriber = (data: NowPlaying) => void;
-
-const subscribers = new Set<Subscriber>();
-let cachedData: NowPlaying = EMPTY;
-
-/**
- * Seed the singleton's cache from an SSR snapshot. Layout calls this on
- * first mount so the hero, mini player, and expanded player all paint
- * with track info on the very first render — no ~500ms flash of "— by —".
- * Subsequent client-side polls replace the cache normally.
- */
-export function seedNowPlayingCache(data: NowPlaying): void {
-  // Only seed if we haven't started polling yet. If a poll has already
-  // landed, the cache has fresher data than the SSR snapshot.
-  if (cachedData === EMPTY) {
-    cachedData = data;
-  }
-}
-let intervalId: ReturnType<typeof setInterval> | null = null;
-let abortCtrl: AbortController | null = null;
-let transitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
-// When audio is actually playing, poll regardless of visibilityState. iOS
-// Safari + Android Chrome flip the tab to "hidden" the moment the screen
-// locks, so a visibility-gated poller leaves the lock-screen / CarPlay
-// MediaSession tile frozen on whatever was airing at lock time. Edge cache
-// (s-maxage=15) absorbs the extra polls — see PlayerProvider for where this
-// gets flipped.
-let playbackActive = false;
-
-export function setNowPlayingPlaybackActive(active: boolean): void {
-  if (playbackActive === active) return;
-  playbackActive = active;
-  // Going active while hidden: poll immediately so MediaSession metadata
-  // catches up without waiting POLL_MS for the next interval.
-  if (active && intervalId !== null) void poll();
-}
-
-function clearTransitionRefetch() {
-  if (transitionTimeoutId !== null) {
-    clearTimeout(transitionTimeoutId);
-    transitionTimeoutId = null;
-  }
-}
-
-// Schedule a one-shot refetch for just after the current track is expected
-// to end. With frame-accurate durations (lib/probe-duration.ts), this lands
-// the new track's metadata within seconds of the listener actually hearing
-// it — instead of waiting up to POLL_MS for the next interval tick.
-function scheduleTransitionRefetch(data: NowPlaying) {
-  clearTransitionRefetch();
-  if (!data.startedAt || !data.durationSeconds) return;
-  const startMs = new Date(data.startedAt).getTime();
-  const delayMs = startMs + data.durationSeconds * 1000 + TRANSITION_BUFFER_MS - Date.now();
-  if (delayMs <= 0) return;
-  transitionTimeoutId = setTimeout(() => {
-    transitionTimeoutId = null;
-    poll();
-  }, delayMs);
-}
-
-async function poll() {
-  if (!abortCtrl) return;
-  // Pause polling while the tab is hidden AND audio isn't playing — saves
-  // Vercel fires for backgrounded idle tabs. Playing tabs keep polling
-  // through screen-off so the lock-screen / CarPlay metadata updates at
-  // track changes. The visibilitychange listener below re-fires poll() the
-  // moment the tab becomes visible again either way.
-  if (!BROADCAST_MODE && !playbackActive && typeof document !== "undefined" && document.visibilityState !== "visible") return;
-  try {
-    const url = BROADCAST_MODE
-      ? `/api/station/now-playing?t=${Date.now()}`
-      : "/api/station/now-playing";
-    const r = await fetch(url, {
-      signal: abortCtrl.signal,
-      cache: "no-store",
-    });
-    if (!r.ok) return;
-    const json = (await r.json()) as NowPlaying;
-    cachedData = json;
-    for (const sub of subscribers) sub(json);
-    scheduleTransitionRefetch(json);
-  } catch {
-    /* keep previous */
-  }
-}
-
-function onVisibilityChange() {
-  if (typeof document === "undefined") return;
-  if (document.visibilityState === "visible") poll();
-}
-
-function startPolling() {
-  if (intervalId !== null) return;
-  abortCtrl = new AbortController();
-  poll();
-  intervalId = setInterval(poll, POLL_MS);
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", onVisibilityChange);
-  }
-}
-
-function stopPolling() {
-  if (intervalId !== null) {
-    clearInterval(intervalId);
-    intervalId = null;
-  }
-  if (abortCtrl) {
-    abortCtrl.abort();
-    abortCtrl = null;
-  }
-  clearTransitionRefetch();
-  if (typeof document !== "undefined") {
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-  }
-}
+// No-op: no polling, no network calls
+function startPolling() {}
+function stopPolling() {}
 
 export function useNowPlaying(): NowPlayingDerived {
-  const [data, setData] = useState<NowPlaying>(cachedData);
-  // null until mounted so SSR and first client render produce identical text.
-  // Initialising from Date.now() would make the server's wall clock
-  // disagree with the client's by ~ms-to-seconds → React error #418.
+  const [data] = useState<NowPlaying>(EMPTY);
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    subscribers.add(setData);
-    if (subscribers.size === 1) startPolling();
-    // Sync late mounts to whatever the shared poll already has.
-    setData(cachedData);
-
-    setNow(Date.now());
-    const tickId = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => {
-      subscribers.delete(setData);
-      if (subscribers.size === 0) stopPolling();
-      clearInterval(tickId);
-    };
+    const tickId = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tickId);
   }, []);
 
-  let elapsedSeconds = 0;
-  let progress = 0;
-  if (now !== null && data.startedAt && data.durationSeconds) {
-    const startMs = new Date(data.startedAt).getTime();
-    elapsedSeconds = Math.max(0, (now - startMs) / 1000);
-    if (data.durationSeconds > 0) {
-      progress = Math.min(1, elapsedSeconds / data.durationSeconds);
-      // Cap elapsed at the total so the time label never reads "3:40 / 3:20"
-      // when Liquidsoap holds a track a few seconds past its expected end
-      // (or when the cached duration is short of the actual file length).
-      elapsedSeconds = Math.min(elapsedSeconds, data.durationSeconds);
-    }
-  }
-
-  return { ...data, elapsedSeconds, progress };
+  return { ...data, elapsedSeconds: 0, progress: 0 };
 }
+
+export function seedNowPlayingCache(_data: NowPlaying) {}
+export function setNowPlayingPlaybackActive(_active: boolean) {}

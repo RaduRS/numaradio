@@ -9,13 +9,15 @@ export function Schedule() {
   const [nowIndex, setNowIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    const update = () => {
-      const active = showForHour(new Date().getHours());
-      setNowIndex(SHOW_SCHEDULE.indexOf(active));
-    };
-    update();
-    const id = setInterval(update, 60_000);
-    return () => clearInterval(id);
+    // POLLING DISABLED — DB is down, no live data.
+    // const update = () => {
+    //   const active = showForHour(new Date().getHours());
+    //   setNowIndex(SHOW_SCHEDULE.indexOf(active));
+    // };
+    // update();
+    // const id = setInterval(update, 60_000);
+    // return () => clearInterval(id);
+    setNowIndex(null);
   }, []);
 
   return (
