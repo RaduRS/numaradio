@@ -13,6 +13,7 @@ export function MiniPlayer() {
   const np = useNowPlaying();
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
+  const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
     function onScroll() {
@@ -21,6 +22,26 @@ export function MiniPlayer() {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    async function check() {
+      try {
+        const r = await fetch("/api/station/listeners", { cache: "no-store" });
+        if (!r.ok || !mounted) return;
+        const json = (await r.json()) as { isLive?: boolean };
+        if (mounted) setIsLive(json.isLive ?? false);
+      } catch {
+        if (mounted) setIsLive(false);
+      }
+    }
+    check();
+    const id = setInterval(check, 15_000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
   }, []);
 
   // Home page has a full hero player — show mini only after scrolling past
@@ -79,10 +100,12 @@ export function MiniPlayer() {
           {np.shoutout?.active ? (
             <span className="shoutout-pill inline">
               <span className="dot" aria-hidden />
-              Lena on air
+              {isLive ? "Lena on air" : "Lena off air"}
             </span>
-          ) : (
+          ) : isLive ? (
             "On Air · Lena"
+          ) : (
+            "Off Air · Lena"
           )}
         </div>
         <div className="mp-title">

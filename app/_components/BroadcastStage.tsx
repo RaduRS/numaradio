@@ -29,6 +29,28 @@ export function BroadcastStage({ broadcast }: Props) {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>("night");
   const [showName, setShowName] = useState<string>("Night Shift");
   const [clockText, setClockText] = useState<string>("");
+  const [isLive, setIsLive] = useState(false);
+
+  // Poll station liveness for the Lena label.
+  useEffect(() => {
+    let mounted = true;
+    async function check() {
+      try {
+        const r = await fetch("/api/station/listeners", { cache: "no-store" });
+        if (!r.ok || !mounted) return;
+        const json = (await r.json()) as { isLive?: boolean };
+        if (mounted) setIsLive(json.isLive ?? false);
+      } catch {
+        if (mounted) setIsLive(false);
+      }
+    }
+    check();
+    const id = setInterval(check, 15_000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
 
   // Hard-mute every <audio> tag in the document — the encoder muxes Icecast
   // directly. Defensive against future code that might auto-play.
@@ -184,6 +206,28 @@ export function BroadcastStage({ broadcast }: Props) {
 // LenaLine component so on-air freshness syncs perfectly.
 function BroadcastLena() {
   const line = useLenaLine();
+  const [isLive, setIsLive] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function check() {
+      try {
+        const r = await fetch("/api/station/listeners", { cache: "no-store" });
+        if (!r.ok || !mounted) return;
+        const json = (await r.json()) as { isLive?: boolean };
+        if (mounted) setIsLive(json.isLive ?? false);
+      } catch {
+        if (mounted) setIsLive(false);
+      }
+    }
+    check();
+    const id = setInterval(check, 15_000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
   const isFresh = line?.source === "live" || line?.source === "context";
   const freshLabel =
     isFresh && line && "atIso" in line ? relativeTimeLabel(line.atIso) : null;
@@ -208,7 +252,7 @@ function BroadcastLena() {
       <div className="bcast-lena-meta">
         <div className="bcast-lena-name">Lena</div>
         <div className="bcast-lena-label">
-          Host · Live{freshLabel ? ` · ${freshLabel}` : ""}
+          Host · {isLive ? "Live" : "Off Air"}{freshLabel ? ` · ${freshLabel}` : ""}
         </div>
       </div>
 

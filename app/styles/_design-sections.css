@@ -146,6 +146,21 @@
   box-shadow: 0 0 10px var(--red-live);
   animation: pulseDot 1.6s ease-in-out infinite;
 }
+.offair-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--fg-mute);
+}
+.offair-label::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--fg-mute);
+}
 .player-time { font-family: var(--font-mono); font-size: 11px; color: var(--fg-mute); letter-spacing: 0.1em; }
 
 .now-art {
