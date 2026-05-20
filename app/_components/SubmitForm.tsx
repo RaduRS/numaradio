@@ -11,7 +11,7 @@ type State =
 const MAX_AUDIO_MB = 10;
 const MAX_ART_MB = 2;
 
-const CLOSED = process.env.NEXT_PUBLIC_CLOSED === "true";
+const OPEN = process.env.NEXT_PUBLIC_CLOSED === "false";
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -259,7 +259,7 @@ export function SubmitForm() {
   }
 
   // ── Closed state ─────────────────────────────────────────
-  if (CLOSED) {
+  if (!OPEN) {
     return (
       <div
         style={{

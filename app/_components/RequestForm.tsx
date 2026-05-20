@@ -19,7 +19,7 @@ const REVIEW_LINES = [
   "Not every submission is guaranteed to play.",
 ];
 
-const CLOSED = process.env.NEXT_PUBLIC_CLOSED === "true";
+const OPEN = process.env.NEXT_PUBLIC_CLOSED === "false";
 
 export function RequestForm({
   initialTab = "song",
@@ -285,7 +285,7 @@ export function RequestForm({
     setSendLabel("✓ Sent");
   }
 
-  if (CLOSED) {
+  if (!OPEN) {
     return (
       <>
         <div className="req-types" role="tablist" aria-label="Request type">
