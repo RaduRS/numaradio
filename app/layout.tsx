@@ -220,7 +220,8 @@ export default async function RootLayout({
             <ExpandedPlayer />
           </PlayerProvider>
         </FallbackArtworkProvider>
-        <PresenceHeartbeat />
+        {/* POLLING DISABLED — DB is down, no live data. */}
+        {/* <PresenceHeartbeat /> */}
         <Analytics />
         <Script id="sw-register" strategy="afterInteractive">
           {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }`}
