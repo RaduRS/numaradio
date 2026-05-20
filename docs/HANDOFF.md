@@ -1,6 +1,25 @@
 # Handoff — pick up where we are
 
-Last updated: 2026-05-18 (evening)
+Last updated: 2026-05-20 (stream down + full frontend polling/UI disabled)
+
+---
+
+## 2026-05-20 — Stream down + static presentation mode
+
+DB is down, Vercel compute exhausted. **All frontend polling commented out** — ready to restore tomorrow with B2 images for static presentation.
+
+What was disabled (all commented, not deleted):
+- All polling hooks: `useNowPlaying`, `useBroadcast`, `useLenaLine`, `BroadcastStage`
+- All live components: `Broadcast`, `OnAirFeed`, `ListenerCount`, `HeroStats`, `ShoutoutWall`, `LiveClock`, `Schedule`
+- Presence heartbeat: `PresenceHeartbeat` component + `/api/presence/heartbeat` route
+- Song/request polling: `SongTab`, `RequestForm`
+- All play/pause buttons → no-ops; all submit buttons → `disabled={true}`
+- Animated EQ bars + waveforms → commented out
+- Footer streaming indicator → commented out
+
+Stream down root cause: Liquidsoap had stale CLOSE_WAIT connection to Icecast. Fix: `sudo systemctl restart numa-liquidsoap`.
+
+When restoring: reverse the `// POLLING DISABLED` comments. The code is all intact.
 
 ---
 
