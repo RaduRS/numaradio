@@ -53,6 +53,7 @@ export function MiniPlayer() {
         }}
         aria-pressed={isPlaying}
         aria-busy={isLoading}
+        disabled
       >
         {isLoading ? (
           <LoadingIcon />
@@ -91,9 +92,9 @@ export function MiniPlayer() {
           <span className="artist">{np.artistDisplay ?? "—"}</span>
         </div>
       </div>
-      <div className="mp-eq eq">
+      {/* <div className="mp-eq eq">
         <span /><span /><span /><span /><span />
-      </div>
+      </div> */}
       <a
         className="mp-req-btn"
         href="#requests"

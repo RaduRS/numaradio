@@ -50,6 +50,7 @@ export function ExpandedPlayerDesktop() {
           <div className="ep-booth-title">{title}</div>
           <div className="ep-booth-artist">{artist}</div>
         </div>
+        {/*
         <Waveform
           hasTrack={Boolean(live)}
           progress={np.progress}
@@ -57,6 +58,7 @@ export function ExpandedPlayerDesktop() {
           durationSeconds={live?.durationSeconds ?? null}
           showTime
         />
+        */}
         <div className="ep-controls">
           <button
             className="btn-play"
@@ -64,6 +66,7 @@ export function ExpandedPlayerDesktop() {
             aria-pressed={isPlaying}
             aria-busy={isLoading}
             style={{ width: 64, height: 64 }}
+            disabled
           >
             {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>

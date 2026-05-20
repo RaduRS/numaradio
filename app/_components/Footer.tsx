@@ -74,6 +74,7 @@ export function Footer() {
         </div>
         <div className="footer-base">
           <span>© 2026 Numa Radio · Broadcasting from everywhere</span>
+          {/* Streaming indicator commented out
           <span className="f-live">
             <span
               style={{
@@ -88,6 +89,7 @@ export function Footer() {
             />{" "}
             Streaming now · <ListenerCount suffix=" listening" />
           </span>
+          */}
         </div>
       </div>
     </footer>

@@ -416,7 +416,7 @@ export function RequestForm({
               </div>
             ) : null}
           </div>
-          <button type="submit" className="btn btn-primary req-send" disabled={sending} aria-busy={sending}>
+          <button type="submit" className="btn btn-primary req-send" disabled={true} aria-busy={sending}>
             <span>{sendLabel}</span>
             {sending ? <LoadingIcon className="btn-icon" /> : <SendIcon className="btn-icon" />}
           </button>

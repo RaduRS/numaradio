@@ -322,7 +322,7 @@
      for 0.3 s, which read as "patches of grey" between solid teal
      bars. Snap-fast change keeps the fill looking like a clean
      left-to-right gradient at all times. */
-  transition: background-color 60ms linear, opacity 60ms linear;
+  /* transition: background-color 60ms linear, opacity 60ms linear; */
 }
 .wave-bar.active {
   background: var(--accent);

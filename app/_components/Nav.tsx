@@ -19,10 +19,12 @@ export function Nav() {
           <Link href="/submit">Submit</Link>
         </div>
         <div className="nav-right">
+          {/* DISABLED — stream offline
           <div className="live-chip">
             <span className="dot" /> Off Air
           </div>
           <ListenLiveButton size="sm" />
+          */}
         </div>
       </div>
     </nav>

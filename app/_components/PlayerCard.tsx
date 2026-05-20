@@ -81,6 +81,7 @@ export function PlayerCard() {
         <div className="artist">{artist.toUpperCase()}</div>
       </div>
 
+      {/*
       <Waveform
         hasTrack={np.isPlaying}
         progress={np.progress}
@@ -88,10 +89,12 @@ export function PlayerCard() {
         durationSeconds={np.durationSeconds}
         showTime
       />
+      */}
 
       <div className="player-controls">
         <button
           className="btn-play"
+          disabled
           onClick={(e) => {
             e.stopPropagation();
             toggle();

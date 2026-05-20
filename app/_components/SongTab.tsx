@@ -398,7 +398,7 @@ export function SongTab() {
       <button
         type="submit"
         className="btn btn-primary req-send"
-        disabled={submitting}
+        disabled={true}
         aria-busy={submitting}
       >
         <span>{submitting ? "Submitting…" : "Create song"}</span>

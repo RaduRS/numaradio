@@ -49,6 +49,7 @@ function ListenPane() {
         <div className="ep-listen-title">{live?.title ?? "—"}</div>
         <div className="ep-listen-artist">{live?.artistDisplay ?? "—"}</div>
       </div>
+      {/*
       <Waveform
         hasTrack={Boolean(live)}
         progress={np.progress}
@@ -56,6 +57,7 @@ function ListenPane() {
         durationSeconds={live?.durationSeconds ?? null}
         showTime
       />
+      */}
       <div className="ep-controls">
         <button
           className="ep-listen-play"
@@ -63,6 +65,7 @@ function ListenPane() {
           onClick={toggle}
           aria-pressed={isPlaying}
           aria-busy={isLoading}
+          disabled
         >
           {isLoading ? <LoadingIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
         </button>

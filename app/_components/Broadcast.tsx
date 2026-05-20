@@ -55,13 +55,13 @@ export function Broadcast() {
               <div className="sub">{PLACEHOLDER_ARTIST}</div>
             </div>
             <div style={{ marginTop: 28 }}>
-              <Waveform
+              {/* <Waveform
                 hasTrack={false}
                 progress={0}
                 elapsedSeconds={0}
                 durationSeconds={null}
                 showTime
-              />
+              /> */}
             </div>
           </div>
 

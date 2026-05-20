@@ -149,31 +149,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const play = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    wantPlaybackRef.current = true;
-    clearRetry();
-    setStatus("loading");
-    // Reload the stream on every play so we never resume from a stale buffer.
-    audio.src = STREAM_URL;
-    audio.load();
-    try {
-      await audio.play();
-      // Browser will fire `playing` once buffered — we update status there.
-    } catch (err) {
-      // NotAllowedError = autoplay/gesture policy blocked us. User has to
-      // click again — bail without retry loop.
-      if (err instanceof DOMException && err.name === "NotAllowedError") {
-        wantPlaybackRef.current = false;
-        retryAttemptRef.current = 0;
-        setStatus("idle");
-        return;
-      }
-      // Anything else is transient (network down on initial attempt etc.)
-      // — keep user intent and retry with backoff.
-      scheduleRetry();
-    }
-  }, [clearRetry, scheduleRetry]);
+    // NO-OP: playback disabled — DB is down, no live data.
+  }, []);
 
   // Keep a ref to the latest `play` so scheduleRetry's setTimeout callback
   // always calls the current closure without needing play in its deps.
@@ -182,20 +159,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [play]);
 
   const pause = useCallback(() => {
-    wantPlaybackRef.current = false;
-    retryAttemptRef.current = 0;
-    clearRetry();
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
-    // Keep `src` attached so the MediaSession (iOS lock screen, Android
-    // notification, Bluetooth/car head unit) stays registered. If we null
-    // src here the OS drops our audio element entirely and pressing play
-    // from the lock screen / car has nothing to resume. On the next play()
-    // we always reassign src + call load() anyway, which forces a fresh
-    // live-stream connection — the stale-buffer concern is handled there.
-    setStatus("idle");
-  }, [clearRetry]);
+    // NO-OP: playback disabled — DB is down, no live data.
+  }, []);
 
   const toggle = useCallback(() => {
     // Subtle tactile confirmation that a press registered. Android honours
