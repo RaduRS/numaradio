@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePlayer } from "./PlayerProvider";
 import { LoadingIcon, PauseIcon, PlayIcon } from "./Icons";
 import { LiveClock } from "./LiveClock";
@@ -16,7 +15,6 @@ export function PlayerCard() {
   const { status, isPlaying, isLoading, toggle, expand } = usePlayer();
   const np = useNowPlaying();
   const fallback = useFallbackArtworkUrl();
-  const [isLive, setIsLive] = useState(false);
 
   const title = np.title ?? "—";
   const artist = np.artistDisplay ?? "—";
@@ -29,26 +27,6 @@ export function PlayerCard() {
   // only (brief dark box during loads is acceptable). Missing
   // artwork → fallback.
   const backgroundImage = cover ? `url(${cover})` : `url(${fallback})`;
-
-  useEffect(() => {
-    let mounted = true;
-    async function check() {
-      try {
-        const r = await fetch("/api/station/listeners", { cache: "no-store" });
-        if (!r.ok || !mounted) return;
-        const json = (await r.json()) as { isLive?: boolean };
-        if (mounted) setIsLive(json.isLive ?? false);
-      } catch {
-        if (mounted) setIsLive(false);
-      }
-    }
-    check();
-    const id = setInterval(check, 15_000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
 
   return (
     <div
@@ -64,8 +42,8 @@ export function PlayerCard() {
       }}
     >
       <div className="player-head">
-        <div className={isLive ? "onair" : "offair-label"}>
-          {np.shoutout?.active ? "On Air" : isLive ? "On Air — Lena" : "Off Air — Lena"}
+        <div className="offair-label">
+          {np.shoutout?.active ? "On Air" : "Off Air — Lena"}
         </div>
         <div className="player-time"><LiveClock /></div>
       </div>

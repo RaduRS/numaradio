@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
 import { useLenaLine, relativeTimeLabel } from "./useLenaLine";
 import { Skeleton } from "./Skeleton";
 
@@ -42,28 +41,6 @@ export interface LenaLineProps {
  */
 export function LenaLine({ className, layout = "card", avatarSize = 36 }: LenaLineProps) {
   const line = useLenaLine();
-  const [isLive, setIsLive] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    async function check() {
-      try {
-        const r = await fetch("/api/station/listeners", { cache: "no-store" });
-        if (!r.ok || !mounted) return;
-        const json = (await r.json()) as { isLive?: boolean };
-        if (mounted) setIsLive(json.isLive ?? false);
-      } catch {
-        if (mounted) setIsLive(false);
-      }
-    }
-    check();
-    const id = setInterval(check, 15_000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
-
   // "live" = audio chatter the daemon just aired (≤5 min)
   // "context" = generated text from real station state (≤30 min)
   // Both deserve the fresh "just now / X min ago" pill + dot pulse.
@@ -114,7 +91,7 @@ export function LenaLine({ className, layout = "card", avatarSize = 36 }: LenaLi
         <div className="lena-head">
           <span className="lena-name">Lena</span>
           <span className="lena-label">
-            Host · {isLive ? "Live" : "Off Air"}{freshLabel ? ` · ${freshLabel}` : ""}
+            Host · Off Air{freshLabel ? ` · ${freshLabel}` : ""}
           </span>
         </div>
         <div className="lena-text" key={line?.script ?? "loading"}>

@@ -21,7 +21,6 @@ export function ExpandedPlayer() {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
   const [exiting, setExiting] = useState(false);
-  const [isLive, setIsLive] = useState(false);
   const exitTimerRef = useRef<number | null>(null);
   // Remember which element had focus when the dialog opened, so the user
   // lands back on it when the dialog closes (screen-reader users otherwise
@@ -108,27 +107,6 @@ export function ExpandedPlayer() {
     if (dy > 80 && dx < 60) handleClose();
   }
 
-  // Poll station status for the "On Air" label in the topbar.
-  useEffect(() => {
-    let mounted = true;
-    async function check() {
-      try {
-        const r = await fetch("/api/station/listeners", { cache: "no-store" });
-        if (!r.ok || !mounted) return;
-        const json = (await r.json()) as { isLive?: boolean };
-        if (mounted) setIsLive(json.isLive ?? false);
-      } catch {
-        if (mounted) setIsLive(false);
-      }
-    }
-    check();
-    const id = setInterval(check, 15_000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
-
   // Focus the chevron on open so keyboard users can Esc / Enter to dismiss.
   const chevRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -194,7 +172,7 @@ export function ExpandedPlayer() {
               <path d="M5 7l5 6 5-6z" />
             </svg>
           </button>
-          <div className={isLive ? "onair" : "offair-label"}>Off Air — Lena</div>
+          <div className="offair-label">Off Air — Lena</div>
           <div style={{ width: 36 }} />
         </div>
         <ExpandedPlayerDesktop />

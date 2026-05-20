@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
 interface Tab {
   href: string;
@@ -87,50 +86,10 @@ export function DashboardNav() {
  * now-playing, service health).
  */
 function StationPulse() {
-  const [isLive, setIsLive] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    async function check() {
-      try {
-        const r = await fetch("/api/station/listeners", { cache: "no-store" });
-        if (!r.ok || !mounted) return;
-        const json = (await r.json()) as { isLive?: boolean };
-        if (mounted) setIsLive(json.isLive ?? false);
-      } catch {
-        if (mounted) setIsLive(false);
-      }
-    }
-    check();
-    const id = setInterval(check, 15_000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
-
   return (
     <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.24em] text-fg-mute">
-      {isLive ? (
-        <>
-          <span className="relative inline-flex h-1.5 w-1.5">
-            <span
-              aria-hidden
-              className="absolute inset-0 animate-ping rounded-full bg-[--red-live] opacity-70"
-            />
-            <span
-              aria-hidden
-              className="absolute inset-0 rounded-full bg-[--red-live]"
-            />
-          </span>
-          On Air
-        </>
-      ) : (
-        <>
-          <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[--fg-mute]" />
-          Off Air
-        </>
-      )}
+      <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[--fg-mute]" />
+      Off Air
     </span>
   );
 }
