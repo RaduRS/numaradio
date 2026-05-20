@@ -287,18 +287,30 @@ export function RequestForm({
 
   if (CLOSED) {
     return (
-      <div
-        style={{
-          padding: "24px 16px",
-          textAlign: "center",
-          color: "var(--fg-mute)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          letterSpacing: "0.06em",
-        }}
-      >
-        Requests are closed.
-      </div>
+      <>
+        <div className="req-types" role="tablist" aria-label="Request type">
+          <button className="req-type active" role="tab" aria-selected={true}>
+            <span className="rt-ico"><SparklesIcon className="" /></span>
+            <span className="rt-label">Song request</span>
+          </button>
+          <button className="req-type" role="tab" aria-selected={false}>
+            <span className="rt-ico"><MegaphoneIcon className="" /></span>
+            <span className="rt-label">Shoutout</span>
+          </button>
+        </div>
+        <div
+          style={{
+            padding: "32px 24px",
+            textAlign: "center",
+            color: "var(--fg-mute)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 13,
+            letterSpacing: "0.06em",
+          }}
+        >
+          Requests are closed.
+        </div>
+      </>
     );
   }
 
